@@ -75,7 +75,41 @@ window.__ModuleLoader__.load({
         'chat.working': 'Working',
         'chat.idle': 'Idle',
         'chat.tab': 'Chat',
-        'chat.detail': 'Details',
+        'chat.tabTrajectory': 'Trajectory',
+        'chat.detail': 'Bot details',
+        'chat.back': 'Back to chat',
+        'chat.completedTook': 'Completed in {duration}',
+        'chat.turnWorked': 'Completed',
+        'chat.turnFailed': 'Failed',
+        'chat.deepDivingFor': 'Deep diving · {duration}',
+        'chat.composerPlaceholder': 'Message or create a task, / for commands, @ for files or chats',
+        'chat.modeCustom': 'Custom',
+        'chat.defaultEffort': 'Default',
+        'chat.voice': 'Voice input',
+        'chat.statsCounts': '{turns} turns {steps} steps',
+        'chat.statsCache': 'cache hit {percent}%',
+        'chat.contextCreated': 'Created {date}',
+        'chat.turnLabel': 'Turn {turn}',
+        'chat.noTrajectory': 'No trajectory yet.',
+        'chat.emptyTitle': 'What can I help with?',
+        'chat.you': 'You',
+        'chat.answer': 'Answer',
+        'chat.reasoningShort': 'Thinking',
+        'chat.toolShort': 'Tool',
+        'chat.durationSeconds': '{seconds}s',
+        'chat.durationMinutes': '{minutes}m {seconds}s',
+        'chat.tool.bash': 'Run command',
+        'chat.tool.read': 'Read file',
+        'chat.tool.edit': 'Edit file',
+        'chat.tool.search': 'Search code',
+        'chat.tool.webSearch': 'Search web',
+        'chat.tool.webFetch': 'Open page',
+        'chat.tool.skill': 'Load skill',
+        'chat.tool.team': 'Team',
+        'chat.tool.message': 'Send message',
+        'chat.tool.question': 'Ask',
+        'chat.tool.plan': 'Update plan',
+        'chat.tool.other': 'Tool',
         'chat.empty': 'Say something to {name}.',
         'chat.placeholder': 'Message {name}…',
         'chat.send': 'Send',
@@ -255,7 +289,41 @@ window.__ModuleLoader__.load({
         'chat.working': '工作中',
         'chat.idle': '空闲',
         'chat.tab': '对话',
-        'chat.detail': '详情',
+        'chat.tabTrajectory': '轨迹',
+        'chat.detail': 'Bot 详情',
+        'chat.back': '返回对话',
+        'chat.completedTook': '已完成，用时 {duration}',
+        'chat.turnWorked': '已完成',
+        'chat.turnFailed': '处理失败',
+        'chat.deepDivingFor': '深度求索中，用时 {duration} ···',
+        'chat.composerPlaceholder': '发消息或创建任务，/ 调用指令，@ 文件或对话',
+        'chat.modeCustom': 'Custom',
+        'chat.defaultEffort': 'Default',
+        'chat.voice': '语音输入',
+        'chat.statsCounts': '{turns} 轮 {steps} 步',
+        'chat.statsCache': '缓存命中 {percent}%',
+        'chat.contextCreated': '创建于 {date}',
+        'chat.turnLabel': '第 {turn} 轮',
+        'chat.noTrajectory': '还没有轨迹。',
+        'chat.emptyTitle': '有什么可以帮忙的？',
+        'chat.you': '你',
+        'chat.answer': '回答',
+        'chat.reasoningShort': '思考',
+        'chat.toolShort': '工具',
+        'chat.durationSeconds': '{seconds} 秒',
+        'chat.durationMinutes': '{minutes} 分 {seconds} 秒',
+        'chat.tool.bash': '运行命令',
+        'chat.tool.read': '读取文件',
+        'chat.tool.edit': '编辑文件',
+        'chat.tool.search': '搜索代码',
+        'chat.tool.webSearch': '搜索网页',
+        'chat.tool.webFetch': '访问网页',
+        'chat.tool.skill': '加载技能',
+        'chat.tool.team': '团队',
+        'chat.tool.message': '发送消息',
+        'chat.tool.question': '提问',
+        'chat.tool.plan': '更新计划',
+        'chat.tool.other': '调用工具',
         'chat.empty': '跟 {name} 说点什么。',
         'chat.placeholder': '发消息给 {name}…',
         'chat.send': '发送',
@@ -533,7 +601,7 @@ window.__ModuleLoader__.load({
         border-radius: var(--dsw-radius-md); border: 0.5px solid var(--dsw-alias-border-l3); cursor: pointer;
         background: var(--dsw-alias-button-elevated-fill); color: var(--dsw-alias-label-primary); }
       .bm-btn:hover { background: var(--dsw-alias-button-floating-hover); }
-      .bm-btn.primary { background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-inverted); border-color: transparent; }
+      .bm-btn.primary { background: var(--dsw-alias-button-primary-fill, #4d6bfe); color: var(--dsw-alias-label-primary-inverted, #fff); border-color: transparent; }
       .bm-btn.primary:hover { background: var(--dsw-alias-button-primary-hover); color: var(--dsw-alias-label-primary-inverted); }
       .bm-btn.danger { color: var(--dsw-alias-label-error); }
       .bm-btn:disabled { opacity: 0.55; cursor: default; }
@@ -668,6 +736,7 @@ window.__ModuleLoader__.load({
       .bm-pane-foot { border-top: 0.5px solid var(--dsw-alias-border-l2); padding-top: 8px; display: flex; }
       .bm-pane-empty { padding: 12px 8px; }
       .bm-detail-col { flex: 1; min-width: 0; overflow: auto; padding: 28px 32px 48px; }
+      .bm-detail-col.bm-chat-col { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
       .bm-detail { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
       .bm-dhead { display: flex; align-items: center; gap: 12px; }
       .bm-dhead-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -864,7 +933,254 @@ window.__ModuleLoader__.load({
         font: inherit; font-size: 12px; line-height: 16px; display: inline-flex; align-items: center; gap: 6px;
         padding: 5px 8px; border-radius: var(--dsw-radius-md); cursor: pointer; width: 100%; text-align: left; }
       .bm-foot-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-      .bm-foot-toggle[data-active='true'] { color: var(--dsw-alias-brand-primary); }
+
+      /* DSH conversation replica: the Bot chat uses the same flow geometry,
+         typography, process rows, composer card and statistics strip as the
+         Harness conversation. */
+      .dc-chat { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+        background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); }
+      .dc-head { flex: none; box-sizing: border-box; display: flex; flex-direction: column;
+        min-height: 76px; padding: 10px 24px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l3); }
+      .dc-head-row { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+      .dc-head-lead { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+      .dc-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        font-size: 14px; line-height: 20px; font-weight: 500; color: var(--dsw-alias-label-primary); }
+      .dc-running-dot { width: 6px; height: 6px; border-radius: 50%; flex: none;
+        background: var(--dsw-alias-brand-primary); animation: bm-pulse 1.2s ease-in-out infinite; }
+      .dc-head-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+      .dc-icon-btn { appearance: none; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px;
+        background: transparent; color: var(--dsw-alias-label-tertiary); display: inline-flex;
+        align-items: center; justify-content: center; cursor: pointer; flex: none; }
+      .dc-icon-btn:hover, .dc-icon-btn[data-active='true'] { background: var(--dsw-alias-interactive-bg-hover);
+        color: var(--dsw-alias-label-primary); }
+      .dc-tabs { display: flex; align-items: center; gap: 22px; margin-top: 4px; }
+      .dc-tabs button { appearance: none; border: 0; background: transparent; font: inherit;
+        font-size: 13px; line-height: 20px; padding: 5px 0 9px; color: var(--dsw-alias-label-tertiary);
+        border-bottom: 2px solid transparent; cursor: pointer; }
+      .dc-tabs button:hover { color: var(--dsw-alias-label-secondary); }
+      .dc-tabs button[data-active='true'] { color: var(--dsw-alias-label-primary);
+        border-bottom-color: var(--dsw-alias-brand-primary); }
+      .dc-scroll { flex: 1; min-height: 0; overflow-x: clip; overflow-y: auto; padding: 16px 24px; }
+      .dc-column { width: 100%; max-width: var(--dsh-chat-content-width, 748px); margin: 0 auto; display: flex; flex-direction: column;
+        gap: 4px; }
+      .dc-user-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+        margin-top: 12px; min-width: 0; }
+      .dc-user-spacer { flex: 1; }
+      .dc-user-main { display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+        min-width: 0; max-width: min(calc(var(--dsh-chat-content-width, 748px) * 0.702), 82%); }
+      .dc-user-bubble { max-width: 100%; box-sizing: border-box; padding: 9px 14px;
+        border-radius: 14px; border-bottom-right-radius: 5px; background: var(--dsw-alias-bg-layer-2);
+        border: 0.5px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-label-primary);
+        font-size: 14px; line-height: 22px; white-space: pre-wrap; word-break: break-word; }
+      .dc-context-card { flex: none; width: 266px; max-width: 42%; box-sizing: border-box; display: flex;
+        gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 10px;
+        border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1);
+        color: var(--dsw-alias-label-tertiary); }
+      .dc-context-mark { display: none; }
+      .dc-context-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+      .dc-context-name { font-size: 12px; line-height: 17px; color: var(--dsw-alias-label-primary);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .dc-context-path { font-size: 10.5px; line-height: 15px; color: var(--dsw-alias-label-tertiary);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .dc-context-meta { font-size: 10px; line-height: 14px; color: var(--dsw-alias-label-caption); }
+      .dc-user-meta { display: flex; align-items: center; gap: 8px; padding-right: 2px;
+        color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
+      .dc-user-copy { appearance: none; border: 0; background: transparent; padding: 0;
+        display: inline-flex; align-items: center; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
+      .dc-user-copy:hover { color: var(--dsw-alias-label-primary); }
+      .dc-turn { display: flex; flex-direction: column; width: 100%; margin-top: 16px; }
+      .dc-turn-head { appearance: none; box-sizing: border-box; display: flex; align-items: center;
+        width: 100%; height: 33px; padding: 0 0 8px; border: 0; border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+        background: none; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 14px;
+        line-height: 24px; text-align: left; cursor: pointer; margin-bottom: 8px; }
+      .dc-turn-head:hover { color: var(--dsw-alias-label-secondary); }
+      .dc-turn-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .dc-turn-chevron { width: 14px; height: 14px; margin-left: 4px; flex: none; opacity: 0.55;
+        transition: transform 100ms ease; }
+      .dc-turn-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+      .dc-turn-body > .dc-prose { margin-top: 12px; }
+      .dc-turn-body > .dc-prose:first-child { margin-top: 0; }
+      .dc-prose { min-width: 0; }
+      .dc-proc { display: flex; flex-direction: column; min-width: 0; }
+      .dc-proc-btn { appearance: none; box-sizing: border-box; display: flex; align-items: center;
+        gap: 6px; width: 100%; min-height: 24px; padding: 0; border: 0; background: none;
+        color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 13px; line-height: 20px;
+        text-align: left; cursor: default; }
+      .dc-proc-btn[aria-expanded] { cursor: pointer; }
+      .dc-proc-btn:hover { color: var(--dsw-alias-label-secondary); }
+      .dc-proc-icon { flex: none; width: 16px; height: 16px; display: inline-flex; align-items: center;
+        justify-content: center; color: inherit; }
+      .dc-proc[data-running='true'] .dc-proc-icon { color: var(--dsw-alias-brand-primary); }
+      .dc-proc-title { flex: none; font-weight: 400; }
+      .dc-proc-sep { flex: none; color: var(--dsw-alias-label-caption); margin: 0 4px; }
+      .dc-proc-summary { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+        white-space: nowrap; color: inherit; }
+      .dc-proc-summary[data-shimmer='true'] { color: transparent;
+        background: linear-gradient(90deg, var(--dsw-alias-label-tertiary) 0%,
+          var(--dsw-alias-label-primary) 40%, var(--dsw-alias-label-tertiary) 80%);
+        background-size: 220% 100%; -webkit-background-clip: text; background-clip: text;
+        animation: bm-shimmer 1.8s linear infinite; }
+      .dc-proc-chevron { flex: none; width: 14px; height: 14px; opacity: 0; transition: opacity 100ms ease; }
+      .dc-proc-btn:hover .dc-proc-chevron, .dc-proc-btn:focus-visible .dc-proc-chevron { opacity: 0.55; }
+      .dc-proc-failed { flex: none; color: var(--dsw-alias-label-error); font-size: 12px; }
+      .dc-spin { display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: none;
+        border: 1.5px solid color-mix(in srgb, var(--dsw-alias-brand-primary) 22%, transparent);
+        border-top-color: var(--dsw-alias-brand-primary); animation: bm-spin .7s linear infinite; }
+      .dc-reason-body { padding: 0 0 8px 22px; max-height: 360px; overflow: auto; min-width: 0; }
+      .dc-reason-body .dc-md-secondary { font-size: 13px; line-height: 22px;
+        color: var(--dsw-alias-label-secondary); }
+      .dc-tool-body { margin: 2px 0 8px 22px; padding: 8px 10px; display: flex; flex-direction: column;
+        gap: 8px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px;
+        background: var(--dsw-alias-bg-layer-1); max-height: 420px; overflow: auto; }
+      .dc-tool-part { display: flex; flex-direction: column; gap: 3px; }
+      .dc-tool-label { font-size: 9.5px; line-height: 14px; letter-spacing: 0.04em;
+        text-transform: uppercase; color: var(--dsw-alias-label-tertiary); }
+      .dc-tool-body pre, .dc-tool-part pre { margin: 0; font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+        font-size: 11px; line-height: 17px; white-space: pre-wrap; word-break: break-word;
+        color: var(--dsw-alias-label-secondary); }
+      .dc-tool-empty { font-size: 11px; color: var(--dsw-alias-label-tertiary); }
+      .dc-md { display: flex; flex-direction: column; gap: 16px; font-size: 14px; line-height: 24px;
+        color: var(--dsw-alias-label-primary); word-break: break-word; }
+      .dc-md .bm-md-p { margin: 0; white-space: pre-wrap; }
+      .dc-md .bm-md-p + .bm-md-p { margin-top: 0; }
+      .dc-md .bm-md-heading { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; }
+      .dc-md h2.bm-md-heading { font-size: 24px; line-height: 32px; }
+      .dc-md .bm-md-list { margin: 0; padding-left: 24px; }
+      .dc-md .bm-md-list li { margin: 0; line-height: 24px; }
+      .dc-md .bm-md-table-wrap { overflow-x: auto; max-width: 100%; }
+      .dc-md .bm-md-table { border-collapse: collapse; width: 100%; font-size: 13px; line-height: 20px; }
+      .dc-md .bm-md-table th, .dc-md .bm-md-table td { padding: 6px 10px; text-align: left;
+        border: 0.5px solid var(--dsw-alias-border-l2); vertical-align: top; }
+      .dc-md .bm-md-table th { background: var(--dsw-alias-bg-layer-1); font-weight: 600;
+        color: var(--dsw-alias-label-primary); }
+      .dc-md .bm-md-table td { color: var(--dsw-alias-label-secondary); }
+      .dc-md .bm-md-quote { margin: 0; padding: 2px 0 2px 12px;
+        border-left: 2px solid var(--dsw-alias-border-l3); color: var(--dsw-alias-label-secondary); }
+      .dc-md a { color: var(--dsw-alias-brand-primary); text-decoration: none; }
+      .dc-md a:hover { text-decoration: underline; }
+      .dc-md .bm-inline-code { font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+        font-size: 12.5px; padding: 1px 5px; border-radius: 5px; background: var(--dsw-alias-bg-layer-1);
+        border: 0.5px solid var(--dsw-alias-border-l2); }
+      .dc-md .bm-code { margin: 0; border: 0.5px solid var(--dsw-alias-border-l2);
+        border-radius: 8px; overflow: hidden; background: var(--dsw-alias-bg-layer-1); }
+      .dc-md .bm-code-head { display: flex; align-items: center; justify-content: space-between;
+        padding: 4px 10px; border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+        color: var(--dsw-alias-label-tertiary); font-size: 10.5px; line-height: 16px; }
+      .dc-md .bm-code-copy { appearance: none; border: 0; background: transparent;
+        color: var(--dsw-alias-label-tertiary); font: inherit; cursor: pointer; padding: 1px 4px;
+        border-radius: 4px; }
+      .dc-md .bm-code-copy:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
+      .dc-md .bm-code pre { margin: 0; padding: 10px 12px; overflow: auto; max-height: 420px; }
+      .dc-md .bm-code code { font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+        font-size: 12px; line-height: 18px; white-space: pre; color: var(--dsw-alias-label-primary); }
+      .dc-running { display: flex; align-items: center; gap: 8px; margin-top: 12px;
+        color: var(--dsw-alias-label-deep-diving, var(--dsw-alias-brand-primary));
+        font-size: 13px; line-height: 22px; }
+      .dc-running-mark { flex: none; display: inline-flex; color: inherit; }
+      .dc-running-text { color: transparent; background: linear-gradient(90deg,
+        var(--dsw-alias-label-deep-diving, var(--dsw-alias-brand-primary)) 0%,
+        var(--dsw-alias-label-primary) 42%,
+        var(--dsw-alias-label-deep-diving, var(--dsw-alias-brand-primary)) 82%);
+        background-size: 220% 100%; -webkit-background-clip: text; background-clip: text;
+        animation: bm-shimmer 1.8s linear infinite; }
+      .dc-turn-error { margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 12px;
+        line-height: 18px; color: var(--dsw-alias-label-error); white-space: pre-wrap;
+        border: 0.5px solid color-mix(in srgb, var(--dsw-alias-label-error) 35%, transparent);
+        background: color-mix(in srgb, var(--dsw-alias-label-error) 8%, transparent); }
+      .dc-hero { display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 8px; padding: 92px 16px; text-align: center; }
+      .dc-hero-title { font-size: 24px; line-height: 32px; font-weight: 600; color: var(--dsw-alias-label-primary); }
+      .dc-hero-sub { font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
+      .dc-older { align-self: center; appearance: none; border: 0; background: transparent;
+        color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 12px; line-height: 18px;
+        padding: 4px 8px; border-radius: 5px; cursor: pointer; margin: 4px 0 12px; }
+      .dc-older:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
+      .dc-composer { flex: none; display: flex; flex-direction: column; align-items: center;
+        gap: 0; padding: 0 24px 4px; }
+      .dc-card { box-sizing: border-box; width: 100%; max-width: calc(var(--dsh-chat-content-width, 748px) + 16px); display: flex; flex-direction: column;
+        gap: 8px; padding: 8px 0 6px; border: 0.5px solid var(--dsw-alias-border-l2);
+        border-radius: 16px; background: var(--dsw-specific-input-major, var(--dsw-alias-bg-layer-2));
+        box-shadow: var(--dsw-elevation-soft, 0 4px 18px rgba(0, 0, 0, 0.14)); }
+      .dc-input { box-sizing: border-box; width: 100%; min-height: 36px; max-height: 180px;
+        resize: none; border: 0; outline: none; background: transparent; color: var(--dsw-alias-label-primary);
+        font: inherit; font-size: 14px; line-height: 24px; padding: 4px 16px 0; overflow-y: auto; }
+      .dc-input::placeholder { color: var(--dsw-alias-label-caption); }
+      .dc-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        padding: 2px 10px 0 12px; min-width: 0; }
+      .dc-bar-left, .dc-bar-right { display: flex; align-items: center; gap: 6px; min-width: 0; }
+      .dc-bar-right { justify-content: flex-end; }
+      .dc-round { appearance: none; width: 26px; height: 26px; padding: 0; border-radius: 50%;
+        border: 0.5px solid var(--dsw-alias-border-l3); background: transparent;
+        color: var(--dsw-alias-label-secondary); display: inline-flex; align-items: center;
+        justify-content: center; cursor: pointer; flex: none; }
+      .dc-round:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+      .dc-round:disabled { opacity: 0.45; cursor: default; }
+      .dc-mode { appearance: none; border: 0; background: transparent; font: inherit; font-size: 12px;
+        line-height: 18px; color: var(--dsw-alias-label-secondary); display: inline-flex;
+        align-items: center; gap: 4px; padding: 3px 5px; border-radius: 5px; cursor: pointer; flex: none; }
+      .dc-mode:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+      .dc-mode-chevron { width: 12px; height: 12px; opacity: 0.6; flex: none; }
+      .dc-model { appearance: none; border: 0; background: transparent; font: inherit; font-size: 12px;
+        line-height: 18px; color: var(--dsw-alias-label-tertiary); display: inline-flex;
+        align-items: center; gap: 4px; padding: 3px 5px; border-radius: 5px; cursor: pointer;
+        min-width: 0; max-width: 340px; }
+      .dc-model:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }
+      .dc-model-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .dc-send { appearance: none; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%;
+        background: var(--dsw-alias-button-primary-fill, #4d6bfe); color: var(--dsw-alias-label-primary-inverted, #fff);
+        display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
+      .dc-send:hover { background: var(--dsw-alias-button-primary-hover); }
+      .dc-send:disabled { opacity: 0.4; cursor: default; }
+      .dc-attach-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 12px 0; }
+      .dc-attach-item { display: flex; align-items: center; gap: 6px; max-width: 220px; padding: 3px 6px;
+        border-radius: 7px; background: var(--dsw-alias-bg-layer-1);
+        border: 0.5px solid var(--dsw-alias-border-l2); }
+      .dc-attach-item img { width: 28px; height: 28px; object-fit: cover; border-radius: 5px; flex: none; }
+      .dc-attach-name { font-size: 10.5px; line-height: 15px; color: var(--dsw-alias-label-secondary);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .dc-attach-remove { appearance: none; border: 0; background: transparent;
+        color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 14px; line-height: 16px;
+        cursor: pointer; padding: 0 2px; flex: none; }
+      .dc-attach-remove:hover { color: var(--dsw-alias-label-error); }
+      .dc-dock { box-sizing: border-box; min-height: 22px; display: flex; align-items: center;
+        justify-content: center; gap: 10px; flex-wrap: wrap; padding-top: 4px;
+        color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 20px; }
+      .dc-stat { display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px;
+        border-radius: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .dc-ring { display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px;
+        color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; }
+      .dc-ring-track { fill: none; stroke: var(--dsw-alias-border-l3); stroke-width: 2; }
+      .dc-ring-fill { fill: none; stroke: var(--dsw-alias-label-tertiary); stroke-width: 2;
+        stroke-linecap: round; }
+      .dc-detail-scroll { flex: 1; min-height: 0; overflow: auto; padding: 16px 24px 32px; }
+      .dc-back { appearance: none; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary);
+        font: inherit; font-size: 12px; line-height: 18px; padding: 4px 8px; border-radius: 6px;
+        cursor: pointer; margin-bottom: 10px; }
+      .dc-back:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+      .dc-traj-column { gap: 0; }
+      .dc-traj { display: flex; flex-direction: column; border-top: 0.5px solid var(--dsw-alias-border-l2); }
+      .dc-traj-row { display: grid; grid-template-columns: 52px 86px minmax(0, 1fr); gap: 12px;
+        padding: 7px 4px; border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+        font-size: 12.5px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
+      .dc-traj-time { color: var(--dsw-alias-label-caption); font-variant-numeric: tabular-nums; }
+      .dc-traj-type { color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis;
+        white-space: nowrap; }
+      .dc-traj-text { min-width: 0; overflow: hidden; text-overflow: ellipsis;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+      .dc-traj-row[data-tone='turn'] { color: var(--dsw-alias-label-primary); font-weight: 500;
+        background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 50%, transparent); }
+      .dc-traj-row[data-tone='user'] .dc-traj-type { color: var(--dsw-alias-brand-primary); }
+      .dc-traj-row[data-tone='tool'] .dc-traj-type { color: var(--dsw-alias-label-secondary); }
+      .dc-empty { padding: 48px 16px; text-align: center; color: var(--dsw-alias-label-tertiary);
+        font-size: 13px; line-height: 20px; }
+      .dc-chat-error { margin: 0 24px 8px; }
+      @media (max-width: 900px) {
+        .dc-head { padding-inline: 16px; }
+        .dc-scroll { padding: 12px 16px; }
+        .dc-composer { padding-inline: 12px; }
+        .dc-context-card { width: 210px; }
+        .dc-traj-row { grid-template-columns: 44px 66px minmax(0, 1fr); gap: 8px; }
+      }
     `
 
     return {
@@ -1915,6 +2231,18 @@ window.__ModuleLoader__.load({
             for (const paragraph of paragraphs) {
               if (paragraph.trim() === '') continue
               const lines = paragraph.split('\n')
+              const cellsOf = line => line.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map(cell => cell.trim())
+              if (lines.length >= 2 && lines[0].includes('|') && cellsOf(lines[1]).every(cell => /^:?-{2,}:?$/.test(cell))) {
+                const header = cellsOf(lines[0])
+                const body = lines.slice(2).filter(line => line.includes('|')).map(cellsOf)
+                nodes.push(h('div', { key: `md-tw${index++}`, className: 'bm-md-table-wrap' },
+                  h('table', { className: 'bm-md-table' },
+                    h('thead', null, h('tr', null, header.map((cell, cellIndex) => h('th', { key: `th${cellIndex}` }, inlineMarkdown(cell, `th${index}-${cellIndex}`))))),
+                    h('tbody', null, body.map((row, rowIndex) => h('tr', { key: `tr${rowIndex}` },
+                      header.map((_cell, cellIndex) => h('td', { key: `td${cellIndex}` },
+                        inlineMarkdown(row[cellIndex] || '', `td${index}-${rowIndex}-${cellIndex}`)))))))))
+                continue
+              }
               if (/^#{1,4}\s/.test(lines[0])) {
                 const level = Math.min(4, (lines[0].match(/^#+/) || ['#'])[0].length)
                 nodes.push(h(`h${level + 2}`, { key: `md-h${index++}`, className: 'bm-md-heading' },
@@ -1954,7 +2282,7 @@ window.__ModuleLoader__.load({
             cursor = match.index + match[0].length
           }
           if (cursor < source.length) pushProse(source.slice(cursor))
-          return h('div', { className: 'bm-md' }, nodes)
+          return h('div', { className: props.className || 'bm-md' }, nodes)
         }
 
         function CodeBlock(props) {
@@ -2076,9 +2404,540 @@ window.__ModuleLoader__.load({
                       ? h('span', { className: 'bm-cursor' })
                       : null))))
         }
+        /* ------------------------------------------------------------------
+           DSH conversation replica
+           The Bot panel renders the same flow shape as the Harness conversation:
+           one settled Turn header, reasoning and tool rows inside it, then the
+           answer. Statistics come from the Session log, not from a separate
+           Bot-only counter.
+           ------------------------------------------------------------------ */
+        function formatDurationText(ms, t) {
+          const seconds = Math.max(1, Math.round((Number(ms) || 0) / 1000))
+          if (seconds < 60) return t('chat.durationSeconds', { seconds })
+          return t('chat.durationMinutes', { minutes: Math.floor(seconds / 60), seconds: seconds % 60 })
+        }
+
+        function formatClockTime(time) {
+          if (!Number.isFinite(time) || time <= 0) return ''
+          const date = new Date(time)
+          return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+        }
+
+        function formatDateText(value) {
+          if (!value) return ''
+          const date = new Date(value)
+          if (Number.isNaN(date.getTime())) return ''
+          return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+        }
+
+        function formatTokenCount(value) {
+          if (!Number.isFinite(value) || value <= 0) return '0'
+          if (value >= 1_000_000) return `${Math.round(value / 100_000) / 10}M`
+          if (value >= 1_000) return `${Math.round(value / 100) / 10}K`
+          return String(Math.round(value))
+        }
+
+        function pathTail(value) {
+          const clean = String(value || '').replace(/\\/g, '/').replace(/\/+$/, '')
+          return clean.split('/').filter(Boolean).pop() || ''
+        }
+
+        function toolLabelKey(name) {
+          const lower = String(name || '').toLowerCase()
+          if (lower === 'bash' || lower === 'shell' || lower === 'terminal') return 'chat.tool.bash'
+          if (lower === 'read' || lower === 'read_file') return 'chat.tool.read'
+          if (lower === 'write' || lower === 'edit' || lower === 'apply_patch') return 'chat.tool.edit'
+          if (lower === 'grep' || lower === 'glob') return 'chat.tool.search'
+          if (lower === 'web_search') return 'chat.tool.webSearch'
+          if (lower === 'web_fetch') return 'chat.tool.webFetch'
+          if (lower === 'skill') return 'chat.tool.skill'
+          if (lower === 'bot_team') return 'chat.tool.team'
+          if (lower === 'message_agent') return 'chat.tool.message'
+          if (lower === 'ask_user_question') return 'chat.tool.question'
+          if (lower === 'plan') return 'chat.tool.plan'
+          return 'chat.tool.other'
+        }
+
+        function reasoningPreview(text, running) {
+          const source = String(text || '')
+          if (!running) return (source.split(/\r?\n/).find(line => line.trim() !== '') || '').replaceAll('**', '').trim()
+          let best = ''
+          let start = 0
+          const paragraphs = /\r?\n(?:[\t ]*\r?\n)+/g
+          for (let match = paragraphs.exec(source); match !== null; match = paragraphs.exec(source)) {
+            const first = source.slice(start, match.index).split(/\r?\n/).find(line => line.trim() !== '')
+            if (first && first.trim() !== '') best = first.trim()
+            start = match.index + match[0].length
+          }
+          return best.replaceAll('**', '').trim()
+        }
+
+        function buildChatFlow(entries) {
+          const items = []
+          const turns = new Map()
+          const calls = new Map()
+          const turnStarts = new Map()
+          const stepStarts = new Map()
+          const stepCounts = new Map()
+          let activeTurn = 0
+          let stepCount = 0
+          let live = { turn: 0, blocks: [], active: false, finished: false }
+          let contextWindow = 0
+          let latestUsage = null
+          let lastRoute = null
+          let firstUser = true
+          const totals = { output: 0, total: 0, input: 0, cacheRead: 0, cacheWrite: 0, decodeMs: 0 }
+          const liveItems = (turn) => {
+            const rows = []
+            live.blocks.forEach((block, index) => {
+              if (!block) return
+              if (block.kind === 'reason') rows.push({ kind: 'reason', text: block.text || '', key: `live-${turn}-r${index}`, running: true, time: 0 })
+              else if (block.kind === 'text') {
+                if ((block.text || '') !== '') rows.push({ kind: 'text', text: block.text, key: `live-${turn}-t${index}`, running: true, time: 0 })
+              } else if (block.kind === 'tool') {
+                rows.push({ kind: 'tool', callId: block.callId || '', name: block.name || '', key: `live-${turn}-c${index}`, running: true, time: 0 })
+              }
+            })
+            return rows
+          }
+          const ensureTurn = (turn, time) => {
+            let existing = turns.get(turn)
+            if (existing) return existing
+            existing = {
+              kind: 'turn', key: `t${turn}`, turn, items: [], startTime: turnStarts.get(turn) ?? time,
+              endTime: 0, reason: '', error: '', stopped: false, streaming: true,
+              steps: stepCounts.get(turn) ?? 0, usage: null, liveItems: [],
+            }
+            turns.set(turn, existing)
+            items.push(existing)
+            return existing
+          }
+          for (const entry of entries || []) {
+            if (!entry || typeof entry !== 'object') continue
+            if (entry.type === 'transient') {
+              const chunk = entry.event && entry.event.data && entry.event.data.chunk
+              if (!chunk) continue
+              const index = Number.isFinite(chunk.index) ? chunk.index : 0
+              if (chunk.type === 'block-start') {
+                const kind = chunk.blockType === 'reasoning' ? 'reason' : chunk.blockType === 'tool-call' ? 'tool' : 'text'
+                live.blocks[index] = kind === 'tool'
+                  ? { kind, callId: '', name: '', arguments: '' }
+                  : { kind, text: '' }
+                live.turn = activeTurn
+                live.active = true
+              } else if (chunk.type === 'text-delta' && typeof chunk.text === 'string') {
+                live.blocks[index] = live.blocks[index] || { kind: 'text', text: '' }
+                live.blocks[index].text += chunk.text
+                live.active = true
+              } else if (chunk.type === 'reasoning-delta' && typeof chunk.text === 'string') {
+                live.blocks[index] = live.blocks[index] || { kind: 'reason', text: '' }
+                live.blocks[index].text += chunk.text
+                live.active = true
+              } else if (chunk.type === 'tool-call-delta') {
+                live.blocks[index] = live.blocks[index] || { kind: 'tool', callId: '', name: '', arguments: '' }
+                const block = live.blocks[index]
+                if (typeof chunk.id === 'string') block.callId = chunk.id
+                if (typeof chunk.name === 'string' && chunk.name !== '') block.name = chunk.name
+                if (typeof chunk.argumentsDelta === 'string') block.arguments += chunk.argumentsDelta
+                live.active = true
+              } else if (chunk.type === 'block-end' && chunk.block) {
+                const block = chunk.block
+                if (block.type === 'reasoning') live.blocks[index] = { kind: 'reason', text: block.text || '' }
+                else if (block.type === 'text') live.blocks[index] = { kind: 'text', text: block.text || '' }
+                else if (block.type === 'tool-call') {
+                  live.blocks[index] = {
+                    kind: 'tool', callId: block.id || block.callId || '', name: block.name || 'tool',
+                    arguments: typeof block.arguments === 'string' ? block.arguments : JSON.stringify(block.arguments || {}),
+                  }
+                }
+                live.active = true
+              } else if (chunk.type === 'finish') live.finished = true
+              continue
+            }
+            const event = entry.event
+            if (!event || typeof event !== 'object') continue
+            const data = event.data || {}
+            if (event.type === 'request/context' && Number.isFinite(data.contextWindow)) contextWindow = data.contextWindow
+            else if (event.type === 'turn/start') {
+              activeTurn = data.turn
+              turnStarts.set(data.turn, event.time)
+              live = { turn: data.turn, blocks: [], active: false, finished: false }
+            } else if (event.type === 'step/start') {
+              stepCount += 1
+              stepStarts.set(`${data.turn}:${data.step}`, event.time)
+              stepCounts.set(data.turn, (stepCounts.get(data.turn) ?? 0) + 1)
+              const turn = turns.get(data.turn)
+              if (turn) turn.steps = stepCounts.get(data.turn)
+            } else if (event.type === 'user/message') {
+              if (!data.source || data.source.kind !== 'user') continue
+              const text = blocksText(data.content)
+              if (text !== '') {
+                items.push({ kind: 'user', key: `u${event.seq}`, text, time: event.time, context: firstUser })
+                firstUser = false
+                if (activeTurn > 0) {
+                  const turn = ensureTurn(activeTurn, event.time)
+                  turn.streaming = true
+                }
+              }
+            } else if (event.type === 'assistant/message') {
+              const turnNumber = data.turn ?? activeTurn
+              const turn = ensureTurn(turnNumber, event.time)
+              const blocks = normalizeAssistantBlocks((data.message || {}).content)
+              blocks.forEach((block, index) => {
+                if (block.kind === 'reasoning' || block.kind === 'reason') turn.items.push({ kind: 'reason', text: block.text, key: `a${event.seq}-r${index}`, running: false, time: event.time })
+                else if (block.kind === 'text') turn.items.push({ kind: 'text', text: block.text, key: `a${event.seq}-t${index}`, running: false, time: event.time })
+                else if (block.kind === 'tool') turn.items.push({ kind: 'tool', callId: block.callId, name: block.name, key: `a${event.seq}-c${index}`, running: false, time: event.time })
+              })
+              if (data.usage) {
+                latestUsage = data.usage
+                totals.output += data.usage.outputTokens || 0
+                totals.total += data.usage.totalTokens || 0
+                totals.input += data.usage.inputTokens || 0
+                totals.cacheRead += data.usage.cacheReadTokens || 0
+                totals.cacheWrite += data.usage.cacheWriteTokens || 0
+                turn.usage = data.usage
+              }
+              for (const part of data.stream || []) {
+                if (!Array.isArray(part.dt)) continue
+                for (const delta of part.dt) if (Number.isFinite(delta) && delta > 0) totals.decodeMs += delta
+              }
+              if (data.message && data.message.source) lastRoute = { provider: data.message.source.provider, model: data.message.source.model }
+              live = { turn: turnNumber, blocks: [], active: false, finished: false }
+            } else if (event.type === 'tool/call') {
+              if (!data.callId) continue
+              const previous = calls.get(data.callId) || {}
+              calls.set(data.callId, {
+                ...previous, callId: data.callId, name: data.name || previous.name || 'tool',
+                arguments: typeof data.arguments === 'string' ? data.arguments : JSON.stringify(data.arguments || {}),
+                status: previous.status === 'error' ? 'error' : 'running',
+                output: previous.output || '', startedAt: previous.startedAt ?? event.time, finishedAt: previous.finishedAt || 0,
+              })
+            } else if (event.type === 'tool/result') {
+              const message = data.message || {}
+              const callId = message.toolCallId || (message.source && message.source.callId) || ''
+              if (!callId) continue
+              const previous = calls.get(callId) || { callId, name: message.name || 'tool', arguments: '', startedAt: event.time }
+              calls.set(callId, {
+                ...previous, status: message.isError === true ? 'error' : 'done',
+                output: blocksText(message.content), finishedAt: event.time,
+              })
+            } else if (event.type === 'turn/end') {
+              const turnNumber = data.turn ?? activeTurn
+              const turn = ensureTurn(turnNumber, event.time)
+              turn.endTime = event.time
+              turn.streaming = false
+              const reason = data.reason || {}
+              turn.reason = reason.kind || 'completed'
+              turn.stopped = reason.kind === 'aborted' || reason.kind === 'interrupted'
+              if (reason.kind === 'error') turn.error = reason.error && reason.error.message ? reason.error.message : 'The turn failed.'
+              if (live.turn === turnNumber) live = { turn: turnNumber, blocks: [], active: false, finished: false }
+            }
+          }
+          if (live.active) {
+            const turn = turns.get(live.turn)
+            if (turn) turn.liveItems = liveItems(live.turn)
+          }
+          const cacheDenominator = totals.input + totals.cacheRead + totals.cacheWrite
+          const stats = {
+            turns: turns.size,
+            steps: stepCount,
+            tps: totals.decodeMs > 0 ? totals.output / (totals.decodeMs / 1000) : 0,
+            totalTokens: totals.total,
+            cacheHit: cacheDenominator > 0 ? totals.cacheRead / cacheDenominator * 100 : null,
+            contextPercent: contextWindow > 0 && latestUsage ? latestUsage.totalTokens / contextWindow * 100 : null,
+            contextWindow, latestUsage, lastRoute,
+          }
+          return {
+            items, calls, stats, activeTurn,
+            runningStart: activeTurn ? (turnStarts.get(activeTurn) ?? 0) : 0,
+          }
+        }
+
+        function useNow(active) {
+          const [now, setNow] = useState(() => Date.now())
+          useEffect(() => {
+            if (!active) return undefined
+            setNow(Date.now())
+            const timer = window.setInterval(() => setNow(Date.now()), 1000)
+            return () => window.clearInterval(timer)
+          }, [active])
+          return now
+        }
+
+        const GLYPH = { width: 14, height: 14, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, 'aria-hidden': true }
+
+        function ThinkGlyph() {
+          return h('svg', GLYPH,
+            h('path', { d: 'M6.2 13.2h3.6M6.7 15h2.6' }),
+            h('path', { d: 'M8 1.5a4.3 4.3 0 0 0-2.7 7.65c.55.45.85 1.05.85 1.7v.95h3.7v-.95c0-.65.3-1.25.85-1.7A4.3 4.3 0 0 0 8 1.5z' }))
+        }
+        function PlusGlyph() {
+          return h('svg', GLYPH, h('path', { d: 'M8 3.2v9.6M3.2 8h9.6' }))
+        }
+        function MicGlyph() {
+          return h('svg', GLYPH,
+            h('rect', { x: 5.2, y: 1.8, width: 5.6, height: 8, rx: 2.8 }),
+            h('path', { d: 'M3.4 7.6a4.6 4.6 0 0 0 9.2 0M8 12.2v2' }))
+        }
+        function SendGlyph() {
+          return h('svg', { width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true },
+            h('path', { d: 'M8 12.8V3.2M4.5 6.7L8 3.2l3.5 3.5', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round' }))
+        }
+        function StopGlyph() {
+          return h('svg', { width: 12, height: 12, viewBox: '0 0 12 12', 'aria-hidden': true },
+            h('rect', { x: 1.8, y: 1.8, width: 8.4, height: 8.4, rx: 2, fill: 'currentColor' }))
+        }
+        function EllipsisGlyph() {
+          return h('svg', GLYPH, h('circle', { cx: 3.2, cy: 8, r: 1.1, fill: 'currentColor', stroke: 'none' }),
+            h('circle', { cx: 8, cy: 8, r: 1.1, fill: 'currentColor', stroke: 'none' }),
+            h('circle', { cx: 12.8, cy: 8, r: 1.1, fill: 'currentColor', stroke: 'none' }))
+        }
+        function ChevronGlyph(props) {
+          return h('svg', { ...GLYPH, className: props.className, style: props.open ? { transform: 'rotate(180deg)' } : undefined },
+            h('path', { d: 'M4 6.2L8 10l4-3.8' }))
+        }
+        function ActivityGlyph() {
+          return h('svg', { ...GLYPH, width: 13, height: 13 },
+            h('path', { d: 'M2.2 8a5.8 5.8 0 1 0 1.8-4.2M2.2 2.2v3.2h3.2' }))
+        }
+
+        function FlowContextCard(props) {
+          const t = useT()
+          const bot = props.bot || {}
+          const title = bot.name || pathTail(bot.dir) || ''
+          const path = String(bot.dir || '')
+          const created = formatDateText(bot.createdAt)
+          if (title === '' && path === '') return null
+          return h('div', { className: 'dc-context-card' },
+            h('div', { className: 'dc-context-text' },
+              h('div', { className: 'dc-context-name', title }, title),
+              path !== '' ? h('div', { className: 'dc-context-path', title: bot.dir }, path) : null,
+              created !== '' ? h('div', { className: 'dc-context-meta' }, t('chat.contextCreated', { date: created })) : null))
+        }
+
+        function CopyGlyph() {
+          return h('svg', { ...GLYPH, width: 12, height: 12 },
+            h('rect', { x: 5, y: 5, width: 8, height: 8, rx: 1.5 }),
+            h('path', { d: 'M3 10.5V3.5A1.5 1.5 0 0 1 4.5 2H11' }))
+        }
+
+        function FlowUser(props) {
+          const t = useT()
+          const [copied, setCopied] = useState(false)
+          const copy = async () => {
+            try {
+              await navigator.clipboard.writeText(String(props.text || ''))
+              setCopied(true)
+              window.setTimeout(() => setCopied(false), 1500)
+            } catch (_error) { /* clipboard unavailable */ }
+          }
+          return h('div', { className: 'dc-user-row' },
+            props.context ? h(FlowContextCard, { bot: props.bot }) : h('div', { className: 'dc-user-spacer' }),
+            h('div', { className: 'dc-user-main' },
+              h('div', { className: 'dc-user-bubble' }, String(props.text || '')),
+              h('div', { className: 'dc-user-meta' },
+                formatClockTime(props.time) !== ''
+                  ? h('span', null, formatClockTime(props.time))
+                  : null,
+                h('button', {
+                  type: 'button', className: 'dc-user-copy', title: t(copied ? 'chat.copied' : 'chat.copy'),
+                  onClick: copy,
+                }, h(CopyGlyph))))
+          )
+        }
+
+        function FlowReasonRow(props) {
+          const t = useT()
+          const [open, setOpen] = useState(false)
+          const text = String(props.text || '')
+          const summary = reasoningPreview(text, props.running === true)
+          const expandable = text.trim() !== ''
+          return h('div', { className: 'dc-proc dc-reason', 'data-running': props.running === true ? 'true' : undefined },
+            h('button', {
+              type: 'button', className: 'dc-proc-btn',
+              onClick: () => expandable && setOpen(value => !value),
+              'aria-expanded': expandable ? open : undefined,
+            },
+              h('span', { className: 'dc-proc-icon' }, h(ThinkGlyph)),
+              h('span', { className: 'dc-proc-title' }, t('chat.reasoning')),
+              summary !== '' ? h('span', { className: 'dc-proc-sep', 'aria-hidden': true }, '·') : null,
+              summary !== '' ? h('span', {
+                className: 'dc-proc-summary', 'data-shimmer': props.running === true ? 'true' : undefined,
+              }, summary) : null,
+              expandable ? h(ChevronGlyph, { open, className: 'dc-proc-chevron' }) : null),
+            open && expandable
+              ? h('div', { className: 'dc-reason-body' },
+                h(MarkdownText, { text, className: 'dc-md dc-md-secondary' }))
+              : null)
+        }
+
+        function FlowToolRow(props) {
+          const t = useT()
+          const call = props.call || {}
+          const [open, setOpen] = useState(false)
+          const status = call.status || (props.running ? 'running' : 'preparing')
+          const label = t(toolLabelKey(call.name || props.name))
+          const summary = toolSummary(call)
+          const output = String(call.output || '')
+          const args = String(call.arguments || '')
+          const expandable = status !== 'preparing' && (args !== '' || output !== '')
+          const running = status === 'running' || status === 'preparing'
+          return h('div', { className: 'dc-proc dc-tool', 'data-state': status },
+            h('button', {
+              type: 'button', className: 'dc-proc-btn',
+              title: call.name || props.name || 'tool',
+              onClick: () => expandable && setOpen(value => !value),
+              'aria-expanded': expandable ? open : undefined,
+            },
+              h('span', { className: 'dc-proc-icon' }, running ? h('span', { className: 'dc-spin' }) : h(ToolGlyph, { name: call.name || props.name })),
+              h('span', { className: 'dc-proc-title' }, label),
+              summary !== '' ? h('span', { className: 'dc-proc-sep', 'aria-hidden': true }, '·') : null,
+              summary !== '' ? h('span', { className: 'dc-proc-summary' }, summary) : null,
+              status === 'error' ? h('span', { className: 'dc-proc-failed' }, t('chat.toolError')) : null,
+              expandable ? h(ChevronGlyph, { open, className: 'dc-proc-chevron' }) : null),
+            open && expandable
+              ? h('div', { className: 'dc-tool-body' },
+                args !== '' ? h('div', { className: 'dc-tool-part' },
+                  h('div', { className: 'dc-tool-label' }, t('chat.toolArgs')),
+                  h('pre', null, args)) : null,
+                h('div', { className: 'dc-tool-part' },
+                  h('div', { className: 'dc-tool-label' }, t('chat.toolOutput')),
+                  output === '' ? h('div', { className: 'dc-tool-empty' }, t('chat.emptyTool')) : h('pre', null, output)))
+              : null)
+        }
+
+        function FlowText(props) {
+          return h('div', { className: 'dc-prose', 'data-streaming': props.running === true ? 'true' : undefined },
+            h(MarkdownText, { text: props.text, className: 'dc-md' }))
+        }
+
+        function FlowTurn(props) {
+          const t = useT()
+          const [open, setOpen] = useState(true)
+          const turn = props.turn
+          const rows = [...(turn.items || []), ...(turn.liveItems || [])]
+          if (rows.length === 0 && !turn.error) return null
+          const processRows = rows.filter(row => row.kind !== 'text')
+          const textRows = rows.filter(row => row.kind === 'text')
+          const visible = open ? rows : textRows
+          const duration = turn.startTime && turn.endTime ? Math.max(1000, turn.endTime - turn.startTime) : 0
+          const label = turn.stopped ? t('chat.stopped')
+            : turn.error ? t('chat.turnFailed')
+              : duration > 0 ? t('chat.completedTook', { duration: formatDurationText(duration, t) })
+                : t('chat.turnWorked')
+          const header = !turn.streaming
+            ? h('button', {
+              type: 'button', className: 'dc-turn-head',
+              onClick: () => setOpen(value => !value),
+              'aria-expanded': open,
+              'data-open': open ? 'true' : undefined,
+            },
+              h('span', { className: 'dc-turn-label' }, label),
+              processRows.length > 0 ? h(ChevronGlyph, { open: !open, className: 'dc-turn-chevron' }) : null)
+            : null
+          return h('div', { className: 'dc-turn', 'data-streaming': turn.streaming ? 'true' : undefined },
+            header,
+            visible.length > 0
+              ? h('div', { className: 'dc-turn-body' }, visible.map((row, index) => row.kind === 'reason'
+                ? h(FlowReasonRow, { key: row.key, text: row.text, running: row.running })
+                : row.kind === 'tool'
+                  ? h(FlowToolRow, {
+                    key: row.key, call: props.calls.get(row.callId), name: row.name, running: row.running,
+                  })
+                  : h(FlowText, { key: row.key, text: row.text, running: row.running })))
+              : null,
+            turn.error ? h('div', { className: 'dc-turn-error' }, turn.error) : null)
+        }
+
+        function FlowRunning(props) {
+          const t = useT()
+          const elapsed = props.startTime > 0 ? Math.max(0, props.now - props.startTime) : 0
+          return h('div', { className: 'dc-running' },
+            h('span', { className: 'dc-running-mark' }, h('span', { className: 'dc-spin' })),
+            h('span', { className: 'dc-running-text' },
+              elapsed > 0 ? t('chat.deepDivingFor', { duration: formatDurationText(elapsed, t) }) : t('chat.deepDiving')))
+        }
+
+        function ContextRing(props) {
+          const percent = Number.isFinite(props.percent) ? Math.max(0, Math.min(100, props.percent)) : 0
+          const radius = 5.5
+          const circumference = 2 * Math.PI * radius
+          return h('span', { className: 'dc-ring', title: `${percent}%` },
+            h('svg', { width: 14, height: 14, viewBox: '0 0 14 14', 'aria-hidden': true },
+              h('circle', { className: 'dc-ring-track', cx: 7, cy: 7, r: radius }),
+              h('circle', {
+                className: 'dc-ring-fill', cx: 7, cy: 7, r: radius,
+                strokeDasharray: `${circumference * percent / 100} ${circumference}`,
+                transform: 'rotate(-90 7 7)',
+              })),
+            h('span', null, `${Math.round(percent)}%`))
+        }
+
+        function FlowStats(props) {
+          const t = useT()
+          const stats = props.stats || {}
+          const bits = []
+          if (stats.turns > 0) bits.push(t('chat.statsCounts', { turns: stats.turns, steps: stats.steps }))
+          if (stats.tps > 0) bits.push(`${stats.tps >= 10 ? Math.round(stats.tps) : Math.round(stats.tps * 10) / 10} tok/s`)
+          if (stats.totalTokens > 0) bits.push(`${formatTokenCount(stats.totalTokens)} tok`)
+          if (stats.cacheHit !== null && stats.cacheHit !== undefined) {
+            bits.push(t('chat.statsCache', { percent: Math.round(stats.cacheHit) }))
+          }
+          if (bits.length === 0 && stats.contextPercent === null) return null
+          return h('div', { className: 'dc-dock' },
+            h('span', { className: 'dc-stat' }, h(ActivityGlyph), h('span', null, bits.join(' · '))),
+            stats.contextPercent !== null && stats.contextPercent !== undefined
+              ? h(ContextRing, { percent: stats.contextPercent })
+              : null)
+        }
+
+        function FlowTrajectory(props) {
+          const t = useT()
+          const rows = []
+          const clipped = (text, size) => {
+            const value = String(text || '').replace(/\s+/g, ' ').trim()
+            return value.length > size ? `${value.slice(0, size)}…` : value
+          }
+          for (const item of props.flow.items) {
+            if (item.kind === 'user') {
+              rows.push({ key: item.key, time: item.time, type: t('chat.you'), tone: 'user', text: item.text })
+              continue
+            }
+            if (item.kind !== 'turn') continue
+            rows.push({
+              key: `${item.key}-head`, time: item.startTime, type: t('chat.turnLabel', { turn: item.turn }), tone: 'turn',
+              text: item.error ? item.error : item.stopped ? t('chat.stopped') : item.streaming
+                ? t('chat.deepDiving')
+                : item.endTime ? t('chat.completedTook', { duration: formatDurationText(Math.max(1000, item.endTime - item.startTime), t) }) : t('chat.turnWorked'),
+            })
+            const turnRows = [...(item.items || []), ...(item.liveItems || [])]
+            for (const row of turnRows) {
+              if (row.kind === 'reason') rows.push({ key: row.key, time: row.time, type: t('chat.reasoningShort'), tone: 'reason', text: clipped(row.text, 320) })
+              else if (row.kind === 'text') rows.push({ key: row.key, time: row.time, type: t('chat.answer'), tone: 'text', text: clipped(row.text, 320) })
+              else if (row.kind === 'tool') {
+                const call = props.flow.calls.get(row.callId)
+                const title = t(toolLabelKey((call && call.name) || row.name))
+                const summary = toolSummary(call || {})
+                const status = call && call.status === 'error' ? ` · ${t('chat.toolError')}` : call && call.status === 'running' ? ` · ${t('chat.toolRunning')}` : ''
+                rows.push({
+                  key: row.key, time: (call && call.startedAt) || row.time, type: t('chat.toolShort'), tone: 'tool',
+                  text: `${title}${summary ? ` · ${summary}` : ''}${status}`,
+                })
+              }
+            }
+          }
+          if (rows.length === 0) return h('div', { className: 'dc-empty' }, t('chat.noTrajectory'))
+          return h('div', { className: 'dc-traj' }, rows.map(row => h('div', {
+            key: row.key, className: 'dc-traj-row', 'data-tone': row.tone,
+          },
+            h('span', { className: 'dc-traj-time' }, formatClockTime(row.time)),
+            h('span', { className: 'dc-traj-type' }, row.type),
+            h('span', { className: 'dc-traj-text' }, row.text))))
+        }
+
         function ChatPane(props) {
           const t = useT()
-          const [tab, setTab] = useState('chat')
+          const [view, setView] = useState('chat')
           const [text, setText] = useState('')
           const [error, setError] = useState('')
           const [busy, setBusy] = useState(false)
@@ -2086,14 +2945,27 @@ window.__ModuleLoader__.load({
           const imagesRef = useRef([])
           imagesRef.current = images
           const attachRef = useRef(null)
+          const inputRef = useRef(null)
           const catalog = props.models && props.models.catalog
-          const vision = modelVisionOf(catalog, effectiveModelOf(catalog, props.bot.model))
+          const selection = effectiveModelOf(catalog, props.bot.model)
+          const vision = modelVisionOf(catalog, selection)
+          const modelName = modelLabelOf(catalog, selection)
+            || (selection && selection.model ? selection.model : t('model.default'))
+          const effortName = selection && selection.reasoningEffort
+            ? (reasoningNameOf(catalog, selection) || selection.reasoningEffort)
+            : t('chat.defaultEffort')
           const releaseImages = (list) => {
             for (const item of list) {
               try { URL.revokeObjectURL(item.url) } catch (_error) { /* the browser may already have released it */ }
             }
           }
           useEffect(() => () => releaseImages(imagesRef.current), [])
+          useEffect(() => {
+            const node = inputRef.current
+            if (!node) return
+            node.style.height = 'auto'
+            node.style.height = `${Math.min(180, Math.max(24, node.scrollHeight))}px`
+          }, [text])
           const addFiles = (fileList) => {
             const accepted = []
             let notice = ''
@@ -2150,21 +3022,22 @@ window.__ModuleLoader__.load({
             listener => (binding ? binding.eventSource.subscribe(listener) : () => {}),
             () => (binding ? binding.eventSource.getSnapshot() : { entries: [], hasMore: false, revision: 0 }),
           )
-          const turns = useMemo(() => buildTranscript(events.entries), [events])
+          const flow = useMemo(() => buildChatFlow(events.entries), [events])
+          const now = useNow(snapshot.running)
           const stickRef = useRef(true)
           useEffect(() => {
             const node = logRef.current
             if (node && stickRef.current) node.scrollTop = node.scrollHeight
-          }, [events.revision, snapshot.running])
+          }, [events.revision, snapshot.running, view])
           useEffect(() => {
             if (props.onSeen) props.onSeen()
           }, [props.sessionId])
           useEffect(() => {
             if (!props.onActivity) return
-            const last = [...turns].reverse().find(turn => turn.kind === 'assistant')
-            if (!last) return
-            const text = last.blocks.filter(block => block.kind === 'text').map(block => block.text).join('\n')
-            if (text !== '') props.onActivity(text)
+            const lastTurn = [...flow.items].reverse().find(item => item.kind === 'turn')
+            if (!lastTurn) return
+            const value = [...lastTurn.items, ...lastTurn.liveItems].filter(item => item.kind === 'text').map(item => item.text).join('\n')
+            if (value !== '') props.onActivity(value)
           }, [events.revision])
           const send = async (event) => {
             event.preventDefault()
@@ -2196,85 +3069,116 @@ window.__ModuleLoader__.load({
             if (session === null) return
             try { await hostCommand('bot.stop', { botId: props.bot.id }) } catch (_failure) { /* the turn may already be settling */ }
           }
-          const head = h('header', { className: 'bm-chat-head' },
-            h('span', { className: 'bm-avatar bm-avatar-sm', style: { background: props.bot.color || COLORS[0] } }, initialOf(props.bot.name)),
-            h('div', { className: 'bm-chat-title' },
-              h('span', { className: 'bm-name' }, props.bot.name),
-              h('span', { className: 'bm-role' }, props.bot.role || '—')),
-            h('span', { className: 'bm-chat-status', 'data-running': Boolean(snapshot.running) },
-              snapshot.running ? t('chat.working') : t('chat.idle')),
-            h('span', {
-              className: 'bm-model-pill',
-              title: describeModel(t, catalog, props.bot.model, { optional: true }),
-            }, modelLabelOf(catalog, effectiveModelOf(catalog, props.bot.model))
-              || (props.bot.model && props.bot.model.provider && props.bot.model.model
-                ? `${props.bot.model.provider}/${props.bot.model.model}`
-                : t('model.default'))),
-            h('div', { className: 'bm-chat-tabs' },
-              h('button', { type: 'button', 'data-active': tab === 'chat', onClick: () => setTab('chat') }, t('chat.tab')),
-              h('button', { type: 'button', 'data-active': tab === 'detail', onClick: () => setTab('detail') }, t('chat.detail'))))
-          if (tab === 'detail') {
-            return h('div', { className: 'bm-chat' }, head, h('div', { className: 'bm-detail-col' }, props.detail))
+          const head = h('header', { className: 'dc-head' },
+            h('div', { className: 'dc-head-row' },
+              h('div', { className: 'dc-head-lead' },
+                h('span', {
+                  className: 'dc-title',
+                  title: props.bot.name ? `${props.bot.name} · ${props.sessionId}` : props.sessionId,
+                }, props.sessionId || props.bot.name),
+                snapshot.running ? h('span', { className: 'dc-running-dot', 'aria-label': t('chat.working') }) : null),
+              h('div', { className: 'dc-head-actions' },
+                h('button', {
+                  type: 'button', className: 'dc-icon-btn', 'data-active': view === 'detail' ? 'true' : undefined,
+                  title: view === 'detail' ? t('chat.back') : t('chat.detail'),
+                  onClick: () => setView(view === 'detail' ? 'chat' : 'detail'),
+                }, h(EllipsisGlyph)))),
+            h('div', { className: 'dc-tabs' },
+              h('button', { type: 'button', 'data-active': view === 'chat' ? 'true' : undefined, onClick: () => setView('chat') }, t('chat.tab')),
+              h('button', { type: 'button', 'data-active': view === 'trajectory' ? 'true' : undefined, onClick: () => setView('trajectory') }, t('chat.tabTrajectory'))))
+          if (view === 'detail') {
+            return h('div', { className: 'dc-chat' },
+              head,
+              h('div', { className: 'dc-detail-scroll' },
+                h('button', { type: 'button', className: 'dc-back', onClick: () => setView('chat') }, `← ${t('chat.back')}`),
+                props.detail))
           }
-          return h('div', { className: 'bm-chat' },
+          const composer = h('div', { className: 'dc-composer' },
+            h('form', { className: 'dc-card', onSubmit: send },
+              images.length > 0
+                ? h('div', { className: 'dc-attach-list' }, images.map(image => h('div', { key: image.id, className: 'dc-attach-item' },
+                  h('img', { src: image.url, alt: image.name }),
+                  h('span', { className: 'dc-attach-name' }, image.name),
+                  h('button', {
+                    type: 'button', className: 'dc-attach-remove', title: t('chat.attachRemove'),
+                    onClick: () => removeImage(image.id),
+                  }, '×'))))
+                : null,
+              h('textarea', {
+                ref: inputRef, className: 'dc-input', value: text, rows: 1,
+                placeholder: t('chat.composerPlaceholder'),
+                onChange: event => setText(event.target.value),
+                onKeyDown: (event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(event) }
+                },
+              }),
+              h('div', { className: 'dc-bar' },
+                h('div', { className: 'dc-bar-left' },
+                  h('button', {
+                    type: 'button', className: 'dc-round',
+                    disabled: vision === false || busy,
+                    title: vision === false ? t('chat.attachVisionOnly') : t('chat.attachAdd'),
+                    onClick: () => { if (attachRef.current) attachRef.current.click() },
+                  }, h(PlusGlyph)),
+                  h('input', {
+                    ref: attachRef, type: 'file', hidden: true, multiple: true,
+                    accept: 'image/png,image/jpeg,image/webp,image/gif',
+                    onChange: (event) => { addFiles(event.target.files); event.target.value = '' },
+                  }),
+                  h('button', {
+                    type: 'button', className: 'dc-mode',
+                    title: describeModel(t, catalog, props.bot.model),
+                    onClick: () => setView('detail'),
+                  }, h('span', null, t('chat.modeCustom')), h(ChevronGlyph, { className: 'dc-mode-chevron' }))),
+                h('div', { className: 'dc-bar-right' },
+                  h('button', {
+                    type: 'button', className: 'dc-model',
+                    title: describeModel(t, catalog, props.bot.model),
+                    onClick: () => setView('detail'),
+                  }, h('span', { className: 'dc-model-name' }, `${modelName} ${effortName}`), h(ChevronGlyph, { className: 'dc-mode-chevron' })),
+                  h('button', { type: 'button', className: 'dc-icon-btn', title: t('chat.voice'), onClick: () => {} }, h(MicGlyph)),
+                  snapshot.running
+                    ? h('button', { type: 'button', className: 'dc-send', title: t('chat.stop'), onClick: stop }, h(StopGlyph))
+                    : h('button', {
+                      type: 'submit', className: 'dc-send', title: t('chat.send'),
+                      disabled: busy || (text.trim() === '' && images.length === 0),
+                    }, h(SendGlyph))))),
+            h(FlowStats, { stats: flow.stats }))
+          if (view === 'trajectory') {
+            return h('div', { className: 'dc-chat' },
+              head,
+              h('div', { className: 'dc-scroll' },
+                h('div', { className: 'dc-column dc-traj-column' }, h(FlowTrajectory, { flow }))))
+          }
+          return h('div', { className: 'dc-chat' },
             head,
             h('div', {
-              className: 'bm-log', ref: logRef,
+              className: 'dc-scroll', ref: logRef,
               onScroll: (event) => {
                 const node = event.currentTarget
                 stickRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48
               },
             },
-              turns.length === 0 && !snapshot.running
-                ? h('div', { className: 'bm-chat-empty' }, t('chat.empty', { name: props.bot.name }))
-                : null,
-              snapshot.hasMore
-                ? h('button', { className: 'bm-btn small', style: { alignSelf: 'center' }, onClick: () => { if (session) void session.loadOlder() } }, t('chat.older'))
-                : null,
-              turns.map(turn => turn.kind === 'user'
-                ? h('div', { key: turn.key, className: 'bm-msg bm-msg-user' }, turn.text)
-                : turn.kind === 'error'
-                  ? h('div', { key: turn.key, className: 'bm-turn-error' }, turn.text)
-                  : turn.kind === 'notice'
-                    ? h('div', { key: turn.key, className: 'bm-turn-notice' }, t('chat.stopped'))
-                    : h(AssistantTurn, { key: turn.key, turn, bot: props.bot })),
-              snapshot.running && turns.every(turn => turn.kind !== 'assistant' || turn.streaming !== true)
-                ? h('div', { className: 'bm-tail' }, h('span', { className: 'bm-spin' }), h('span', { className: 'bm-tail-text' }, t('chat.tail')))
-                : null),
-            error ? h('div', { className: 'bm-error bm-chat-error' }, error) : null,
-            h('form', { className: 'bm-compose bm-compose-col', onSubmit: send },
-              images.length > 0
-                ? h('div', { className: 'bm-attach-list' }, images.map(image => h('div', { key: image.id, className: 'bm-attach-item' },
-                  h('img', { src: image.url, alt: image.name }),
-                  h('span', { className: 'bm-attach-name' }, image.name),
-                  h('button', {
-                    type: 'button', className: 'bm-attach-remove', title: t('chat.attachRemove'),
-                    onClick: () => removeImage(image.id),
-                  }, '×'))))
-                : null,
-              h('div', { className: 'bm-compose-row' },
-                h('button', {
-                  type: 'button',
-                  className: 'bm-btn small bm-attach-btn',
-                  disabled: vision === false || busy,
-                  title: vision === false ? t('chat.attachVisionOnly') : t('chat.attachAdd'),
-                  onClick: () => { if (attachRef.current) attachRef.current.click() },
-                }, t('chat.attach')),
-                h('input', {
-                  ref: attachRef, type: 'file', hidden: true, multiple: true,
-                  accept: 'image/png,image/jpeg,image/webp,image/gif',
-                  onChange: (event) => { addFiles(event.target.files); event.target.value = '' },
-                }),
-                h('textarea', {
-                  value: text, rows: 1, placeholder: t('chat.placeholder', { name: props.bot.name }),
-                  onChange: event => setText(event.target.value),
-                  onKeyDown: (event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(event) }
-                  },
-                }),
+              h('div', { className: 'dc-column' },
+                flow.items.length === 0 && !snapshot.running
+                  ? h('div', { className: 'dc-hero' },
+                    h('div', { className: 'dc-hero-title' }, t('chat.emptyTitle')),
+                    h('div', { className: 'dc-hero-sub' }, t('chat.empty', { name: props.bot.name })))
+                  : null,
+                snapshot.hasMore
+                  ? h('button', {
+                    className: 'dc-older', type: 'button',
+                    onClick: () => { if (session) void session.loadOlder() },
+                  }, t('chat.older'))
+                  : null,
+                flow.items.map(item => item.kind === 'user'
+                  ? h(FlowUser, { key: item.key, text: item.text, context: item.context, time: item.time, bot: props.bot })
+                  : h(FlowTurn, { key: item.key, turn: item, calls: flow.calls })),
                 snapshot.running
-                  ? h('button', { type: 'button', className: 'bm-btn', onClick: stop }, t('chat.stop'))
-                  : h('button', { type: 'submit', className: 'bm-btn primary', disabled: busy || (text.trim() === '' && images.length === 0) }, busy ? t('form.busy') : t('chat.send')))))
+                  ? h(FlowRunning, { startTime: flow.runningStart, now })
+                  : null)),
+            error ? h('div', { className: 'bm-error dc-chat-error' }, error) : null,
+            composer)
         }
 
         function GroupForm(props) {
@@ -2671,10 +3575,12 @@ window.__ModuleLoader__.load({
                   h('p', null, t('page.empty.body')),
                   h('button', { className: 'bm-btn primary', onClick: () => setForm({ mode: 'create' }) }, t('page.empty.cta')))
 
+          const chatMode = !form && !activeGroup && Boolean(activeBot && activeSessionId)
           return h('div', { className: 'bm-page bm-page-split' },
             h('style', null, CSS),
             pane,
-            h('section', { className: 'bm-detail-col' }, hostNotice, approvalBanner, detail))
+            h('section', { className: chatMode ? 'bm-detail-col bm-chat-col' : 'bm-detail-col' },
+              hostNotice, approvalBanner, detail))
         }
 
         function PanelIcon(props) {
