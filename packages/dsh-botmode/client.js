@@ -26,10 +26,13 @@ window.__ModuleLoader__.load({
         'mode.currentHarness': 'Current mode: Harness',
         'page.eyebrow': 'Bot mode',
         'page.title': 'Bots',
-        'page.subtitle': 'Named, long-lived assistants. Each Bot owns a workspace folder named after it — its persona lives there, and the team board connects every Bot.',
+        'host.loading': 'Loading the Bot roster from the Host…',
+        'host.error': 'The Host did not answer',
+        'host.retry': 'Retry',
+        'page.subtitle': 'Named, long-lived assistants. Each Bot owns a folder, a persona, a memory and one permanent chat; the Host keeps the roster, Group Rooms and Routines.',
         'page.new': 'New bot',
         'page.empty.title': 'No Bots yet',
-        'page.empty.body': 'A Bot is its own workspace plus a chat. Creating one writes its persona into AGENTS.md there; the team board lets every Bot on this machine leave messages for the others.',
+        'page.empty.body': 'Creating a Bot writes its folder, SOUL.md and MEMORY.md, opens its permanent chat, and registers it on the team roster so the other Bots can message it.',
         'page.empty.cta': 'Create the first Bot',
         'pane.bots': 'Bots',
         'pane.groups': 'Group chats',
@@ -40,6 +43,11 @@ window.__ModuleLoader__.load({
         'group.hint': 'Every member answers in the group; each reply is posted in the shared transcript.',
         'group.name': 'Name',
         'group.namePlaceholder': 'e.g. Research desk',
+        'group.mode': 'Routing',
+        'group.modeAuto': 'Lead first, then @mentions',
+        'group.modeEveryone': 'Everyone each round',
+        'group.lead': 'Lead Bot',
+        'group.leadAuto': 'First member',
         'group.members': 'Members',
         'group.create': 'Create group',
         'group.delete': 'Delete group',
@@ -53,6 +61,17 @@ window.__ModuleLoader__.load({
         'group.noMembers': 'Add at least two Bots first.',
         'group.needName': 'Name the group first.',
         'group.needMembers': 'Pick at least two Bots.',
+        'chat.reasoning': 'Reasoning',
+        'chat.toolArgs': 'Arguments',
+        'chat.toolOutput': 'Output',
+        'chat.toolRunning': 'running',
+        'chat.toolDone': 'done',
+        'chat.toolError': 'failed',
+        'chat.emptyTool': '(no output)',
+        'chat.copy': 'Copy',
+        'chat.copied': 'Copied',
+        'chat.stopped': 'Stopped',
+        'chat.tail': 'Thinking…',
         'chat.working': 'Working',
         'chat.idle': 'Idle',
         'chat.tab': 'Chat',
@@ -107,6 +126,42 @@ window.__ModuleLoader__.load({
         'err.update': 'Could not update the Bot: {msg}',
         'err.brief': 'Could not send the brief: {msg}',
         'err.session': 'This Bot has no chat session any more.',
+        'form.section': 'Section',
+        'form.provider': 'Model provider',
+        'form.providerPlaceholder': 'leave empty for the default',
+        'form.model': 'Model',
+        'form.modelPlaceholder': 'leave empty for the default',
+        'form.approval': 'Approval policy',
+        'approval.ask': 'Ask me',
+        'approval.allowAlways': 'Always allow',
+        'approval.denyAlways': 'Always deny',
+        'approval.once': 'Allow once',
+        'approval.session': 'Allow this session',
+        'approval.always': 'Always allow',
+        'approval.deny': 'Deny',
+        'form.tools': 'Allowed tools',
+        'form.toolsPlaceholder': 'comma separated; empty means every tool',
+        'section.new': 'Section',
+        'section.namePrompt': 'Name the new Section',
+        'detail.routines': 'Routines',
+        'routine.new': 'New routine',
+        'routine.none': 'No routines yet. A routine wakes this Bot on a cron schedule even when its chat is cold.',
+        'routine.next': 'next',
+        'routine.run': 'Run now',
+        'routine.pause': 'Pause',
+        'routine.resume': 'Resume',
+        'routine.name': 'Name',
+        'routine.cron': 'Cron (5 fields)',
+        'routine.prompt': 'Instruction',
+        'routine.promptPlaceholder': 'What should this Bot do when the routine fires?',
+        'routine.hint': 'The Host evaluates this cron itself and wakes the Bot even after a restart. Example: 0 9 * * 1-5.',
+        'routine.create': 'Create routine',
+        'group.running': 'Routing…',
+        'group.needsYou': 'needs you',
+        'group.continue': 'Continue',
+        'group.stop': 'Stop',
+        'group.pausedBudget': 'The dispatch budget is spent. Continue with a fresh budget, or stop.',
+        'group.pausedMention': 'A Bot asked for a human decision.',
       },
       zh: {
         'meta.title': 'Bot 模式',
@@ -119,10 +174,13 @@ window.__ModuleLoader__.load({
         'mode.currentHarness': '当前模式：Harness',
         'page.eyebrow': 'Bot 模式',
         'page.title': 'Bot 团队',
-        'page.subtitle': '有名字、长期存在的助手。每个 Bot 拥有一个以自己命名的工作区，人格写在里面；所有 Bot 通过团队留言板互通。',
+        'host.loading': '正在从 Host 读取 Bot 名册…',
+        'host.error': 'Host 没有响应',
+        'host.retry': '重试',
+        'page.subtitle': '有名字、长期在线的助手。每个 Bot 拥有自己的目录、人格、记忆和一个永久会话；名册、群聊与例程都由 Host 维护。',
         'page.new': '新建 Bot',
         'page.empty.title': '还没有 Bot',
-        'page.empty.body': '每个 Bot 是一个独立工作区加一条对话。创建时会把人格写进工作区的 AGENTS.md；所有 Bot 通过团队留言板互相留话。',
+        'page.empty.body': '创建 Bot 会生成它的目录、SOUL.md 和 MEMORY.md，打开永久会话，并登记到团队名册，其他 Bot 才能给它发消息。',
         'page.empty.cta': '创建第一个 Bot',
         'pane.bots': 'Bot',
         'pane.groups': '群聊',
@@ -133,6 +191,11 @@ window.__ModuleLoader__.load({
         'group.hint': '每位成员都会在群里回复，所有消息落在同一个群记录里。',
         'group.name': '群名称',
         'group.namePlaceholder': '例如：调研小组',
+        'group.mode': '路由方式',
+        'group.modeAuto': 'Lead 先答，再按 @ 接力',
+        'group.modeEveryone': '每轮所有人',
+        'group.lead': 'Lead Bot',
+        'group.leadAuto': '默认第一个成员',
         'group.members': '成员',
         'group.create': '创建群聊',
         'group.delete': '删除群聊',
@@ -146,6 +209,17 @@ window.__ModuleLoader__.load({
         'group.noMembers': '先至少加两个 Bot。',
         'group.needName': '先给群起个名字。',
         'group.needMembers': '至少选两个 Bot。',
+        'chat.reasoning': '思考过程',
+        'chat.toolArgs': '参数',
+        'chat.toolOutput': '输出',
+        'chat.toolRunning': '运行中',
+        'chat.toolDone': '完成',
+        'chat.toolError': '失败',
+        'chat.emptyTool': '（无输出）',
+        'chat.copy': '复制',
+        'chat.copied': '已复制',
+        'chat.stopped': '已停止',
+        'chat.tail': '正在思考…',
         'chat.working': '工作中',
         'chat.idle': '空闲',
         'chat.tab': '对话',
@@ -200,6 +274,42 @@ window.__ModuleLoader__.load({
         'err.update': '更新 Bot 失败：{msg}',
         'err.brief': '发送失败：{msg}',
         'err.session': '这个 Bot 已经没有对应的会话了。',
+        'form.section': '分组',
+        'form.provider': '模型提供方',
+        'form.providerPlaceholder': '留空使用默认',
+        'form.model': '模型',
+        'form.modelPlaceholder': '留空使用默认',
+        'form.approval': '审批策略',
+        'approval.ask': '每次询问我',
+        'approval.allowAlways': '总是允许',
+        'approval.denyAlways': '总是拒绝',
+        'approval.once': '允许一次',
+        'approval.session': '本会话允许',
+        'approval.always': '总是允许',
+        'approval.deny': '拒绝',
+        'form.tools': '允许的工具',
+        'form.toolsPlaceholder': '用逗号分隔；留空表示全部工具',
+        'section.new': '新建分组',
+        'section.namePrompt': '给新分组起个名字',
+        'detail.routines': '定时例程',
+        'routine.new': '新建例程',
+        'routine.none': '还没有例程。例程按 cron 在 Host 侧唤醒这个 Bot，即使对话已经冷却。',
+        'routine.next': '下次',
+        'routine.run': '立即运行',
+        'routine.pause': '暂停',
+        'routine.resume': '恢复',
+        'routine.name': '名称',
+        'routine.cron': 'Cron（5 段）',
+        'routine.prompt': '指令',
+        'routine.promptPlaceholder': '例程触发时这个 Bot 要做什么？',
+        'routine.hint': 'Host 自己计算 cron，重启后也会唤醒 Bot。例如：0 9 * * 1-5。',
+        'routine.create': '创建例程',
+        'group.running': '调度中…',
+        'group.needsYou': '需要你',
+        'group.continue': '继续',
+        'group.stop': '停止',
+        'group.pausedBudget': '本轮调度预算已用完。可以按新预算继续，或停止。',
+        'group.pausedMention': '有 Bot 请求人类决定。',
       },
     }
 
@@ -459,6 +569,101 @@ window.__ModuleLoader__.load({
       .bm-live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px;
         background: var(--dsw-alias-brand-primary); animation: bm-pulse 1.2s ease-in-out infinite; }
       @keyframes bm-pulse { 0%,100% { opacity: 0.25 } 50% { opacity: 1 } }
+      .bm-log { gap: 18px; padding: 18px 22px 28px; }
+      .bm-msg { max-width: 74%; font-size: 13.5px; line-height: 21px; white-space: pre-wrap; word-break: break-word;
+        padding: 9px 12px; border-radius: 10px; }
+      .bm-msg-user { align-self: flex-end; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary);
+        border: 0.5px solid var(--dsw-alias-border-l2); border-bottom-right-radius: 4px; }
+      .bm-turn { display: flex; flex-direction: column; gap: 6px; max-width: 880px; width: 100%; align-self: flex-start; }
+      .bm-turn-who { display: flex; align-items: center; gap: 7px; }
+      .bm-turn-name { font-size: 11.5px; line-height: 16px; color: var(--dsw-alias-label-tertiary); }
+      .bm-avatar-xs { width: 18px; height: 18px; font-size: 9px; border-radius: 5px; }
+      .bm-turn-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+      .bm-assistant-text { font-size: 13.5px; line-height: 22px; color: var(--dsw-alias-label-primary); word-break: break-word; }
+      .bm-md { min-width: 0; }
+      .bm-md-p { margin: 0 0 9px; white-space: pre-wrap; }
+      .bm-md > :last-child { margin-bottom: 0; }
+      .bm-md-heading { margin: 14px 0 6px; font-size: 14px; line-height: 20px; font-weight: 600; }
+      .bm-md-list { margin: 0 0 9px; padding-left: 20px; }
+      .bm-md-list li { margin: 2px 0; }
+      .bm-md-quote { margin: 0 0 9px; padding: 2px 0 2px 10px; border-left: 2px solid var(--dsw-alias-border-l2);
+        color: var(--dsw-alias-label-secondary); white-space: pre-wrap; }
+      .bm-md a { color: var(--dsw-alias-brand-primary); text-decoration: none; }
+      .bm-md a:hover { text-decoration: underline; }
+      .bm-inline-code { font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 12px;
+        padding: 1px 5px; border-radius: 5px; background: var(--dsw-alias-bg-layer-1);
+        border: 0.5px solid var(--dsw-alias-border-l2); }
+      .bm-code { margin: 8px 0; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; overflow: hidden;
+        background: var(--dsw-alias-bg-layer-1); }
+      .bm-code-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 10px;
+        border-bottom: 0.5px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-label-tertiary); font-size: 10.5px; }
+      .bm-code-lang { text-transform: lowercase; letter-spacing: 0.02em; }
+      .bm-code-copy { appearance: none; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary);
+        font: inherit; cursor: pointer; padding: 1px 4px; border-radius: 4px; }
+      .bm-code-copy:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
+      .bm-code pre { margin: 0; padding: 10px 12px; overflow: auto; max-height: 420px; }
+      .bm-code code { font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+        font-size: 12px; line-height: 18px; white-space: pre; color: var(--dsw-alias-label-primary); }
+      .bm-cursor { display: inline-block; width: 7px; height: 15px; margin-left: 2px; vertical-align: -2px;
+        border-radius: 1px; background: var(--dsw-alias-label-secondary); animation: bm-blink 1s step-end infinite; }
+      @keyframes bm-blink { 0%,100% { opacity: 1 } 50% { opacity: 0 } }
+      .bm-reason { border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; overflow: hidden;
+        background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 55%, transparent); max-width: 880px; }
+      .bm-reason-head { display: flex; align-items: center; gap: 7px; width: 100%; padding: 5px 9px; border: 0;
+        background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11.5px;
+        line-height: 17px; cursor: pointer; text-align: left; }
+      .bm-reason-icon { display: inline-flex; color: var(--dsw-alias-label-tertiary); flex: none; }
+      .bm-reason-icon[data-running='true'] { color: var(--dsw-alias-brand-primary); animation: bm-pulse 1.2s ease-in-out infinite; }
+      .bm-reason-title { flex: none; color: var(--dsw-alias-label-secondary); }
+      .bm-reason-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        color: var(--dsw-alias-label-tertiary); }
+      .bm-reason-summary[data-shimmer='true'] { background: linear-gradient(90deg,
+        var(--dsw-alias-label-tertiary) 0%, var(--dsw-alias-label-primary) 40%, var(--dsw-alias-label-tertiary) 80%);
+        background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+        animation: bm-shimmer 1.8s linear infinite; }
+      @keyframes bm-shimmer { from { background-position: 120% 0 } to { background-position: -120% 0 } }
+      .bm-reason-body { border-top: 0.5px solid var(--dsw-alias-border-l1); padding: 9px 12px;
+        color: var(--dsw-alias-label-secondary); font-size: 12.5px; line-height: 20px; max-height: 320px; overflow: auto; }
+      .bm-reason-body .bm-md-p { white-space: pre-wrap; }
+      .bm-tool { border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; overflow: hidden;
+        background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 45%, transparent); max-width: 880px; }
+      .bm-tool-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 9px; border: 0;
+        background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11.5px;
+        line-height: 17px; text-align: left; cursor: default; }
+      .bm-tool-head[aria-expanded] { cursor: pointer; }
+      .bm-tool-icon { display: inline-flex; color: var(--dsw-alias-label-tertiary); flex: none; }
+      .bm-tool-name { flex: none; font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+        font-size: 11px; color: var(--dsw-alias-label-primary); }
+      .bm-tool-summary { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        color: var(--dsw-alias-label-tertiary); font-family: var(--dsw-font-mono, ui-monospace, monospace);
+        font-size: 10.5px; }
+      .bm-tool-state { flex: none; font-size: 10px; color: var(--dsw-alias-label-tertiary); }
+      .bm-tool[data-state='error'] { border-color: color-mix(in srgb, var(--dsw-alias-label-error) 35%, transparent); }
+      .bm-tool[data-state='error'] .bm-tool-state { color: var(--dsw-alias-label-error); }
+      .bm-tool[data-state='running'] .bm-tool-icon { color: var(--dsw-alias-brand-primary); }
+      .bm-tool-chevron { flex: none; display: inline-block; transform: rotate(0deg); transition: transform .14s ease;
+        opacity: 0.55; font-size: 13px; line-height: 1; }
+      .bm-tool-chevron[data-open='true'] { transform: rotate(90deg); }
+      .bm-tool-body { border-top: 0.5px solid var(--dsw-alias-border-l1); padding: 8px 10px;
+        display: flex; flex-direction: column; gap: 8px; background: var(--dsw-alias-bg-layer-1); }
+      .bm-tool-label { font-size: 9.5px; line-height: 14px; letter-spacing: 0.04em; text-transform: uppercase;
+        color: var(--dsw-alias-label-tertiary); margin-bottom: 3px; }
+      .bm-tool-body pre { margin: 0; font-family: var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+        font-size: 11px; line-height: 17px; white-space: pre-wrap; word-break: break-word; max-height: 300px;
+        overflow: auto; color: var(--dsw-alias-label-secondary); }
+      .bm-tool-empty { font-size: 11px; color: var(--dsw-alias-label-tertiary); }
+      .bm-spin { display: inline-block; width: 11px; height: 11px; border-radius: 50%; flex: none;
+        border: 1.5px solid color-mix(in srgb, var(--dsw-alias-brand-primary) 22%, transparent);
+        border-top-color: var(--dsw-alias-brand-primary); animation: bm-spin .7s linear infinite; }
+      @keyframes bm-spin { to { transform: rotate(360deg) } }
+      .bm-tail { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 18px;
+        color: var(--dsw-alias-label-tertiary); padding: 2px 1px; }
+      .bm-tail-text { animation: bm-pulse 1.6s ease-in-out infinite; }
+      .bm-turn-error { max-width: 880px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-error);
+        border: 0.5px solid color-mix(in srgb, var(--dsw-alias-label-error) 35%, transparent);
+        background: color-mix(in srgb, var(--dsw-alias-label-error) 8%, transparent);
+        border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; }
+      .bm-turn-notice { font-size: 11.5px; color: var(--dsw-alias-label-tertiary); }
       .bm-compose { flex: none; border-top: 0.5px solid var(--dsw-alias-border-l2); padding: 10px 12px 12px;
         display: flex; gap: 8px; align-items: flex-end; }
       .bm-compose textarea { flex: 1; resize: none; min-height: 34px; max-height: 160px; font: inherit; font-size: 13px;
@@ -476,41 +681,129 @@ window.__ModuleLoader__.load({
       .bm-foot { border-top: 0.5px solid var(--dsw-alias-border-l2); padding-top: 14px; display: flex;
         align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
       .bm-foot span { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); max-width: 620px; }
+      .bm-approvals { display: flex; flex-direction: column; gap: 6px; padding: 10px 16px 0; }
+      .bm-approval { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: var(--dsw-radius-md);
+        border: 0.5px solid var(--dsw-alias-border-selected); background: var(--dsw-alias-bg-layer-1); }
+      .bm-approval-text { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; font-size: 12px; }
+      .bm-approval-name { font-weight: 600; }
+      .bm-approval-tool { font-family: var(--dsw-alias-font-mono, monospace); font-size: 11px;
+        padding: 0 5px; border-radius: 4px; background: var(--dsw-alias-bg-layer-2); }
+      .bm-approval-reason { color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 380px; }
+      .bm-approval-actions { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+      .bm-bot-group { display: flex; flex-direction: column; gap: 1px; padding-bottom: 4px; }
+      .bm-group-title { font-size: 10px; line-height: 14px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+        color: var(--dsw-alias-label-tertiary); padding: 6px 8px 2px; }
+      .bm-block-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .bm-routine-list { display: flex; flex-direction: column; gap: 6px; }
+      .bm-routine { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: var(--dsw-radius-md);
+        border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); }
+      .bm-routine-text { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+      .bm-routine-name { font-size: 12px; line-height: 16px; font-weight: 600; }
+      .bm-routine-meta { font-size: 10px; line-height: 14px; color: var(--dsw-alias-label-tertiary); }
+      .bm-routine-prompt { font-size: 11px; line-height: 16px; color: var(--dsw-alias-label-secondary);
+        overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+      .bm-routine-actions { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+      .bm-routine-form { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: var(--dsw-radius-md);
+        border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); }
+      .bm-room-alert { flex: none; display: flex; align-items: center; gap: 8px; margin: 10px 16px 0; padding: 8px 10px;
+        border-radius: var(--dsw-radius-md); border: 0.5px solid var(--dsw-alias-border-selected);
+        background: var(--dsw-alias-bg-layer-1); font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+      .bm-room-alert span { flex: 1; }
+      .bm-needs-you { font-size: 10px; line-height: 16px; padding: 1px 7px; border-radius: 999px;
+        background: var(--dsw-alias-label-error); color: #fff; }
+      .bm-foot-toggle:not([data-wide='true']) span { display: none; }
+      .bm-foot-toggle { appearance: none; border: 0; background: transparent; color: var(--dsw-alias-label-secondary);
+        font: inherit; font-size: 12px; line-height: 16px; display: inline-flex; align-items: center; gap: 6px;
+        padding: 5px 8px; border-radius: var(--dsw-radius-md); cursor: pointer; width: 100%; text-align: left; }
+      .bm-foot-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+      .bm-foot-toggle[data-active='true'] { color: var(--dsw-alias-brand-primary); }
     `
 
     return {
-      inject: ['slots', 'layout', 'locale', 'sessions', 'uiWorkspace', 'remote', 'remote.workspaceFiles'],
+      inject: ['slots', 'layout', 'locale', 'sessions', 'uiWorkspace'],
       apply(ctx) {
         const sessions = ctx.get('sessions')
         let workspaceStore
         try { workspaceStore = ctx.get('workspaces') } catch (_error) { workspaceStore = undefined }
         const locale = ctx.get('locale')
-        const roster = createStore(readRoster())
-        const GROUPS_KEY = 'dsh.botmode.groups.v1'
-        const readGroups = () => {
+        const hostStore = createStore({ state: null, status: 'loading', error: '' })
+        const hostRequest = async (path, init) => {
+          const response = await fetch(`/botmode/api/${path}`, {
+            credentials: 'include', cache: 'no-store', ...init,
+          })
+          let payload
+          try { payload = await response.json() } catch (_failure) { payload = null }
+          if (!payload || payload.ok !== true) {
+            throw new Error((payload && payload.error) || `Bot mode API answered ${response.status}`)
+          }
+          return payload
+        }
+        const refreshHost = async () => {
           try {
-            const raw = window.localStorage.getItem(GROUPS_KEY)
-            const parsed = raw ? JSON.parse(raw) : []
-            return Array.isArray(parsed) ? parsed.filter(group => group && typeof group.id === 'string' && Array.isArray(group.members)) : []
-          } catch (_error) {
-            return []
+            const payload = await hostRequest('state')
+            hostStore.set({ state: payload.state, status: 'ready', error: '' })
+          } catch (error) {
+            hostStore.set({
+              state: hostStore.getSnapshot().state,
+              status: 'error',
+              error: error && error.message ? error.message : String(error),
+            })
           }
         }
-        const writeGroups = (list) => {
-          try { window.localStorage.setItem(GROUPS_KEY, JSON.stringify(list)) } catch (_error) { /* memory only */ }
+        const hostCommand = async (type, payload = {}) => {
+          const response = await hostRequest('command', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ type, ...payload }),
+          })
+          hostStore.set({ state: response.state, status: 'ready', error: '' })
+          return response.result
         }
-        const groupStore = createStore(readGroups())
-        const saveGroups = (next) => { writeGroups(next); groupStore.set(next) }
-        const appendGroupMessage = (groupId, message) => {
-          const next = groupStore.getSnapshot().map(group => (group.id === groupId
-            ? { ...group, messages: [...(group.messages || []), message].slice(-300), lastAt: message.at }
-            : group))
-          saveGroups(next)
+        // Components keep their old roster/groups props; both now read the Host
+        // snapshot, so every browser and cold Bot sees the same data.
+        // getSnapshot must return the SAME reference until the Host state object
+        // changes; a fresh [] or a fresh map on every read makes React re-render
+        // until it gives up ("Maximum update depth exceeded") and blanks the panel.
+        const EMPTY_BOTS = []
+        const roster = {
+          getSnapshot: () => {
+            const state = hostStore.getSnapshot().state
+            return state && Array.isArray(state.bots) ? state.bots : EMPTY_BOTS
+          },
+          subscribe: listener => hostStore.subscribe(listener),
         }
-        const markGroupSeen = (groupId) => {
-          const next = groupStore.getSnapshot().map(group => (group.id === groupId ? { ...group, lastSeen: Date.now() } : group))
-          saveGroups(next)
+        let groupCache = { state: undefined, value: EMPTY_BOTS }
+        const groupStore = {
+          getSnapshot: () => {
+            const state = hostStore.getSnapshot().state
+            if (!state || !Array.isArray(state.rooms)) return EMPTY_BOTS
+            if (groupCache.state === state) return groupCache.value
+            groupCache = {
+              state,
+              value: state.rooms.map(room => ({
+                ...room,
+                members: room.memberIds || [],
+                messages: (room.transcript || []).map(item => ({
+                  ...item,
+                  at: Number.isFinite(Date.parse(item.at)) ? Date.parse(item.at) : Date.now(),
+                })),
+              })),
+            }
+            return groupCache.value
+          },
+          subscribe: listener => hostStore.subscribe(listener),
         }
+        const writeRoster = () => {}
+        const saveGroups = () => {}
+        const appendGroupMessage = () => {}
+        const markGroupSeen = () => {}
+        ctx.effect(() => {
+          void refreshHost()
+          const timer = window.setInterval(() => {
+            if (document.visibilityState !== 'hidden') void refreshHost()
+          }, 3000)
+          return () => window.clearInterval(timer)
+        }, 'botmode: host state polling')
         // Both spaces share one Host session list and one Workspace registry, and
         // neither has a filter API. This plugin therefore narrows the snapshots the
         // Harness sidebar reads: Harness mode shows only non-Bot entries, Bot mode
@@ -625,70 +918,6 @@ window.__ModuleLoader__.load({
         }
         ctx.effect(registerLocales, 'botmode: dictionaries')
 
-        /* Adopt roster entries the Host file carries and this browser does not
-           yet have. The read needs one Session as filesystem authority, so the
-           first Bot with a chat provides the anchor; a missing file, an
-           unavailable Remote or a malformed record leaves the roster as it was.
-           Seeding only appends: a local entry always wins. */
-        const seedFromHost = async () => {
-          try {
-            const current = roster.getSnapshot()
-            const anchor = current.find(bot => bot && bot.sessionId)
-            if (!anchor) return
-            let files
-            try {
-              const remote = ctx.get('remote')
-              files = remote && remote.workspaceFiles
-            } catch (_error) {
-              return
-            }
-            if (!files || typeof files.read !== 'function') return
-            const page = await files.read(anchor.sessionId, HOST_ROSTER_FILE, { offset: 1, limit: 200 })
-            const body = page && 'value' in page ? (page.ok === false ? undefined : page.value) : page
-            const text = typeof body === 'string' ? body : (body && body.text)
-            if (typeof text !== 'string' || text.trim() === '') return
-            let parsed
-            try {
-              parsed = JSON.parse(text)
-            } catch (_error) {
-              return
-            }
-            const rows = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.bots) ? parsed.bots : [])
-            const fresh = roster.getSnapshot()
-            const seen = new Set()
-            for (const bot of fresh) {
-              seen.add(bot.sessionId)
-              seen.add(bot.name)
-            }
-            const merged = [...fresh]
-            for (const row of rows) {
-              if (!row || typeof row.name !== 'string' || typeof row.sessionId !== 'string') continue
-              if (seen.has(row.sessionId) || seen.has(row.name)) continue
-              merged.push({
-                id: typeof row.id === 'string' && row.id !== '' ? row.id : newId(),
-                name: row.name,
-                role: typeof row.role === 'string' ? row.role : '',
-                instructions: typeof row.instructions === 'string' ? row.instructions : '',
-                color: typeof row.color === 'string' && row.color !== '' ? row.color : COLORS[0],
-                sessionId: row.sessionId,
-                createdAt: typeof row.createdAt === 'number' ? row.createdAt : Date.now(),
-              })
-              seen.add(row.sessionId)
-              seen.add(row.name)
-            }
-            if (merged.length === fresh.length) return
-            writeRoster(merged)
-            roster.set(merged)
-          } catch (_error) {
-            /* seeding is best effort: the Bot page keeps working without it */
-          }
-        }
-
-        ctx.effect(() => {
-          const timer = setTimeout(() => { seedFromHost() }, 800)
-          return () => { clearTimeout(timer) }
-        }, 'botmode: host roster seed')
-
         const useLang = () => useSyncExternalStore(
           listener => locale.subscribe(listener),
           () => locale.getLocale(),
@@ -707,7 +936,7 @@ window.__ModuleLoader__.load({
 
         const openBot = (bot) => {
           if (!bot.sessionId) return
-          ctx.get('uiWorkspace').openSession(bot.sessionId)
+          ctx.layout.selectPanel(PANEL_ID)
         }
 
         const toBots = () => ctx.layout.selectPanel(PANEL_ID)
@@ -780,98 +1009,24 @@ window.__ModuleLoader__.load({
         }
         const teamList = () => roster.getSnapshot().map(bot => ({ name: bot.name, role: bot.role || '' }))
 
-        const createBot = async (draft, lang) => {
-          const root = await ensureRootDir(await ensureRoot())
-          const dirName = safeDirName(draft.name)
-          const dir = await ensureDir(root, dirName, `${root}/${dirName}`)
-          const workspace = await workspaces.create({ path: dir })
-          try {
-            await workspaces.rename(workspace.workspaceId, draft.name)
-          } catch (_error) { /* the title falls back to the folder name */ }
-          const sessionId = await sessions.create({ workspaceId: workspace.workspaceId })
-          await sessions.using(sessionId, { source: 'botmode' }, (reference) => (
-            reference.binding.session.rename(draft.name)
-          ))
-          const scaffolded = await scaffold(sessionId, {
-            name: draft.name,
-            role: draft.role,
-            instructions: draft.instructions,
-            color: draft.color,
-            team: teamList(),
-          })
-          await promptBot(sessionId, scaffolded
-            ? kickoff(draft.name, lang)
-            : setupInChat(draft, teamList(), lang))
-          const bot = {
-            id: newId(),
-            name: draft.name,
-            role: draft.role,
-            instructions: draft.instructions,
-            color: draft.color,
-            sessionId,
-            workspaceId: workspace.workspaceId,
-            dir,
-            createdAt: Date.now(),
-          }
-          const next = [...roster.getSnapshot(), bot]
-          writeRoster(next)
-          roster.set(next)
-          return bot
+        // Roster mutations go to the Host, which owns the Bot directory, the
+        // canonical Session and the identity files. The Client only renders.
+        const createBot = async (draft) => {
+          const result = await hostCommand('bot.save', { draft })
+          return result.bot
         }
 
-        const updateBot = async (bot, draft, lang) => {
-          const next = roster.getSnapshot().map(item => (item.id === bot.id ? { ...item, ...draft } : item))
-          writeRoster(next)
-          roster.set(next)
-          if (bot.sessionId) {
-            await sessions.using(bot.sessionId, { source: 'botmode' }, (reference) => (
-              reference.binding.session.rename(draft.name)
-            ))
-            const scaffolded = await scaffold(bot.sessionId, {
-              name: draft.name,
-              role: draft.role,
-              instructions: draft.instructions,
-              color: draft.color,
-              team: teamList().filter(member => member.name !== draft.name),
-            })
-            if (!scaffolded) await promptBot(bot.sessionId, setupInChat(draft, teamList().filter(member => member.name !== draft.name), lang, true))
-            if (bot.workspaceId && draft.name !== bot.name) {
-              try {
-                await workspaces.rename(bot.workspaceId, draft.name)
-              } catch (_error) { /* keep the old workspace title */ }
-            }
-            await promptBot(bot.sessionId, profileUpdate(draft.name, draft.role, draft.instructions, lang))
-          }
+        const updateBot = async (bot, draft) => {
+          const result = await hostCommand('bot.save', { botId: bot.id, draft })
+          return result.bot
         }
 
-        const deleteBot = (bot) => {
-          const next = roster.getSnapshot().filter(item => item.id !== bot.id)
-          writeRoster(next)
-          roster.set(next)
+        const deleteBot = async (bot) => {
+          await hostCommand('bot.delete', { botId: bot.id })
         }
 
-        const migrateBot = async (bot, lang) => {
-          const root = await ensureRootDir(await ensureRoot())
-          const dirName = safeDirName(bot.name)
-          const dir = await ensureDir(root, dirName, `${root}/${dirName}`)
-          const workspace = await workspaces.create({ path: dir })
-          try {
-            await workspaces.rename(workspace.workspaceId, bot.name)
-          } catch (_error) { /* the title falls back to the folder name */ }
-          const sessionId = await sessions.create({ workspaceId: workspace.workspaceId })
-          await sessions.using(sessionId, { source: 'botmode' }, (reference) => (
-            reference.binding.session.rename(bot.name)
-          ))
-          const team = teamList().filter(member => member.name !== bot.name)
-          const scaffolded = await scaffold(sessionId, {
-            name: bot.name, role: bot.role, instructions: bot.instructions, color: bot.color, team,
-          })
-          await promptBot(sessionId, scaffolded ? kickoff(bot.name, lang) : setupInChat(bot, team, lang))
-          const next = roster.getSnapshot().map(item => (item.id === bot.id
-            ? { ...item, sessionId, workspaceId: workspace.workspaceId, dir }
-            : item))
-          writeRoster(next)
-          roster.set(next)
+        const migrateBot = async (bot) => {
+          await hostCommand('bot.save', { botId: bot.id, draft: { ...bot } })
         }
 
         const sessionOf = (state, bot) => (state && state.byId ? state.byId[bot.sessionId] : undefined)
@@ -923,12 +1078,55 @@ window.__ModuleLoader__.load({
                 placeholder: t('form.instructionsPlaceholder'),
                 onChange: event => setDraft({ ...draft, instructions: event.target.value }),
               })),
-            h('div', { className: 'bm-label' }, t('form.color'),
-              h('div', { className: 'bm-swatches' }, COLORS.map(color => h('button', {
-                key: color, type: 'button', className: 'bm-swatch', title: color,
-                style: { background: color }, 'data-active': draft.color === color,
-                onClick: () => setDraft({ ...draft, color }),
-              })))),
+            h('div', { className: 'bm-row' },
+              h('label', { className: 'bm-label' }, t('form.section'),
+                h('select', {
+                  className: 'bm-input',
+                  value: draft.sectionId || 'general',
+                  onChange: event => setDraft({ ...draft, sectionId: event.target.value }),
+                }, (props.sections && props.sections.length > 0 ? props.sections : [{ id: 'general', name: 'General' }]).map(section => h('option', { key: section.id, value: section.id },
+                  section.nameZh || section.name)))),
+              h('label', { className: 'bm-label' }, t('form.color'),
+                h('div', { className: 'bm-swatches' }, COLORS.map(color => h('button', {
+                  key: color, type: 'button', className: 'bm-swatch', title: color,
+                  style: { background: color }, 'data-active': draft.color === color,
+                  onClick: () => setDraft({ ...draft, color }),
+                }))))),
+            h('div', { className: 'bm-row' },
+              h('label', { className: 'bm-label' }, t('form.provider'),
+                h('input', {
+                  className: 'bm-input', value: (draft.model && draft.model.provider) || '',
+                  placeholder: t('form.providerPlaceholder'),
+                  onChange: event => setDraft({ ...draft, model: { ...(draft.model || {}), provider: event.target.value } }),
+                })),
+              h('label', { className: 'bm-label' }, t('form.model'),
+                h('input', {
+                  className: 'bm-input', value: (draft.model && draft.model.model) || '',
+                  placeholder: t('form.modelPlaceholder'),
+                  onChange: event => setDraft({ ...draft, model: { ...(draft.model || {}), model: event.target.value } }),
+                }))),
+            h('label', { className: 'bm-label' }, t('form.approval'),
+              h('select', {
+                className: 'bm-input',
+                value: draft.approvalPolicy || 'ask',
+                onChange: event => setDraft({ ...draft, approvalPolicy: event.target.value }),
+              },
+                h('option', { value: 'ask' }, t('approval.ask')),
+                h('option', { value: 'always' }, t('approval.allowAlways')),
+                h('option', { value: 'never' }, t('approval.denyAlways')))),
+            h('label', { className: 'bm-label' }, t('form.tools'),
+              h('input', {
+                className: 'bm-input',
+                value: ((draft.tools && draft.tools.allow) || []).join(', '),
+                placeholder: t('form.toolsPlaceholder'),
+                onChange: event => setDraft({
+                  ...draft,
+                  tools: {
+                    ...(draft.tools || {}),
+                    allow: event.target.value.split(',').map(item => item.trim()).filter(Boolean),
+                  },
+                }),
+              })),
             error ? h('div', { className: 'bm-error' }, error) : null,
             h('div', { className: 'bm-form-actions' },
               h('button', { type: 'button', className: 'bm-btn', onClick: props.onCancel }, t('form.cancel')),
@@ -953,7 +1151,7 @@ window.__ModuleLoader__.load({
             setNotice('')
             try {
               for (const bot of targets) {
-                await promptBot(bot.sessionId, `[Team brief from the user] ${String(text).trim()}`)
+                await props.onCommand('bot.dispatch', { botId: bot.id, text: `[Team brief from the user] ${String(text).trim()}` })
               }
               setText('')
               setNotice(t('brief.sent', { n: targets.length }))
@@ -1048,6 +1246,95 @@ window.__ModuleLoader__.load({
             time ? h('span', { className: 'bm-srow-time' }, time) : null)
         }
 
+        function RoutineSection(props) {
+          const t = useT()
+          const [open, setOpen] = useState(false)
+          const [name, setName] = useState('')
+          const [cron, setCron] = useState('0 9 * * 1-5')
+          const [prompt, setPrompt] = useState('')
+          const [error, setError] = useState('')
+          const [busy, setBusy] = useState(false)
+          const routines = props.routines || []
+          const act = (command, payload) => {
+            setBusy(true)
+            setError('')
+            props.onCommand(command, payload)
+              .catch((failure) => setError(failure && failure.message ? failure.message : String(failure)))
+              .finally(() => setBusy(false))
+          }
+          const submit = async (event) => {
+            event.preventDefault()
+            if (busy) return
+            setBusy(true)
+            setError('')
+            try {
+              await props.onCommand('routine.save', {
+                botId: props.bot.id,
+                name: name.trim() || `${props.bot.name} routine`,
+                cron: cron.trim(),
+                prompt: prompt.trim(),
+                enabled: true,
+              })
+              setName('')
+              setPrompt('')
+              setOpen(false)
+            } catch (failure) {
+              setError(failure && failure.message ? failure.message : String(failure))
+            } finally { setBusy(false) }
+          }
+          const row = (routine) => h('div', { key: routine.id, className: 'bm-routine' },
+            h('div', { className: 'bm-routine-text' },
+              h('div', { className: 'bm-routine-name' }, routine.name),
+              h('div', { className: 'bm-routine-meta' },
+                `${routine.cron}${routine.nextAt ? ` · ${t('routine.next')} ${new Date(routine.nextAt).toLocaleString()}` : ''}`),
+              h('div', { className: 'bm-routine-prompt' }, routine.prompt)),
+            h('div', { className: 'bm-routine-actions' },
+              h('button', {
+                className: 'bm-btn small', disabled: busy,
+                onClick: () => act('routine.run', { routineId: routine.id }),
+              }, t('routine.run')),
+              h('button', {
+                className: 'bm-btn small', disabled: busy,
+                onClick: () => act('routine.toggle', { routineId: routine.id, enabled: !routine.enabled }),
+              }, routine.enabled ? t('routine.pause') : t('routine.resume')),
+              h('button', {
+                className: 'bm-btn small danger', disabled: busy,
+                onClick: () => act('routine.delete', { routineId: routine.id }),
+              }, t('card.delete'))))
+          const form = open ? h('form', { className: 'bm-routine-form', onSubmit: submit },
+            h('div', { className: 'bm-row' },
+              h('label', { className: 'bm-label' }, t('routine.name'),
+                h('input', {
+                  className: 'bm-input', value: name, placeholder: `${props.bot.name} routine`,
+                  onChange: event => setName(event.target.value),
+                })),
+              h('label', { className: 'bm-label' }, t('routine.cron'),
+                h('input', {
+                  className: 'bm-input', value: cron, placeholder: '0 9 * * 1-5',
+                  onChange: event => setCron(event.target.value),
+                }))),
+            h('label', { className: 'bm-label' }, t('routine.prompt'),
+              h('textarea', {
+                className: 'bm-input', rows: 3, value: prompt,
+                placeholder: t('routine.promptPlaceholder'),
+                onChange: event => setPrompt(event.target.value),
+              })),
+            h('p', { className: 'bm-form-hint' }, t('routine.hint')),
+            error ? h('div', { className: 'bm-error' }, error) : null,
+            h('div', { className: 'bm-form-actions' },
+              h('button', {
+                type: 'submit', className: 'bm-btn primary',
+                disabled: busy || prompt.trim() === '',
+              }, t('routine.create')))) : null
+          return h('section', { className: 'bm-block' },
+            h('div', { className: 'bm-block-head' },
+              h('h3', null, t('detail.routines')),
+              h('button', { className: 'bm-section-add', onClick: () => setOpen(value => !value) }, t('routine.new'))),
+            routines.length === 0 ? h('p', { className: 'bm-muted' }, t('routine.none')) : null,
+            routines.length > 0 ? h('div', { className: 'bm-routine-list' }, routines.map(row)) : null,
+            form)
+        }
+
         function BotDetail(props) {
           const t = useT()
           const [confirming, setConfirming] = useState(false)
@@ -1067,7 +1354,7 @@ window.__ModuleLoader__.load({
                 h('div', { className: 'bm-role' }, bot.role || '—'),
                 bot.dir ? h('div', { className: 'bm-dir', title: bot.dir }, `${t('detail.workspace')} · ${bot.dir}`) : null)),
             h('div', { className: 'bm-dactions' },
-              h('button', { className: 'bm-btn primary', disabled: !summary, onClick: () => summary && props.onOpen(bot) }, t('card.open')),
+              h('button', { className: 'bm-btn primary', disabled: !bot.sessionId, onClick: () => bot.sessionId && props.onOpen(bot) }, t('card.open')),
               !bot.dir
                 ? h('button', { className: 'bm-btn', disabled: migrating, onClick: migrate },
                   migrating ? t('card.migrating') : t('card.migrate'))
@@ -1093,6 +1380,11 @@ window.__ModuleLoader__.load({
                   primary: row.primary,
                   onOpen: () => props.onOpenSession(row.id),
                 })))),
+            h(RoutineSection, {
+              bot,
+              routines: props.routines,
+              onCommand: props.onCommand,
+            }),
             props.brief ? props.brief : null,
           )
         }
@@ -1109,14 +1401,92 @@ window.__ModuleLoader__.load({
           return parts.join('\n')
         }
 
-        function chatRows(entries) {
-          const rows = []
-          let live = ''
+        function normalizeAssistantBlocks(content) {
+          const blocks = []
+          for (const block of content || []) {
+            if (!block || typeof block !== 'object') continue
+            if (block.type === 'reasoning' && typeof block.text === 'string' && block.text.trim() !== '') {
+              blocks.push({ kind: 'reasoning', text: block.text })
+            } else if (block.type === 'text' && typeof block.text === 'string' && block.text.trim() !== '') {
+              blocks.push({ kind: 'text', text: block.text })
+            } else if (block.type === 'tool-call') {
+              blocks.push({
+                kind: 'tool',
+                callId: block.id || block.callId || '',
+                name: block.name || 'tool',
+                arguments: typeof block.arguments === 'string' ? block.arguments : JSON.stringify(block.arguments || {}),
+              })
+            }
+          }
+          return blocks
+        }
+
+        function buildTranscript(entries) {
+          const turns = []
+          const calls = new Map()
+          const live = { blocks: [], active: false, finished: false }
+          const ensureLive = (index, type) => {
+            if (!live.blocks[index] || live.blocks[index].kind !== type) {
+              live.blocks[index] = type === 'tool'
+                ? { kind: 'tool', callId: '', name: '', arguments: '', streaming: true }
+                : { kind: type, text: '', streaming: true }
+            }
+            live.active = true
+            return live.blocks[index]
+          }
+          const resetLive = () => {
+            live.blocks = []
+            live.active = false
+            live.finished = false
+          }
+          const flushLive = () => {
+            const blocks = live.blocks.filter(block => block && (block.kind === 'tool' || (block.text && block.text !== '')))
+            if (blocks.length > 0) {
+              turns.push({ kind: 'assistant', key: 'live', blocks, streaming: !live.finished })
+            }
+            live.blocks = []
+            live.active = false
+            live.finished = false
+          }
           for (const entry of entries || []) {
             if (!entry || typeof entry !== 'object') continue
             if (entry.type === 'transient') {
               const chunk = entry.event && entry.event.data && entry.event.data.chunk
-              if (chunk && chunk.type === 'text-delta' && typeof chunk.text === 'string') live += chunk.text
+              if (!chunk) continue
+              const index = Number.isFinite(chunk.index) ? chunk.index : 0
+              if (chunk.type === 'block-start') {
+                const blockType = chunk.blockType === 'reasoning' ? 'reasoning'
+                  : chunk.blockType === 'tool-call' ? 'tool' : 'text'
+                live.blocks[index] = blockType === 'tool'
+                  ? { kind: 'tool', callId: '', name: '', arguments: '', streaming: true }
+                  : { kind: blockType, text: '', streaming: true }
+                live.active = true
+              } else if (chunk.type === 'text-delta' && typeof chunk.text === 'string') {
+                ensureLive(index, 'text').text += chunk.text
+              } else if (chunk.type === 'reasoning-delta' && typeof chunk.text === 'string') {
+                ensureLive(index, 'reasoning').text += chunk.text
+              } else if (chunk.type === 'tool-call-delta') {
+                const block = ensureLive(index, 'tool')
+                if (typeof chunk.id === 'string') block.callId = chunk.id
+                if (typeof chunk.name === 'string' && chunk.name !== '') block.name = chunk.name
+                if (typeof chunk.argumentsDelta === 'string') block.arguments += chunk.argumentsDelta
+              } else if (chunk.type === 'block-end' && chunk.block) {
+                const block = chunk.block
+                if (block.type === 'reasoning' || block.type === 'text') {
+                  live.blocks[index] = { kind: block.type, text: block.text || '', streaming: true }
+                } else if (block.type === 'tool-call') {
+                  live.blocks[index] = {
+                    kind: 'tool',
+                    callId: block.id || block.callId || '',
+                    name: block.name || 'tool',
+                    arguments: typeof block.arguments === 'string' ? block.arguments : JSON.stringify(block.arguments || {}),
+                    streaming: true,
+                  }
+                }
+                live.active = true
+              } else if (chunk.type === 'finish') {
+                live.finished = true
+              }
               continue
             }
             const event = entry.event
@@ -1125,21 +1495,277 @@ window.__ModuleLoader__.load({
             if (event.type === 'user/message') {
               if (!data.source || data.source.kind !== 'user') continue
               const text = blocksText(data.content)
-              if (text !== '') rows.push({ key: `u${event.seq}`, kind: 'user', text })
+              if (text !== '') turns.push({ kind: 'user', key: `u${event.seq}`, text })
             } else if (event.type === 'assistant/message') {
-              live = ''
-              const message = data.message || {}
-              const text = blocksText(message.content)
-              if (text !== '') rows.push({ key: `a${event.seq}`, kind: 'assistant', text })
+              resetLive()
+              const blocks = normalizeAssistantBlocks((data.message || {}).content)
+              if (blocks.length > 0) turns.push({ kind: 'assistant', key: `a${event.seq}`, blocks, streaming: false })
             } else if (event.type === 'tool/call') {
-              rows.push({ key: `t${event.seq}`, kind: 'tool', text: data.name || 'tool' })
+              const callId = data.callId || ''
+              if (callId !== '') {
+                calls.set(callId, {
+                  callId,
+                  name: data.name || 'tool',
+                  arguments: typeof data.arguments === 'string' ? data.arguments : JSON.stringify(data.arguments || {}),
+                  status: 'running',
+                  output: '',
+                  isError: false,
+                })
+              }
             } else if (event.type === 'tool/result') {
-              rows.push({ key: `r${event.seq}`, kind: 'tool', text: `${data.message && data.message.name ? data.message.name : ''} done`, error: data.message && data.message.isError === true })
+              const message = data.message || {}
+              const callId = message.toolCallId || (message.source && message.source.callId) || ''
+              if (callId !== '') {
+                const existing = calls.get(callId) || { callId, name: message.name || 'tool', arguments: '', status: 'done', output: '', isError: false }
+                existing.status = message.isError === true ? 'error' : 'done'
+                existing.isError = message.isError === true
+                existing.output = blocksText(message.content)
+                calls.set(callId, existing)
+              }
+            } else if (event.type === 'turn/end') {
+              flushLive()
+              const reason = data.reason || {}
+              if (reason.kind === 'error') {
+                const text = reason.error && reason.error.message ? reason.error.message : 'The turn failed.'
+                turns.push({ kind: 'error', key: `e${event.seq}`, text })
+              } else if (reason.kind === 'aborted') {
+                turns.push({ kind: 'notice', key: `n${event.seq}`, text: 'stopped' })
+              }
             }
           }
-          return { rows, live }
+          flushLive()
+          const referenced = new Set()
+          for (const turn of turns) {
+            if (turn.kind !== 'assistant') continue
+            turn.blocks = turn.blocks.map((block) => {
+              if (block.kind !== 'tool') return block
+              const call = calls.get(block.callId) || {
+                callId: block.callId,
+                name: block.name || 'tool',
+                arguments: block.arguments || '',
+                status: 'preparing',
+                output: '',
+                isError: false,
+              }
+              if (call.callId) referenced.add(call.callId)
+              return { ...block, name: call.name || block.name, call }
+            })
+          }
+          const extra = [...calls.values()].filter(call => !referenced.has(call.callId))
+          if (extra.length > 0) {
+            turns.push({
+              kind: 'assistant',
+              key: 'extra-tools',
+              blocks: extra.map(call => ({ kind: 'tool', callId: call.callId, name: call.name, call })),
+              streaming: false,
+            })
+          }
+          return turns
         }
 
+        function safeHref(value) {
+          return /^https?:\/\//i.test(value) ? value : undefined
+        }
+
+        function inlineMarkdown(text, keyPrefix) {
+          const nodes = []
+          const pattern = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g
+          let cursor = 0
+          let index = 0
+          for (const match of text.matchAll(pattern)) {
+            if (match.index > cursor) nodes.push(text.slice(cursor, match.index))
+            const token = match[0]
+            const key = `${keyPrefix}-i${index++}`
+            if (token.startsWith('**')) {
+              nodes.push(h('strong', { key }, token.slice(2, -2)))
+            } else if (token.startsWith('`')) {
+              nodes.push(h('code', { key, className: 'bm-inline-code' }, token.slice(1, -1)))
+            } else {
+              const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token)
+              const href = link === null ? undefined : safeHref(link[2])
+              nodes.push(href
+                ? h('a', { key, href, target: '_blank', rel: 'noreferrer noopener' }, link[1])
+                : token)
+            }
+            cursor = match.index + token.length
+          }
+          if (cursor < text.length) nodes.push(text.slice(cursor))
+          return nodes
+        }
+
+        function MarkdownText(props) {
+          const t = useT()
+          const nodes = []
+          const source = String(props.text || '')
+          const fence = /```([^\n`]*)\n([\s\S]*?)```/g
+          let cursor = 0
+          let index = 0
+          const pushProse = (prose) => {
+            const paragraphs = prose.split(/\n{2,}/)
+            for (const paragraph of paragraphs) {
+              if (paragraph.trim() === '') continue
+              const lines = paragraph.split('\n')
+              if (/^#{1,4}\s/.test(lines[0])) {
+                const level = Math.min(4, (lines[0].match(/^#+/) || ['#'])[0].length)
+                nodes.push(h(`h${level + 2}`, { key: `md-h${index++}`, className: 'bm-md-heading' },
+                  inlineMarkdown(lines[0].replace(/^#{1,4}\s/, ''), `h${index}`)))
+                continue
+              }
+              if (lines.every(line => /^\s*[-*]\s+/.test(line))) {
+                nodes.push(h('ul', { key: `md-ul${index++}`, className: 'bm-md-list' },
+                  lines.map((line, lineIndex) => h('li', { key: `li${lineIndex}` },
+                    inlineMarkdown(line.replace(/^\s*[-*]\s+/, ''), `li${index}-${lineIndex}`)))))
+                continue
+              }
+              if (lines.every(line => /^\s*\d+[.)]\s+/.test(line))) {
+                nodes.push(h('ol', { key: `md-ol${index++}`, className: 'bm-md-list' },
+                  lines.map((line, lineIndex) => h('li', { key: `li${lineIndex}` },
+                    inlineMarkdown(line.replace(/^\s*\d+[.)]\s+/, ''), `li${index}-${lineIndex}`)))))
+                continue
+              }
+              if (lines.every(line => /^>\s?/.test(line))) {
+                nodes.push(h('blockquote', { key: `md-bq${index++}`, className: 'bm-md-quote' },
+                  inlineMarkdown(lines.map(line => line.replace(/^>\s?/, '')).join('\n'), `bq${index}`)))
+                continue
+              }
+              const children = []
+              lines.forEach((line, lineIndex) => {
+                if (lineIndex > 0) children.push(h('br', { key: `br${lineIndex}` }))
+                children.push(...inlineMarkdown(line, `p${index}-${lineIndex}`))
+              })
+              nodes.push(h('p', { key: `md-p${index++}`, className: 'bm-md-p' }, children))
+            }
+          }
+          for (const match of source.matchAll(fence)) {
+            if (match.index > cursor) pushProse(source.slice(cursor, match.index))
+            const language = (match[1] || '').trim()
+            const code = match[2] || ''
+            nodes.push(h(CodeBlock, { key: `md-code${index++}`, language, code, t }))
+            cursor = match.index + match[0].length
+          }
+          if (cursor < source.length) pushProse(source.slice(cursor))
+          return h('div', { className: 'bm-md' }, nodes)
+        }
+
+        function CodeBlock(props) {
+          const [copied, setCopied] = useState(false)
+          const copy = async () => {
+            try {
+              await navigator.clipboard.writeText(props.code)
+              setCopied(true)
+              window.setTimeout(() => setCopied(false), 1600)
+            } catch (_error) { /* clipboard unavailable */ }
+          }
+          return h('div', { className: 'bm-code' },
+            h('div', { className: 'bm-code-head' },
+              h('span', { className: 'bm-code-lang' }, props.language || 'text'),
+              h('button', { type: 'button', className: 'bm-code-copy', onClick: copy },
+                props.t(copied ? 'chat.copied' : 'chat.copy'))),
+            h('pre', null, h('code', null, props.code)))
+        }
+
+        function ToolGlyph(props) {
+          const name = String(props.name || '').toLowerCase()
+          const common = { width: 14, height: 14, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.3, 'aria-hidden': true }
+          if (name === 'bash' || name === 'shell') {
+            return h('svg', common, h('rect', { x: 1.5, y: 2.5, width: 13, height: 11, rx: 2 }), h('path', { d: 'M4 6l2 2-2 2M8.5 10h3.5' }))
+          }
+          if (name === 'read' || name === 'write' || name === 'edit') {
+            return h('svg', common, h('path', { d: 'M3 2h7l3 3v9H3z' }), h('path', { d: 'M9.5 2v3.5H13' }))
+          }
+          if (name === 'grep' || name === 'glob' || name === 'web_search') {
+            return h('svg', common, h('circle', { cx: 7, cy: 7, r: 4.2 }), h('path', { d: 'M10.2 10.2L14 14' }))
+          }
+          if (name === 'web_fetch') {
+            return h('svg', common, h('circle', { cx: 8, cy: 8, r: 5.8 }), h('path', { d: 'M2.4 8h11.2M8 2.2c2.8 3.4 2.8 8.2 0 11.6M8 2.2c-2.8 3.4-2.8 8.2 0 11.6' }))
+          }
+          if (name === 'skill' || name === 'bot_team' || name === 'message_agent') {
+            return h('svg', common, h('path', { d: 'M8 1.8l1.7 3.6 3.9.5-2.9 2.7.8 3.9L8 10.6l-3.5 1.9.8-3.9L2.4 5.9l3.9-.5z' }))
+          }
+          return h('svg', common, h('circle', { cx: 8, cy: 8, r: 5.6 }), h('path', { d: 'M8 5.2v3.2l2.2 1.4' }))
+        }
+
+        function toolSummary(call) {
+          const raw = String((call && call.arguments) || '').trim()
+          if (raw === '') return ''
+          try {
+            const parsed = JSON.parse(raw)
+            if (parsed && typeof parsed === 'object') {
+              for (const key of ['description', 'command', 'path', 'query', 'name', 'target', 'url']) {
+                if (typeof parsed[key] === 'string' && parsed[key] !== '') return parsed[key]
+              }
+              const first = Object.values(parsed).find(value => typeof value === 'string')
+              if (typeof first === 'string') return first
+            }
+          } catch (_error) { /* show raw below */ }
+          return raw
+        }
+
+        function ToolCallRow(props) {
+          const t = useT()
+          const call = props.call || {}
+          const [open, setOpen] = useState(false)
+          const status = call.status || 'preparing'
+          const summary = toolSummary(call)
+          const output = String(call.output || '')
+          const expandable = status !== 'preparing' && (String(call.arguments || '') !== '' || output !== '')
+          return h('div', { className: 'bm-tool', 'data-state': status },
+            h('button', {
+              type: 'button', className: 'bm-tool-head', onClick: () => expandable && setOpen(value => !value),
+              'aria-expanded': expandable ? open : undefined,
+            },
+              h('span', { className: 'bm-tool-icon' }, h(ToolGlyph, { name: call.name || props.name })),
+              h('span', { className: 'bm-tool-name' }, call.name || props.name || 'tool'),
+              summary !== '' ? h('span', { className: 'bm-tool-summary' }, summary) : null,
+              status === 'running' || status === 'preparing'
+                ? h('span', { className: 'bm-spin', 'aria-label': t('chat.toolRunning') })
+                : h('span', { className: 'bm-tool-state' },
+                  t(status === 'error' ? 'chat.toolError' : 'chat.toolDone')),
+              expandable ? h('span', { className: 'bm-tool-chevron', 'data-open': open }, '›') : null),
+            open && expandable ? h('div', { className: 'bm-tool-body' },
+              String(call.arguments || '') !== ''
+                ? h('div', { className: 'bm-tool-section' },
+                  h('div', { className: 'bm-tool-label' }, t('chat.toolArgs')),
+                  h('pre', null, String(call.arguments)))
+                : null,
+              h('div', { className: 'bm-tool-section' },
+                h('div', { className: 'bm-tool-label' }, t('chat.toolOutput')),
+                output === '' ? h('div', { className: 'bm-tool-empty' }, t('chat.emptyTool')) : h('pre', null, output))) : null)
+        }
+
+        function ReasoningRow(props) {
+          const t = useT()
+          const [open, setOpen] = useState(false)
+          const text = String(props.text || '')
+          const summary = (text.split(/\r?\n/).find(line => line.trim() !== '') || '').replaceAll('**', '').slice(0, 140)
+          return h('div', { className: 'bm-reason', 'data-running': props.running === true },
+            h('button', { type: 'button', className: 'bm-reason-head', onClick: () => setOpen(value => !value) },
+              h('span', { className: 'bm-reason-icon', 'data-running': props.running === true }, h(ToolGlyph, { name: 'reasoning' })),
+              h('span', { className: 'bm-reason-title' }, t('chat.reasoning')),
+              summary !== '' && !open
+                ? h('span', { className: 'bm-reason-summary', 'data-shimmer': props.running === true }, summary)
+                : null,
+              h('span', { className: 'bm-tool-chevron', 'data-open': open }, '›')),
+            open ? h('div', { className: 'bm-reason-body' }, h(MarkdownText, { text })) : null)
+        }
+
+        function AssistantTurn(props) {
+          const t = useT()
+          return h('div', { className: 'bm-turn', 'data-streaming': props.turn.streaming === true },
+            h('div', { className: 'bm-turn-who' },
+              h('span', { className: 'bm-avatar bm-avatar-xs', style: { background: props.bot.color || COLORS[0] } }, initialOf(props.bot.name)),
+              h('span', { className: 'bm-turn-name' }, props.bot.name)),
+            h('div', { className: 'bm-turn-body' },
+              props.turn.blocks.map((block, index) => block.kind === 'reasoning'
+                ? h(ReasoningRow, { key: `r${index}`, text: block.text, running: props.turn.streaming === true && index === props.turn.blocks.length - 1 })
+                : block.kind === 'tool'
+                  ? h(ToolCallRow, { key: `t${index}`, call: block.call, name: block.name })
+                  : h('div', { key: `x${index}`, className: 'bm-assistant-text' },
+                    h(MarkdownText, { text: block.text }),
+                    props.turn.streaming === true && index === props.turn.blocks.length - 1
+                      ? h('span', { className: 'bm-cursor' })
+                      : null))))
+        }
         function ChatPane(props) {
           const t = useT()
           const [tab, setTab] = useState('chat')
@@ -1165,18 +1791,21 @@ window.__ModuleLoader__.load({
             listener => (binding ? binding.eventSource.subscribe(listener) : () => {}),
             () => (binding ? binding.eventSource.getSnapshot() : { entries: [], hasMore: false, revision: 0 }),
           )
-          const { rows, live } = useMemo(() => chatRows(events.entries), [events])
+          const turns = useMemo(() => buildTranscript(events.entries), [events])
+          const stickRef = useRef(true)
           useEffect(() => {
             const node = logRef.current
-            if (node) node.scrollTop = node.scrollHeight
+            if (node && stickRef.current) node.scrollTop = node.scrollHeight
           }, [events.revision, snapshot.running])
           useEffect(() => {
             if (props.onSeen) props.onSeen()
           }, [props.sessionId])
           useEffect(() => {
             if (!props.onActivity) return
-            const last = [...rows].reverse().find(row => row.kind === 'assistant')
-            if (last) props.onActivity(last.text)
+            const last = [...turns].reverse().find(turn => turn.kind === 'assistant')
+            if (!last) return
+            const text = last.blocks.filter(block => block.kind === 'text').map(block => block.text).join('\n')
+            if (text !== '') props.onActivity(text)
           }, [events.revision])
           const send = async (event) => {
             event.preventDefault()
@@ -1185,9 +1814,10 @@ window.__ModuleLoader__.load({
             setBusy(true)
             setError('')
             try {
-              const result = await session.prompt([{ type: 'text', text: value }], 'queue')
-              if (result && result.ok === false) setError(result.error && result.error.message ? result.error.message : 'Prompt rejected')
-              else setText('')
+              // Every Bot turn goes through the Host FIFO so a teammate message
+              // or Routine can never write the same Session concurrently.
+              await hostCommand('bot.dispatch', { botId: props.bot.id, text: value })
+              setText('')
             } catch (failure) {
               setError(failure && failure.message ? failure.message : String(failure))
             } finally {
@@ -1196,7 +1826,7 @@ window.__ModuleLoader__.load({
           }
           const stop = async () => {
             if (session === null) return
-            try { await session.cancel() } catch (_failure) { /* the turn may already be settling */ }
+            try { await hostCommand('bot.stop', { botId: props.bot.id }) } catch (_failure) { /* the turn may already be settling */ }
           }
           const head = h('header', { className: 'bm-chat-head' },
             h('span', { className: 'bm-avatar bm-avatar-sm', style: { background: props.bot.color || COLORS[0] } }, initialOf(props.bot.name)),
@@ -1213,20 +1843,28 @@ window.__ModuleLoader__.load({
           }
           return h('div', { className: 'bm-chat' },
             head,
-            h('div', { className: 'bm-log', ref: logRef },
-              rows.length === 0 && live === '' && !snapshot.running
+            h('div', {
+              className: 'bm-log', ref: logRef,
+              onScroll: (event) => {
+                const node = event.currentTarget
+                stickRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48
+              },
+            },
+              turns.length === 0 && !snapshot.running
                 ? h('div', { className: 'bm-chat-empty' }, t('chat.empty', { name: props.bot.name }))
                 : null,
               snapshot.hasMore
                 ? h('button', { className: 'bm-btn small', style: { alignSelf: 'center' }, onClick: () => { if (session) void session.loadOlder() } }, t('chat.older'))
                 : null,
-              rows.map(row => row.kind === 'user'
-                ? h('div', { key: row.key, className: 'bm-msg bm-msg-user' }, row.text)
-                : row.kind === 'tool'
-                  ? h('div', { key: row.key, className: 'bm-toolrow', 'data-error': row.error === true }, row.text)
-                  : h('div', { key: row.key, className: 'bm-msg bm-msg-bot' }, row.text)),
-              live !== ''
-                ? h('div', { className: 'bm-msg bm-msg-bot bm-msg-live' }, h('span', { className: 'bm-live-dot' }), live)
+              turns.map(turn => turn.kind === 'user'
+                ? h('div', { key: turn.key, className: 'bm-msg bm-msg-user' }, turn.text)
+                : turn.kind === 'error'
+                  ? h('div', { key: turn.key, className: 'bm-turn-error' }, turn.text)
+                  : turn.kind === 'notice'
+                    ? h('div', { key: turn.key, className: 'bm-turn-notice' }, t('chat.stopped'))
+                    : h(AssistantTurn, { key: turn.key, turn, bot: props.bot })),
+              snapshot.running && turns.every(turn => turn.kind !== 'assistant' || turn.streaming !== true)
+                ? h('div', { className: 'bm-tail' }, h('span', { className: 'bm-spin' }), h('span', { className: 'bm-tail-text' }, t('chat.tail')))
                 : null),
             error ? h('div', { className: 'bm-error bm-chat-error' }, error) : null,
             h('form', { className: 'bm-compose', onSubmit: send },
@@ -1246,6 +1884,8 @@ window.__ModuleLoader__.load({
           const t = useT()
           const [name, setName] = useState(props.group ? props.group.name : '')
           const [members, setMembers] = useState(props.group ? [...props.group.members] : [])
+          const [mode, setMode] = useState(props.group && props.group.mode ? props.group.mode : 'auto')
+          const [leadBotId, setLeadBotId] = useState(props.group && props.group.leadBotId ? props.group.leadBotId : '')
           const [error, setError] = useState('')
           const toggle = (id) => setMembers(current => (current.includes(id) ? current.filter(item => item !== id) : [...current, id]))
           const submit = (event) => {
@@ -1253,7 +1893,12 @@ window.__ModuleLoader__.load({
             const value = name.trim()
             if (value === '') { setError(t('group.needName')); return }
             if (members.length < 2) { setError(t('group.needMembers')); return }
-            props.onSave({ name: value, members })
+            props.onSave({
+              name: value,
+              members,
+              mode,
+              leadBotId: members.includes(leadBotId) ? leadBotId : '',
+            })
           }
           return h('form', { className: 'bm-form', onSubmit: submit },
             h('h2', null, t(props.group ? 'group.editTitle' : 'group.createTitle')),
@@ -1263,6 +1908,21 @@ window.__ModuleLoader__.load({
                 className: 'bm-input', value: name, autoFocus: true, placeholder: t('group.namePlaceholder'),
                 onChange: event => setName(event.target.value),
               })),
+            h('div', { className: 'bm-row' },
+              h('label', { className: 'bm-label' }, t('group.mode'),
+                h('select', {
+                  className: 'bm-input', value: mode,
+                  onChange: event => setMode(event.target.value),
+                },
+                  h('option', { value: 'auto' }, t('group.modeAuto')),
+                  h('option', { value: 'everyone' }, t('group.modeEveryone')))),
+              h('label', { className: 'bm-label' }, t('group.lead'),
+                h('select', {
+                  className: 'bm-input', value: leadBotId,
+                  onChange: event => setLeadBotId(event.target.value),
+                },
+                  h('option', { value: '' }, t('group.leadAuto')),
+                  props.bots.filter(bot => members.includes(bot.id)).map(bot => h('option', { key: bot.id, value: bot.id }, bot.name))))),
             h('div', { className: 'bm-label' }, t('group.members'),
               h('div', { className: 'bm-picks' }, props.bots.map(bot => h('label', {
                 key: bot.id, className: 'bm-pick', 'data-on': members.includes(bot.id),
@@ -1284,87 +1944,58 @@ window.__ModuleLoader__.load({
           const [error, setError] = useState('')
           const logRef = useRef(null)
           const group = props.group
-          const members = props.bots.filter(bot => group.members.includes(bot.id) && bot.sessionId)
-          useEffect(() => { markGroupSeen(group.id) }, [group.id])
+          const members = props.bots.filter(bot => (group.members || []).includes(bot.id))
+          const messages = group.messages || []
+          const paused = group.status === 'paused' || group.needsYou === true
           useEffect(() => {
             const node = logRef.current
             if (node) node.scrollTop = node.scrollHeight
-          }, [group.messages.length])
-          const ask = (bot, prompt) => {
-            let reference
-            try {
-              reference = sessions.retain(bot.sessionId, { source: 'botmode.group' })
-            } catch (_failure) {
-              return
-            }
-            const binding = reference.binding
-            const base = binding.eventSource.getSnapshot().entries.length
-            let lastText = ''
-            let done = false
-            let off = null
-            const finish = () => {
-              if (done) return
-              done = true
-              try { if (off) off() } catch (_failure) { /* already gone */ }
-              try { reference.release() } catch (_failure) { /* already released */ }
-              if (lastText.trim() !== '') {
-                appendGroupMessage(group.id, { id: newId(), from: bot.id, name: bot.name, text: lastText.trim(), at: Date.now() })
-                if (props.onPosted) props.onPosted(bot, lastText.trim())
-              }
-            }
-            off = binding.eventSource.subscribe(() => {
-              const entries = binding.eventSource.getSnapshot().entries
-              let ended = false
-              for (let index = base; index < entries.length; index += 1) {
-                const entry = entries[index]
-                if (!entry || entry.type !== 'event' || !entry.event) continue
-                if (entry.event.type === 'assistant/message') {
-                  const value = blocksText(entry.event.data && entry.event.data.message ? entry.event.data.message.content : [])
-                  if (value !== '') lastText = value
-                }
-                if (entry.event.type === 'turn/end') ended = true
-              }
-              if (ended) finish()
-            })
-            window.setTimeout(finish, 180000)
-            void binding.session.prompt([{ type: 'text', text: prompt }], 'queue').catch(() => {
-              try { off() } catch (_failure) { /* already gone */ }
-              try { reference.release() } catch (_failure) { /* already released */ }
-            })
-          }
-          const send = (event) => {
+          }, [messages.length, group.status])
+          const send = async (event) => {
             event.preventDefault()
             const value = text.trim()
             if (value === '' || busy) return
-            if (members.length === 0) { setError(t('group.noMembers')); return }
+            if (members.length < 2) { setError(t('group.noMembers')); return }
             setBusy(true)
             setError('')
-            const history = (group.messages || []).slice(-8).map(message => `${message.name}: ${message.text}`).join('\n')
-            appendGroupMessage(group.id, { id: newId(), from: 'user', name: t('group.you'), text: value, at: Date.now() })
-            for (const bot of members) {
-              const prompt = [
-                `[群聊「${group.name}」]`,
-                history ? `最近的群消息：\n${history}` : '',
-                `用户：${value}`,
-                `你是 ${bot.name}${bot.role ? `（${bot.role}）` : ''}。在群里用简短的一段话回复，只说你负责的部分；不要代替其他成员说话。`,
-              ].filter(Boolean).join('\n\n')
-              ask(bot, prompt)
+            try {
+              await hostCommand('room.send', { roomId: group.id, text: value })
+              setText('')
+            } catch (failure) {
+              setError(failure && failure.message ? failure.message : String(failure))
+            } finally {
+              setBusy(false)
             }
-            setText('')
-            setBusy(false)
           }
+          const control = async (action) => {
+            setBusy(true)
+            setError('')
+            try { await hostCommand('room.control', { roomId: group.id, action }) } catch (failure) {
+              setError(failure && failure.message ? failure.message : String(failure))
+            } finally { setBusy(false) }
+          }
+          const running = group.status === 'running' || group.running === true
+          const reason = group.pausedReason === 'budget'
+            ? t('group.pausedBudget')
+            : t('group.pausedMention')
           return h('div', { className: 'bm-chat' },
             h('header', { className: 'bm-chat-head' },
               h('span', { className: 'bm-avatar bm-avatar-sm', style: { background: group.color || COLORS[3] } }, initialOf(group.name)),
               h('div', { className: 'bm-chat-title' },
                 h('span', { className: 'bm-name' }, group.name),
                 h('span', { className: 'bm-role' }, t('group.membersCount', { n: members.length }))),
+              running ? h('span', { className: 'bm-chat-status', 'data-running': true }, t('group.running')) : null,
+              paused ? h('span', { className: 'bm-needs-you' }, t('group.needsYou')) : null,
               h('div', { className: 'bm-chat-tabs' },
                 h('button', { type: 'button', 'data-active': true }, t('chat.tab')),
                 h('button', { type: 'button', onClick: props.onEdit }, t('chat.detail')))),
+            paused ? h('div', { className: 'bm-room-alert' },
+              h('span', null, reason),
+              h('button', { className: 'bm-btn small primary', disabled: busy, onClick: () => control('continue') }, t('group.continue')),
+              h('button', { className: 'bm-btn small', disabled: busy, onClick: () => control('stop') }, t('group.stop'))) : null,
             h('div', { className: 'bm-log', ref: logRef },
-              (group.messages || []).length === 0 ? h('div', { className: 'bm-chat-empty' }, t('group.empty')) : null,
-              (group.messages || []).map(message => h('div', {
+              messages.length === 0 ? h('div', { className: 'bm-chat-empty' }, t('group.empty')) : null,
+              messages.map(message => h('div', {
                 key: message.id,
                 className: `bm-msg ${message.from === 'user' ? 'bm-msg-user' : 'bm-msg-bot'}`,
               },
@@ -1379,7 +2010,7 @@ window.__ModuleLoader__.load({
                   if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(event) }
                 },
               }),
-              h('button', { type: 'submit', className: 'bm-btn primary', disabled: text.trim() === '' }, t('group.send'))))
+              h('button', { type: 'submit', className: 'bm-btn primary', disabled: text.trim() === '' || busy }, t('group.send'))))
         }
 
         function BotsPage() {
@@ -1390,33 +2021,19 @@ window.__ModuleLoader__.load({
             listener => sessions.list.subscribe(listener),
             rawSessionSnapshot,
           )
-          const workspaceList = useSyncExternalStore(
-            listener => workspaceSvc.list.subscribe(listener),
-            rawWorkspaceSnapshot,
-          )
-          const bots = stored.filter((bot) => {
-            if (sessionOf(list, bot) === undefined) return false
-            if (workspaceList === undefined || !Array.isArray(workspaceList.items)) return true
-            if (!bot.workspaceId) return true
-            return workspaceList.items.some(row => row && row.workspaceId === bot.workspaceId)
-          })
+          const hostSnapshot = useSyncExternalStore(hostStore.subscribe, hostStore.getSnapshot)
+          const sections = (hostSnapshot.state && hostSnapshot.state.sections) || []
+          const routines = (hostSnapshot.state && hostSnapshot.state.routines) || []
+          const approvals = (hostSnapshot.state && hostSnapshot.state.approvals) || []
+          const bots = stored.filter(bot => bot.hidden !== true)
           const lang = useLang()
           const activeLang = (lang && lang.active) || 'en'
           const [form, setForm] = useState(null)
           const [selection, setSelection] = useState(null)
           const [query, setQuery] = useState('')
 
-          const patchBot = (id, patch) => {
-            const next = roster.getSnapshot().map(bot => (bot.id === id ? { ...bot, ...patch } : bot))
-            writeRoster(next)
-            roster.set(next)
-          }
-          const botActivity = (bot) => (text) => {
-            const current = roster.getSnapshot().find(item => item.id === bot.id)
-            if (!current || current.lastText === text) return
-            patchBot(bot.id, { lastText: text, lastAt: Date.now() })
-          }
-          const botSeen = (bot) => () => patchBot(bot.id, { lastSeen: Date.now() })
+          const botActivity = () => () => {}
+          const botSeen = () => () => {}
 
           const sessionRowsOf = (bot) => {
             const rows = list.ids
@@ -1448,36 +2065,41 @@ window.__ModuleLoader__.load({
 
           const openBotEntry = (bot) => { setSelection({ kind: 'bot', id: bot.id }); setForm(null) }
           const openGroupEntry = (group) => { setSelection({ kind: 'group', id: group.id }); setForm(null) }
-          const createGroup = (draft) => {
-            const group = {
-              id: newId(),
+          const createGroup = async (draft) => {
+            const room = await hostCommand('room.save', { draft: {
               name: draft.name,
+              memberIds: draft.members,
+              mode: draft.mode || 'auto',
+              leadBotId: draft.leadBotId || '',
               color: COLORS[(groups.length + 2) % COLORS.length],
-              members: draft.members,
-              createdAt: Date.now(),
-              lastSeen: Date.now(),
-              messages: [],
-            }
-            saveGroups([...groups, group])
+            } })
             setForm(null)
-            setSelection({ kind: 'group', id: group.id })
+            setSelection({ kind: 'group', id: room.id })
           }
-          const saveGroup = (group, draft) => {
-            saveGroups(groups.map(item => (item.id === group.id ? { ...item, name: draft.name, members: draft.members } : item)))
+          const saveGroup = async (group, draft) => {
+            await hostCommand('room.save', { roomId: group.id, draft: {
+              name: draft.name,
+              memberIds: draft.members,
+              mode: draft.mode || group.mode || 'auto',
+              leadBotId: draft.leadBotId || group.leadBotId || '',
+            } })
             setForm(null)
           }
-          const deleteGroup = (group) => {
-            saveGroups(groups.filter(item => item.id !== group.id))
+          const deleteGroup = async (group) => {
+            await hostCommand('room.delete', { roomId: group.id })
             setForm(null)
             setSelection(null)
           }
 
+          const sectionGroups = sections
+            .map(section => ({ section, bots: visibleBots.filter(bot => bot.sectionId === section.id) }))
+            .filter(group => group.bots.length > 0)
+          const orphanBots = visibleBots.filter(bot => !sections.some(section => section.id === bot.sectionId))
           const botRow = (bot) => {
             const summary = sessionOf(list, bot)
             const active = activeBot && activeBot.id === bot.id
-            const time = bot.lastAt || (summary && summary.updatedAt)
-            const unread = !active && (bot.lastAt || 0) > (bot.lastSeen || 0)
-            const preview = bot.lastText || bot.role || t('card.noPreview')
+            const time = bot.lastTurnAt ? Date.parse(bot.lastTurnAt) : (summary && summary.updatedAt)
+            const preview = bot.lastReply || bot.role || t('card.noPreview')
             return h('button', {
               key: bot.id, type: 'button', className: 'bm-frow', 'data-active': active,
               onClick: () => openBotEntry(bot),
@@ -1488,13 +2110,12 @@ window.__ModuleLoader__.load({
                   h('span', { className: 'bm-frow-name' }, bot.name),
                   time ? h('span', { className: 'bm-frow-time' }, new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : null),
                 h('span', { className: 'bm-frow-preview' }, preview)),
-              unread ? h('span', { className: 'bm-unread' }) : null)
+              bot.running ? h('span', { className: 'bm-srow-dot', 'data-running': true }) : null)
           }
 
           const groupRow = (group) => {
             const active = activeGroup && activeGroup.id === group.id
             const last = (group.messages || []).length > 0 ? group.messages[group.messages.length - 1] : undefined
-            const unread = !active && (group.lastAt || 0) > (group.lastSeen || 0)
             const preview = last ? `${last.name}: ${last.text}` : t('group.emptyPreview')
             return h('button', {
               key: group.id, type: 'button', className: 'bm-frow', 'data-active': active,
@@ -1504,11 +2125,31 @@ window.__ModuleLoader__.load({
               h('span', { className: 'bm-frow-text' },
                 h('span', { className: 'bm-frow-top' },
                   h('span', { className: 'bm-frow-name' }, group.name),
-                  group.lastAt ? h('span', { className: 'bm-frow-time' }, new Date(group.lastAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : null),
+                  last ? h('span', { className: 'bm-frow-time' }, new Date(last.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : null),
                 h('span', { className: 'bm-frow-preview' }, preview)),
-              unread ? h('span', { className: 'bm-unread' }) : null)
+              group.needsYou ? h('span', { className: 'bm-unread' }) : null)
           }
 
+          const hostNotice = hostSnapshot.status === 'ready'
+            ? null
+            : h('div', { className: 'bm-room-alert' },
+              h('span', null, hostSnapshot.status === 'loading'
+                ? t('host.loading')
+                : `${t('host.error')}: ${hostSnapshot.error || ''}`),
+              hostSnapshot.status === 'error'
+                ? h('button', { className: 'bm-btn small', onClick: () => { void refreshHost() } }, t('host.retry'))
+                : null)
+          const approvalBanner = approvals.length === 0 ? null : h('div', { className: 'bm-approvals' },
+            approvals.map(approval => h('div', { key: approval.id, className: 'bm-approval' },
+              h('div', { className: 'bm-approval-text' },
+                h('span', { className: 'bm-approval-name' }, approval.botName),
+                h('span', { className: 'bm-approval-tool' }, approval.toolName),
+                approval.reason ? h('span', { className: 'bm-approval-reason' }, approval.reason) : null),
+              h('div', { className: 'bm-approval-actions' },
+                h('button', { className: 'bm-btn small primary', onClick: () => hostCommand('approval.decide', { approvalId: approval.id, decision: 'once' }).catch(() => {}) }, t('approval.once')),
+                h('button', { className: 'bm-btn small', onClick: () => hostCommand('approval.decide', { approvalId: approval.id, decision: 'session' }).catch(() => {}) }, t('approval.session')),
+                h('button', { className: 'bm-btn small', onClick: () => hostCommand('approval.decide', { approvalId: approval.id, decision: 'always' }).catch(() => {}) }, t('approval.always')),
+                h('button', { className: 'bm-btn small danger', onClick: () => hostCommand('approval.decide', { approvalId: approval.id, decision: 'deny' }).catch(() => {}) }, t('approval.deny'))))))
           const pane = h('aside', { className: 'bm-pane' },
             h('div', { className: 'bm-pane-head' },
               h('span', { className: 'bm-pane-title' }, t('pane.title')),
@@ -1518,10 +2159,21 @@ window.__ModuleLoader__.load({
               onChange: event => setQuery(event.target.value),
             }),
             h('div', { className: 'bm-groups' },
-              h('div', { className: 'bm-section' }, t('pane.bots')),
+              h('div', { className: 'bm-section' },
+                h('span', null, t('pane.bots')),
+                h('button', {
+                  className: 'bm-section-add',
+                  onClick: async () => {
+                    const name = window.prompt(t('section.namePrompt'))
+                    if (name && name.trim() !== '') await hostCommand('section.save', { name: name.trim() }).catch(() => {})
+                  },
+                }, t('section.new'))),
               visibleBots.length === 0
                 ? h('p', { className: 'bm-muted bm-pane-empty' }, t('pane.empty'))
-                : visibleBots.map(botRow),
+                : sectionGroups.map(group => h('div', { key: group.section.id, className: 'bm-bot-group' },
+                  h('div', { className: 'bm-group-title' }, group.section.nameZh || group.section.name),
+                  group.bots.map(botRow))),
+              orphanBots.length > 0 ? h('div', { className: 'bm-bot-group' }, orphanBots.map(botRow)) : null,
               h('div', { className: 'bm-section' },
                 h('span', null, t('pane.groups')),
                 h('button', { className: 'bm-section-add', onClick: () => setForm({ mode: 'group' }) }, t('pane.newGroup'))),
@@ -1536,23 +2188,27 @@ window.__ModuleLoader__.load({
               bot: activeBot,
               summary: sessionOf(list, activeBot),
               sessions: activeRows,
-              brief: bots.length >= 2 ? h(BriefBox, { bots }) : null,
+              routines: routines.filter(routine => routine.botId === activeBot.id),
+              onCommand: hostCommand,
+              brief: bots.length >= 2 ? h(BriefBox, { bots, onCommand: hostCommand }) : null,
               onOpen: openBot,
               onOpenSession: (id) => setSelection({ kind: 'bot', id: activeBot.id }),
               onEdit: (bot) => setForm({ mode: 'edit', bot }),
               onDelete: deleteBot,
-              onMigrate: (bot) => migrateBot(bot, activeLang),
+              onMigrate: (bot) => migrateBot(bot),
             })
             : null
           const detail = form
             ? form.mode === 'group'
               ? h(GroupForm, {
+                key: 'group-create',
                 bots,
                 onCancel: () => setForm(null),
                 onSave: createGroup,
               })
               : form.mode === 'groupEdit'
                 ? h(GroupForm, {
+                  key: `group-${form.group.id}`,
                   bots,
                   group: form.group,
                   onCancel: () => setForm(null),
@@ -1560,12 +2216,30 @@ window.__ModuleLoader__.load({
                   onDelete: () => deleteGroup(form.group),
                 })
                 : h(BotForm, {
+                  key: form.mode === 'edit' ? `bot-${form.bot.id}` : 'bot-create',
                   mode: form.mode,
                   bot: form.bot,
                   lang: activeLang,
+                  sections,
                   initial: form.mode === 'create'
-                    ? { name: '', role: '', instructions: '', color: COLORS[(bots.length + 1) % COLORS.length] }
-                    : { name: form.bot.name, role: form.bot.role || '', instructions: form.bot.instructions || '', color: form.bot.color || COLORS[0] },
+                    ? {
+                      name: '', role: '', instructions: '',
+                      color: COLORS[(bots.length + 1) % COLORS.length],
+                      sectionId: sections[0] ? sections[0].id : 'general',
+                      model: { provider: '', model: '', reasoningEffort: '' },
+                      tools: { allow: [], deny: [] },
+                      approvalPolicy: 'ask',
+                    }
+                    : {
+                      name: form.bot.name,
+                      role: form.bot.role || '',
+                      instructions: form.bot.instructions || '',
+                      color: form.bot.color || COLORS[0],
+                      sectionId: form.bot.sectionId || 'general',
+                      model: form.bot.model || { provider: '', model: '', reasoningEffort: '' },
+                      tools: form.bot.tools || { allow: [], deny: [] },
+                      approvalPolicy: form.bot.approvalPolicy || 'ask',
+                    },
                   onCancel: () => setForm(null),
                   onDone: () => setForm(null),
                 })
@@ -1574,7 +2248,6 @@ window.__ModuleLoader__.load({
                 key: activeGroup.id,
                 group: activeGroup,
                 bots,
-                onPosted: (bot, text) => patchBot(bot.id, { lastText: text, lastAt: Date.now() }),
                 onEdit: () => setForm({ mode: 'groupEdit', group: activeGroup }),
               })
               : activeBot && activeSessionId
@@ -1586,7 +2259,9 @@ window.__ModuleLoader__.load({
                   onActivity: botActivity(activeBot),
                   onSeen: botSeen(activeBot),
                 })
-                : h('section', { className: 'bm-empty bm-detail-empty' },
+                : activeBot
+                  ? h('section', { className: 'bm-detail-col' }, detailBody)
+                  : h('section', { className: 'bm-empty bm-detail-empty' },
                   h('h2', null, t('page.empty.title')),
                   h('p', null, t('page.empty.body')),
                   h('button', { className: 'bm-btn primary', onClick: () => setForm({ mode: 'create' }) }, t('page.empty.cta')))
@@ -1594,7 +2269,7 @@ window.__ModuleLoader__.load({
           return h('div', { className: 'bm-page bm-page-split' },
             h('style', null, CSS),
             pane,
-            h('section', { className: 'bm-detail-col' }, detail))
+            h('section', { className: 'bm-detail-col' }, hostNotice, approvalBanner, detail))
         }
 
         function PanelIcon(props) {
@@ -1637,11 +2312,31 @@ window.__ModuleLoader__.load({
           return h('div', { style: { display: 'contents' } }, h('style', null, CSS), props.children, control)
         }
 
-        ctx.slots.inject('sidebar.session.action', () => ctx.slots.register({
-          name: 'sidebar.session.action',
+        function FooterToggle(props) {
+          const t = useT()
+          const panel = useMainPanel()
+          const active = Boolean(panel && panel.activePanelId === PANEL_ID)
+          return h('button', {
+            type: 'button',
+            className: 'bm-foot-toggle',
+            'data-active': active,
+            'data-wide': props.wide !== false,
+            title: t(active ? 'mode.toHarness' : 'mode.toBots'),
+            onClick: () => { if (active) toHarness(); else toBots() },
+          },
+            h(PanelIcon, { size: 15 }),
+            props.wide === false ? null : h('span', null, t(active ? 'foot.back' : 'mode.bot')))
+        }
+
+        ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+          name: 'sidebar.footer.action',
           id: 'botmode.mode-switch',
+          order: 10,
+          label: () => (typeof locale.getLocale === 'function'
+            ? (String((locale.getLocale() || {}).active || '').startsWith('zh') ? 'Bot 模式' : 'Bot mode')
+            : 'Bot mode'),
           locale: NS,
-        }, ModeSwitch))
+        }, FooterToggle))
 
         const panelLabel = () => {
           const active = String((locale.getLocale() && locale.getLocale().active) || '').toLowerCase()
@@ -1655,11 +2350,29 @@ window.__ModuleLoader__.load({
           locale: NS,
         }, PanelIcon))
 
+        class PageBoundary extends React.Component {
+          constructor(props) {
+            super(props)
+            this.state = { error: null }
+          }
+          static getDerivedStateFromError(error) {
+            return { error }
+          }
+          render() {
+            if (this.state.error) {
+              return h('div', { className: 'bm-page', style: { padding: '32px', overflow: 'auto' } },
+                h('h2', null, 'Bot 模式渲染失败 / Bot mode failed to render'),
+                h('pre', { style: { whiteSpace: 'pre-wrap', fontSize: '12px', opacity: 0.8 } },
+                  String((this.state.error && this.state.error.stack) || this.state.error)))
+            }
+            return this.props.children
+          }
+        }
         ctx.slots.inject('main', () => ctx.slots.register({
           name: 'main',
           key: PANEL_ID,
           locale: NS,
-        }, BotsPage))
+        }, () => h(PageBoundary, null, h(BotsPage))))
       },
     }
   },

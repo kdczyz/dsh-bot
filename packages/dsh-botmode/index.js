@@ -1,250 +1,349 @@
 /**
- * Host half of Bot mode.
+ * Bot mode for DeepSeek Harness — Host half.
  *
- * A Bot lives in its own workspace directory:
+ * Adds a Bot roster with real identity isolation, a teammate messaging tool,
+ * Group Rooms with a bounded routing state machine, and Host-level persistent
+ * Routines that wake a cold Bot Session. The Client half renders the roster and
+ * the Bot page behind the sidebar switch.
  *
- *   <bots root>/<Bot>/
- *     AGENTS.md            persona + standing instructions (DSH reads it as project instructions)
- *     SOUL.md              the same persona, for people
- *     bot.json             name, role, colour, created time
- *     TEAM.md              the roster and the post protocol
- *     .dsh/skills/team/SKILL.md   the team skill every Bot loads
- *
- * The Client creates the directory and the workspace; `/botmode scaffold` writes the
- * files into the Bot session's own working directory. `team_board` is the shared board
- * that lets Bots on this machine leave messages for each other.
+ * State lives under `$DSH_HOME/botmode/`:
+ *   state.json                 roster, Sections, Rooms, Routines
+ *   bots/<slug>-<id>/          one directory per Bot
+ *     bot.json  SOUL.md  MEMORY.md  .dsh/skills/team/SKILL.md
  */
-import { existsSync } from 'node:fs'
-import { appendFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
-import { basename, dirname, join } from 'node:path'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { BotStore } from './host/store.js'
+import { Dispatcher } from './host/dispatch.js'
+import { Rooms } from './host/rooms.js'
+import { Routines } from './host/routines.js'
+import { BotApi, PREFIX } from './host/api.js'
+import { Approvals } from './host/approvals.js'
+import { personaBlock, syncBotFiles, syncTeamFiles } from './host/persona.js'
 
+export const name = 'botmode'
 export const inject = ['commands', 'tools']
 
-const BOT_FILE = 'bot.json'
-const TEAM_DIR = '.team'
-const BOARD_FILE = 'board.jsonl'
-const BOARD_KEEP = 200
+const DEFAULT_TOOLS = ['message_agent', 'bot_team']
 
-const readJson = async (path, fallback) => {
+const sessionIdOf = (agent) => {
   try {
-    const raw = await readFile(path, 'utf8')
-    const value = JSON.parse(raw)
-    return value ?? fallback
+    return agent?.session?.id ?? agent?.session?.header?.id
   } catch (_error) {
-    return fallback
+    return undefined
   }
-}
-
-const botOf = (cwd) => {
-  if (typeof cwd !== 'string' || cwd === '') return undefined
-  const file = join(cwd, BOT_FILE)
-  return existsSync(file) ? { dir: cwd, name: basename(cwd), file } : undefined
-}
-
-const botRoot = (cwd) => dirname(cwd)
-
-const boardPath = (cwd) => join(botRoot(cwd), TEAM_DIR, BOARD_FILE)
-
-const oneLine = (value) => String(value ?? '').replace(/\s+/g, ' ').trim()
-
-const scaffoldFiles = ({ name, role, instructions, color, team }) => {
-  const roster = Array.isArray(team) && team.length > 0
-    ? team.map(member => `- ${member.name}${member.role ? ` — ${member.role}` : ''}`).join('\n')
-    : '- (no other Bots yet)'
-  const persona = [
-    `# ${name}`,
-    '',
-    role ? `Role: ${role}` : '',
-    '',
-    '## Standing instructions',
-    '',
-    instructions || '(none yet)',
-    '',
-    '## Team',
-    '',
-    'You are one Bot in a team that shares this machine. Every Bot has its own workspace',
-    'and its own chat. You talk to the others through the `team_board` tool:',
-    '',
-    '- `team_board` action="roster" lists the Bots and their roles.',
-    '- `team_board` action="read" shows what the others posted lately.',
-    '- `team_board` action="post" text="@Name …" leaves a message for a teammate.',
-    '',
-    'Read the board when a task may involve a teammate; post when you need one.',
-    'Never claim a teammate did something you did not see on the board.',
-    '',
-    '## Teammates',
-    '',
-    roster,
-    '',
-  ].join('\n')
-  const teamSkill = [
-    '---',
-    'name: team',
-    'description: Talk to the other Bots on this machine through the shared team board.',
-    'whenToUse: When you need a teammate, when a request touches another Bot\'s role, or before starting work someone else may already have done.',
-    '---',
-    '',
-    '# Team board',
-    '',
-    'Every Bot on this machine shares one board. Use the `team_board` tool.',
-    '',
-    '1. `team_board` `action="roster"` — who is on the team and what each one owns.',
-    '2. `team_board` `action="read"` — the latest posts (newest last).',
-    '3. `team_board` `action="post"` with `text` — leave a message. Start it with `@Name`',
-    '   to address one Bot; anyone can read it.',
-    '',
-    'Rules:',
-    '- Post what you need, with the context the other Bot cannot see.',
-    '- Do not repost the same request; read the board first.',
-    '- A Bot only reads the board when it runs, so treat a post as a note, not a call.',
-    '- Answer a request addressed to you by posting back with `@Name`.',
-    '',
-  ].join('\n')
-  const teamMd = [
-    '# Team',
-    '',
-    roster,
-    '',
-    'Bots talk through the `team_board` tool. Each Bot works in its own workspace.',
-    '',
-  ].join('\n')
-  return {
-    'AGENTS.md': persona,
-    'SOUL.md': persona,
-    [BOT_FILE]: `${JSON.stringify({ name, role: role || '', color: color || '', createdAt: new Date().toISOString() }, null, 2)}\n`,
-    'TEAM.md': teamMd,
-    '.dsh/skills/team/SKILL.md': teamSkill,
-  }
-}
-
-const writeScaffold = async (cwd, payload) => {
-  const files = scaffoldFiles(payload)
-  for (const [relative, content] of Object.entries(files)) {
-    const target = join(cwd, relative)
-    await mkdir(dirname(target), { recursive: true })
-    await writeFile(target, content, 'utf8')
-  }
-}
-
-const boardLines = async (cwd, limit) => {
-  const path = boardPath(cwd)
-  let raw = ''
-  try {
-    raw = await readFile(path, 'utf8')
-  } catch (_error) {
-    return []
-  }
-  const lines = raw.split('\n').filter(line => line.trim() !== '')
-  const take = Math.max(1, Math.min(Number(limit) || 20, 100))
-  return lines.slice(-take).map((line) => {
-    try {
-      return JSON.parse(line)
-    } catch (_error) {
-      return { text: line }
-    }
-  })
-}
-
-const rosterOf = async (cwd) => {
-  const root = botRoot(cwd)
-  let entries = []
-  try {
-    entries = await readdir(root, { withFileTypes: true })
-  } catch (_error) {
-    return []
-  }
-  const bots = []
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name.startsWith('.')) continue
-    const meta = await readJson(join(root, entry.name, BOT_FILE), undefined)
-    if (meta === undefined) continue
-    bots.push({ name: meta.name || entry.name, role: meta.role || '', dir: join(root, entry.name) })
-  }
-  return bots.sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export function apply(ctx) {
-  ctx.commands.register({
-    name: 'botmode',
-    description: 'Write or update this Bot\'s workspace files (persona, team skill).',
-    input: { hint: 'scaffold <json>' },
-    handler: async ({ agent, rawInput }) => {
-      const input = String(rawInput ?? '').trim()
-      const space = input.indexOf(' ')
-      const action = (space === -1 ? input : input.slice(0, space)).toLowerCase()
-      const rest = space === -1 ? '' : input.slice(space + 1).trim()
-      const cwd = agent?.session?.header?.cwd
-      if (typeof cwd !== 'string' || cwd === '') {
-        return { kind: 'error', text: 'This Session has no working directory.' }
-      }
-      if (action === 'scaffold') {
-        let payload
-        try {
-          payload = JSON.parse(rest)
-        } catch (_error) {
-          return { kind: 'error', text: 'scaffold needs a JSON payload.' }
-        }
-        if (typeof payload?.name !== 'string' || payload.name.trim() === '') {
-          return { kind: 'error', text: 'scaffold needs a name.' }
-        }
-        const team = await rosterOf(cwd)
-        await writeScaffold(cwd, {
-          name: payload.name.trim(),
-          role: typeof payload.role === 'string' ? payload.role : '',
-          instructions: typeof payload.instructions === 'string' ? payload.instructions : '',
-          color: typeof payload.color === 'string' ? payload.color : '',
-          team: team.filter(member => member.dir !== cwd),
-        })
-        return { kind: 'success', text: `Wrote Bot files into ${cwd}.` }
-      }
-      return { kind: 'error', text: 'Unknown action. Use scaffold.' }
-    },
+  const logger = ctx.logger
+  const home = process.env.DSH_HOME && process.env.DSH_HOME !== ''
+    ? process.env.DSH_HOME
+    : join(homedir(), '.dsh')
+  const store = new BotStore(join(home, 'botmode'))
+  const dispatcher = new Dispatcher(ctx, store, logger, (agent, bot) => { void configureAgent(agent, bot) })
+  const rooms = new Rooms(store, dispatcher, logger)
+  const routines = new Routines(ctx, store, dispatcher, logger)
+  const approvals = new Approvals(store, logger)
+  const api = new BotApi({ ctx, store, dispatcher, rooms, routines, approvals, logger })
+
+  const ready = store.load().catch((error) => {
+    logger?.warn?.(`botmode: could not read state: ${String(error)}`)
   })
 
-  const when = ({ agent }) => botOf(agent?.session?.header?.cwd) !== undefined
+  ctx.effect(() => routines.start(), 'botmode: persistent routines')
+  ctx.effect(() => () => approvals.clear(), 'botmode: approval cleanup')
 
-  ctx.tools.register({
-    name: 'team_board',
-    description: 'Read and post on the shared board of the Bots on this machine. Use it to see who else is on the team, what they posted lately, and to leave a message for a teammate.',
+  // A Bot Session is never shown in the Harness UI, so its approval requests
+  // would otherwise fail closed with no human in reach. Answer them here and
+  // park the ones that need the Bot page; non-Bot Sessions keep the normal
+  // composed answerers.
+  const approvalOff = ctx.on('approval/request', (request, next) => {
+    const sessionId = sessionIdOf(request?.agent)
+    const bot = sessionId ? store.botBySession(sessionId) : undefined
+    if (!bot) return next()
+    return approvals.ask(bot, request)
+  })
+  ctx.effect(() => approvalOff, 'botmode: approval bridge')
+
+  // Public Host service: other plugins and the CLI can drive the same roster.
+  const botsService = {
+    state: () => store.state,
+    list: () => store.state.bots.slice(),
+    get: (id) => store.bot(id),
+    sectionList: () => store.state.sections.slice(),
+    roomList: () => store.state.rooms.slice(),
+    routineList: () => store.state.routines.slice(),
+    async create(draft) {
+      await ready
+      const response = await api.command({ type: 'bot.save', draft })
+      return response.bot
+    },
+    async update(id, draft) {
+      await ready
+      const response = await api.command({ type: 'bot.save', botId: id, draft })
+      return response.bot
+    },
+    async remove(id) {
+      await ready
+      return api.command({ type: 'bot.delete', botId: id })
+    },
+    dispatchToBot(botId, text, options = {}) {
+      return dispatcher.dispatch(botId, text, { source: options.source ?? 'service' })
+    },
+    async messageAgent(botId, target, message, expectReply = false) {
+      return dispatcher.messageAgent(botId, target, message, expectReply)
+    },
+    isBusy: (botId) => dispatcher.isBusy(botId),
+    status: () => dispatcher.status(),
+    saveRoom: (roomId, draft) => rooms.save(roomId, draft),
+    sendToRoom: (roomId, text) => rooms.send(roomId, text),
+    controlRoom: (roomId, action) => rooms.control(roomId, action),
+    saveRoutine: (routineId, draft) => routines.save(routineId, draft),
+  }
+  ctx.effect(() => ctx.reflect.provide('bots', botsService), 'botmode: ctx.bots service')
+
+  // Persona, model binding, tool policy, permanent-chat commands and approval
+  // policy are applied once per live Agent. A newly created Session is mapped to
+  // its Bot only after session creation returns, so the Dispatcher invokes this
+  // same function when it first resolves that Agent.
+  const configured = new WeakSet()
+  async function configureAgent(agent, bot) {
+    if (!agent || !bot || configured.has(agent)) return
+    configured.add(agent)
+    try {
+      const persona = await personaBlock(store, bot, store.state)
+      agent.ctx.effect(() => {
+        const prompt = agent.ctx.get('systemPrompt')
+        if (!prompt) return
+        return prompt.section({ name: `botmode:persona:${bot.id}`, order: 500, text: persona })
+      }, `botmode: persona for ${bot.name}`)
+    } catch (error) {
+      logger?.warn?.(`botmode: persona for ${bot.name} failed: ${String(error)}`)
+    }
+    try {
+      const tools = agent.ctx.get('tools')
+      if (tools) {
+        // Drop names the current composition does not expose instead of letting
+        // tools.restrict() throw and silently leave every tool visible.
+        const known = new Set((tools.definitions?.() ?? []).map(entry => entry.name))
+        const deny = bot.tools.deny.filter(name => known.has(name))
+        const allow = bot.tools.allow.length > 0
+          ? [...new Set([...bot.tools.allow, ...DEFAULT_TOOLS])].filter(name => known.has(name))
+          : undefined
+        if (allow !== undefined || deny.length > 0) {
+          agent.ctx.effect(() => tools.restrict({
+            ...allow === undefined ? {} : { allow },
+            ...deny.length > 0 ? { deny } : {},
+          }), `botmode: tools for ${bot.name}`)
+        }
+      }
+    } catch (error) {
+      logger?.warn?.(`botmode: tool policy for ${bot.name} failed: ${String(error)}`)
+    }
+    // A Bot chat is permanent: `/new` and `/reset` compact the history instead of
+    // abandoning the Session, so the canonical botId → sessionId mapping survives.
+    try {
+      const commands = agent.ctx.get('commands')
+      const compaction = agent.ctx.get('compaction')
+      if (commands && compaction && typeof compaction.compactNow === 'function') {
+        for (const commandName of ['new', 'reset']) {
+          agent.ctx.effect(() => commands.register({
+            name: commandName,
+            description: `Compact this Bot chat instead of starting a new Session (/${commandName}).`,
+            recordInput: false,
+            input: { hint: '(no arguments)' },
+            handler: async (invocation) => {
+              try {
+                const outcome = await compaction.compactNow(invocation.agent, invocation.signal, invocation.commandId)
+                return {
+                  kind: 'success',
+                  text: outcome === null
+                    ? 'No compactable history yet; this permanent Bot chat is unchanged.'
+                    : `Compacted this permanent Bot chat through seq ${String(outcome.endSeq ?? '')}. The Session is unchanged.`,
+                }
+              } catch (error) {
+                return { kind: 'error', text: `Compaction failed: ${error instanceof Error ? error.message : String(error)}` }
+              }
+            },
+          }), `botmode: /${commandName} for ${bot.name}`)
+        }
+      }
+    } catch (error) {
+      logger?.warn?.(`botmode: permanent-chat commands for ${bot.name} failed: ${String(error)}`)
+    }
+    // A Bot must ask under the policy the Bot page exposes. The profile default
+    // may be "never" (fully autonomous); "ask" is what lets the approval bridge
+    // park a request for a human decision, and "always"/"ask" both need it.
+    try {
+      const approval = agent.ctx.get('approval')
+      if (approval && typeof approval.setPolicy === 'function') {
+        approval.setPolicy(agent, bot.approvalPolicy === 'never' ? 'never' : 'ask')
+      }
+    } catch (error) {
+      logger?.warn?.(`botmode: approval policy for ${bot.name} failed: ${String(error)}`)
+    }
+    if (bot.model.provider !== '' && bot.model.model !== '') {
+      try {
+        const selection = { provider: bot.model.provider, model: bot.model.model }
+        if (bot.model.reasoningEffort !== '') selection.reasoningEffort = bot.model.reasoningEffort
+        agent.model.select(selection)
+      } catch (error) {
+        logger?.warn?.(`botmode: model for ${bot.name} failed: ${String(error)}`)
+      }
+    }
+  }
+
+  const agentOff = ctx.on('agent/created', async ({ agent }) => {
+    await ready
+    const sessionId = sessionIdOf(agent)
+    if (!sessionId) return
+    const bot = store.botBySession(sessionId)
+    if (!bot) return
+    await configureAgent(agent, bot)
+  })
+  ctx.effect(() => agentOff, 'botmode: agent bootstrap listener')
+
+  // Teammate messaging. Registered globally, but only a Bot Session may use it.
+  ctx.effect(() => ctx.tools.register({
+    name: 'message_agent',
+    description: 'Send an asynchronous message to another Bot\'s permanent chat. Returns a dispatched receipt immediately; with expectReply the answer arrives later in your own chat. Unavailable inside a Group Room.',
     parameters: {
-      action: {
-        type: 'string',
-        required: true,
-        enum: ['roster', 'read', 'post'],
-        description: 'roster: Bots and roles. read: recent posts. post: append your message.',
+      type: 'object',
+      properties: {
+        target: { type: 'string', description: 'Teammate name or Bot id.' },
+        message: { type: 'string', description: 'Self-contained message, including the context the teammate cannot see.' },
+        expectReply: { type: 'boolean', description: 'Ask the dispatcher to deliver the teammate\'s reply back into this chat.' },
       },
-      text: { type: 'string', description: 'For post: the message. Start with @Name to address one Bot.' },
-      limit: { type: 'number', description: 'For read: how many posts to return (default 20, max 100).' },
+      required: ['target', 'message'],
+      additionalProperties: false,
     },
     output: {
       schema: { type: 'string' },
       render: (_args, value) => [{ type: 'text', text: String(value) }],
     },
     async execute(args, exec) {
-      const cwd = exec?.agent?.session?.header?.cwd
-      const bot = botOf(cwd)
-      if (bot === undefined) return 'This Session is not a Bot workspace.'
-      const action = String(args?.action ?? '')
-      if (action === 'roster') {
-        const bots = await rosterOf(cwd)
-        if (bots.length === 0) return 'No Bots found.'
-        return bots.map(member => `${member.name}${member.role ? ` — ${member.role}` : ''}`).join('\n')
-      }
-      if (action === 'read') {
-        const posts = await boardLines(cwd, args?.limit)
-        if (posts.length === 0) return 'The board is empty.'
-        return posts.map(post => `[${post.at || '?'}] ${post.from || '?'}: ${oneLine(post.text)}`).join('\n')
-      }
-      if (action === 'post') {
-        const text = String(args?.text ?? '').trim()
-        if (text === '') return 'Write the message in text.'
-        const path = boardPath(cwd)
-        await mkdir(dirname(path), { recursive: true })
-        const record = { at: new Date().toISOString(), from: bot.name, text }
-        await appendFile(path, `${JSON.stringify(record)}\n`, 'utf8')
-        return `Posted as ${bot.name}.`
-      }
-      return 'Unknown action. Use roster, read or post.'
+      await ready
+      const sessionId = sessionIdOf(exec?.agent)
+      if (!sessionId) return 'This Session is not a Bot.'
+      const sender = store.botBySession(sessionId)
+      if (!sender) return 'This Session is not a Bot.'
+      const result = await dispatcher.messageAgent(
+        sender.id,
+        String(args?.target ?? ''),
+        String(args?.message ?? ''),
+        args?.expectReply === true,
+      )
+      return JSON.stringify(result)
     },
-  }, { when })
+  }), 'botmode: message_agent tool')
+
+  ctx.effect(() => ctx.tools.register({
+    name: 'bot_team',
+    description: 'Read the Bot roster, your own identity, Sections and Group Room membership.',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['roster', 'me', 'rooms'], description: 'Which view to return.' },
+      },
+      additionalProperties: false,
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(args, exec) {
+      await ready
+      const action = String(args?.action ?? 'roster')
+      const sessionId = sessionIdOf(exec?.agent)
+      const me = sessionId ? store.botBySession(sessionId) : undefined
+      if (action === 'me') {
+        return JSON.stringify(me
+          ? { id: me.id, name: me.name, role: me.role, dir: me.dir, sectionId: me.sectionId, tools: me.tools }
+          : { error: 'This Session is not a Bot.' })
+      }
+      if (action === 'rooms') {
+        const mine = store.state.rooms.filter(room => me && room.memberIds.includes(me.id))
+        return JSON.stringify(mine.map(room => ({ id: room.id, name: room.name, mode: room.mode, members: room.memberIds })))
+      }
+      return JSON.stringify(store.state.bots.map(bot => ({
+        id: bot.id,
+        name: bot.name,
+        role: bot.role,
+        sectionId: bot.sectionId,
+        me: me?.id === bot.id,
+      })))
+    },
+  }), 'botmode: bot_team tool')
+
+  // Human command for headless use and troubleshooting.
+  ctx.effect(() => ctx.commands.register({
+    name: 'botmode',
+    description: 'Inspect or drive Bot mode from a Session: status, roster, dispatch, room, routine.',
+    input: { hint: 'status | roster | dispatch <bot> <text> | room <roomId> <text> | routine <id>' },
+    handler: async ({ rawInput }) => {
+      await ready
+      const input = String(rawInput ?? '').trim()
+      const space = input.indexOf(' ')
+      const action = (space === -1 ? input : input.slice(0, space)).toLowerCase()
+      const rest = space === -1 ? '' : input.slice(space + 1).trim()
+      if (action === '' || action === 'status') {
+        return {
+          kind: 'success',
+          text: JSON.stringify({
+            root: store.root,
+            bots: store.state.bots.map(bot => ({ id: bot.id, name: bot.name, sessionId: bot.sessionId, busy: dispatcher.isBusy(bot.id) })),
+            rooms: store.state.rooms.map(room => ({ id: room.id, name: room.name, status: room.status })),
+            routines: store.state.routines.map(routine => ({ id: routine.id, botId: routine.botId, cron: routine.cron, nextAt: routine.nextAt })),
+          }, null, 2),
+        }
+      }
+      if (action === 'roster') {
+        return {
+          kind: 'success',
+          text: store.state.bots.map(bot => `${bot.id}  ${bot.name}${bot.role ? ` — ${bot.role}` : ''}`).join('\n') || '(no Bots)',
+        }
+      }
+      if (action === 'dispatch') {
+        const split = rest.indexOf(' ')
+        const target = split === -1 ? rest : rest.slice(0, split)
+        const text = split === -1 ? '' : rest.slice(split + 1).trim()
+        const bot = store.bot(target) ?? store.state.bots.find(item => item.name.toLowerCase() === target.toLowerCase())
+        if (!bot || text === '') return { kind: 'error', text: 'Use: dispatch <bot> <text>' }
+        dispatcher.dispatch(bot.id, text, { source: 'command' })
+        return { kind: 'success', text: `Dispatched to ${bot.name}.` }
+      }
+      if (action === 'room') {
+        const split = rest.indexOf(' ')
+        const roomId = split === -1 ? rest : rest.slice(0, split)
+        const text = split === -1 ? '' : rest.slice(split + 1).trim()
+        if (text === '') return { kind: 'error', text: 'Use: room <roomId> <text>' }
+        await rooms.send(roomId, text)
+        return { kind: 'success', text: 'Room turn started.' }
+      }
+      if (action === 'routine') {
+        if (rest === '') return { kind: 'error', text: 'Use: routine <routineId>' }
+        await routines.runNow(rest)
+        return { kind: 'success', text: 'Routine dispatched.' }
+      }
+      if (action === 'scaffold') {
+        // Backwards-compatible: rewrite every Bot's identity files.
+        await syncTeamFiles(store, store.state)
+        for (const bot of store.state.bots) await syncBotFiles(store, bot, store.state)
+        return { kind: 'success', text: 'Bot identity files rewritten.' }
+      }
+      return { kind: 'error', text: 'Unknown action.' }
+    },
+  }), 'botmode: command')
+
+  // HTTP surface for the Client half. The Web carrier may activate after this
+  // plugin; wait for it instead of probing once at load.
+  ctx.inject(['webServer'], (scope) => {
+    scope.effect(() => scope.webServer.register({
+      kind: 'prefix',
+      path: PREFIX.replace(/\/$/, ''),
+      handler: (req, res) => api.handle(req, res),
+    }), 'botmode: api route')
+  })
+
+  logger?.info?.(`botmode: state at ${store.root}`)
 }

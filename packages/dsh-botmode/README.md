@@ -1,26 +1,28 @@
-# Bot mode (`@local/dsh-botmode`)
+# @local/dsh-botmode
 
-A DeepSeek Harness bundle that adds a Bot roster and a **Harness / Bot** mode
-switch to the session bar.
+DeepSeek Harness 的 Bot 团队模式插件（Host + Web Client 双半区）。
 
-- **Harness mode**: the normal session list and conversation.
-- **Bot mode**: a roster of named Bots. Each Bot gets its own workspace folder
-  named after it; the persona, role and standing instructions are written into
-  `AGENTS.md`, `SOUL.md`, `bot.json`, `TEAM.md` and
-  `.dsh/skills/team/SKILL.md` in that folder, and the Bot's chat session lives
-  there.
-- **Team board**: every Bot carries the `team_board` tool, so Bots on this
-  machine can read and post messages to each other (`<bots root>/.team/board.jsonl`).
+- 每个 Bot 独立目录、SOUL/MEMORY、模型、工具白名单、审批策略、永久会话
+- `message_agent` 异步队友消息（每 Bot FIFO，`expectReply` 回复回送，>16k 落盘）
+- Group Room 2–6 人，`@`/lead/everyone 路由，预算暂停，`@user` 升级
+- Host 持久 Routines：cron 解析 + 冷会话唤醒，定时器在 `ctx.effect()` 内
+- Bot 审批桥：once / session / always / deny
+- 侧边栏面板图标 + 底部切换按钮 + 独立 `botmode` 主面板
 
-Each Bot workspace is a normal DSH workspace, so it also appears in Harness
-mode under the Bot's name.
+安装（桌面端）：
 
-Install this directory through **Plugins → Add plugin** (or
-`dsh plugin add <this directory>`), then reload the page. Restart the `dsh web`
-process once after installing or updating, so the Host half (the `/botmode`
-command and `team_board`) loads; the UI works without a restart but falls back to
-in-chat setup.
+```bash
+dsh plugin --profile desktop install /Users/a1412/Desktop/dsh-bot/packages/dsh-botmode
+```
 
-Version 0.2: own workspace per Bot, persona files, team board. The board is
-asynchronous; direct Bot-to-Bot wake-up is not implemented yet. See
-`docs/DETAIL.md`.
+或使用 Plugin Manager 的 `install_bundle`，target 传本目录绝对路径。安装后 Host 行 `include:botmode`，Client 模块 `@local/dsh-botmode/client`。
+
+状态根：`$DSH_HOME/botmode`。HTTP：`/botmode/api/state`、`/botmode/api/command`。
+
+测试：
+
+```bash
+node test/host.test.mjs
+```
+
+完整架构、命令表与限制见仓库根目录 [README.md](../../README.md)。
