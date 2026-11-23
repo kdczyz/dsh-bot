@@ -11,8 +11,11 @@
 import { newId } from './store.js'
 import { syncBotFiles, syncTeamFiles } from './persona.js'
 import { nextCronTime } from './cron.js'
+import { botModelCatalog } from './models.js'
 
 const MAX_BODY_BYTES = 256 * 1024
+const MAX_IMAGE_BYTES = 32 * 1024 * 1024
+const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
 const APPROVAL_POLICIES = ['ask', 'always', 'never']
 const PREFIX = '/botmode/api/'
 
@@ -23,18 +26,23 @@ const sendJson = (res, status, payload) => {
   res.end(JSON.stringify(payload))
 }
 
-const readBody = async (req) => {
+const readRawBody = async (req, maxBytes) => {
   const chunks = []
   let size = 0
   for await (const chunk of req) {
     size += chunk.byteLength
-    if (size > MAX_BODY_BYTES) {
+    if (size > maxBytes) {
       req.resume()
       return undefined
     }
     chunks.push(chunk)
   }
-  return Buffer.concat(chunks, size).toString('utf8')
+  return Buffer.concat(chunks, size)
+}
+
+const readBody = async (req) => {
+  const body = await readRawBody(req, MAX_BODY_BYTES)
+  return body === undefined ? undefined : body.toString('utf8')
 }
 
 const stringOr = (value, fallback = '') => (typeof value === 'string' ? value : fallback)
@@ -66,6 +74,42 @@ export class BotApi {
       if (route === 'state' && req.method === 'GET') {
         await this.store.load()
         sendJson(res, 200, { ok: true, state: this.publicState() })
+        return
+      }
+      if (route === 'models' && req.method === 'GET') {
+        const force = url.searchParams.get('force') === '1'
+        const catalog = await botModelCatalog(this.ctx, { force })
+        sendJson(res, 200, { ok: true, catalog })
+        return
+      }
+      if (route === 'image' && req.method === 'POST') {
+        const mediaType = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase()
+        if (!IMAGE_TYPES.has(mediaType)) {
+          sendJson(res, 415, { ok: false, error: 'unsupported image type' })
+          return
+        }
+        const body = await readRawBody(req, MAX_IMAGE_BYTES)
+        if (body === undefined) {
+          sendJson(res, 413, { ok: false, error: 'image too large' })
+          return
+        }
+        const attachments = this.ctx.get('attachments')
+        if (!attachments || typeof attachments.saveImages !== 'function') {
+          throw new Error('Image attachments are unavailable in this Host.')
+        }
+        let name = ''
+        try {
+          const raw = String(req.headers['x-botmode-image-name'] ?? '')
+          name = raw === '' ? '' : decodeURIComponent(raw)
+        } catch (_error) {
+          name = ''
+        }
+        const [attachment] = await attachments.saveImages([{
+          data: body,
+          mediaType,
+          ...name === '' ? {} : { name },
+        }])
+        sendJson(res, 200, { ok: true, attachment })
         return
       }
       if (route === 'command' && req.method === 'POST') {
@@ -183,6 +227,9 @@ export class BotApi {
       model: stringOr(draft?.model?.model, existing?.model?.model ?? '').trim(),
       reasoningEffort: stringOr(draft?.model?.reasoningEffort, existing?.model?.reasoningEffort ?? '').trim(),
     }
+    if ((model.provider === '') !== (model.model === '')) {
+      throw new Error('Choose both a provider and a model, or leave both empty for the DSH default.')
+    }
     const tools = {
       allow: Array.isArray(draft?.tools?.allow)
         ? [...new Set(draft.tools.allow.filter(item => typeof item === 'string' && item !== ''))]
@@ -276,8 +323,13 @@ export class BotApi {
   async dispatchBot(payload) {
     const botId = stringOr(payload.botId)
     const text = stringOr(payload.text).trim()
-    if (text === '') throw new Error('Write a message first.')
-    const result = this.dispatcher.dispatch(botId, text, { source: 'api' })
+    const images = Array.isArray(payload.images)
+      ? payload.images.filter(image => image && typeof image === 'object'
+        && typeof image.attachmentId === 'string' && image.attachmentId !== ''
+        && typeof image.mediaType === 'string' && IMAGE_TYPES.has(image.mediaType)).slice(0, 20)
+      : []
+    if (text === '' && images.length === 0) throw new Error('Write a message or attach an image first.')
+    const result = this.dispatcher.dispatch(botId, text, { source: 'api', images })
     if (!result.ok) throw new Error(result.error ?? 'dispatch failed')
     return result
   }

@@ -9,6 +9,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { writeTextFile } from './store.js'
+import { modelAcceptsImages, resolveBotSelection } from './models.js'
 
 const TURN_TIMEOUT_MS = 15 * 60 * 1000
 const MAX_REPLY_CHARS = 16_000
@@ -24,10 +25,10 @@ const textOfBlocks = (blocks) => {
 
 const oneLine = (value) => String(value ?? '').replace(/\s+/g, ' ').trim()
 
-export const makeUserMessage = (text) => ({
+export const makeUserMessage = (text, content) => ({
   id: randomUUID(),
   role: 'user',
-  content: [{ type: 'text', text }],
+  content: content ?? [{ type: 'text', text }],
   source: { kind: 'user' },
 })
 
@@ -137,16 +138,18 @@ export class Dispatcher {
     const bot = this.store.bot(botId)
     if (!bot) return { ok: false, error: 'unknown bot' }
     const prompt = String(text ?? '').trim()
-    if (prompt === '') return { ok: false, error: 'empty message' }
+    const images = Array.isArray(options.images) ? options.images : []
+    if (prompt === '' && images.length === 0) return { ok: false, error: 'empty message' }
     this.#running.add(botId)
     if (options.roomId) this.#roomBots.add(botId)
     const startedAt = new Date().toISOString()
     try {
       const agent = await this.#resolveAgent(bot)
-      this.#applyModel(bot, agent)
+      const selection = this.#applyModel(bot, agent)
+      const content = await this.#promptContent(prompt, images, selection)
       const session = agent.session
       const beforeSeq = (session.ownEvents().at(-1)?.seq ?? -1) + 1
-      const message = makeUserMessage(prompt)
+      const message = makeUserMessage(prompt, content)
       agent.followup(message)
       await this.#waitIdle(agent)
       try { await this.ctx.sessions.flush(session) } catch (_error) { /* durability is best effort here */ }
@@ -196,18 +199,49 @@ export class Dispatcher {
     }
   }
 
+  /**
+   * Bind the Bot's own model, or the DSH default when it has none. Returning the
+   * selection lets the same turn use it for the image-input capability check.
+   */
   #applyModel(bot, agent) {
-    const model = bot.model
-    if (!model || model.provider === '' || model.model === '') return
+    const selection = resolveBotSelection(this.ctx, bot)
+    if (!selection) return undefined
     try {
-      const selection = { provider: model.provider, model: model.model }
-      if (typeof model.reasoningEffort === 'string' && model.reasoningEffort !== '') {
-        selection.reasoningEffort = model.reasoningEffort
-      }
-      agent.model?.select(selection)
+      const current = agent.model?.current?.()
+      const same = current
+        && current.provider === selection.provider
+        && current.model === selection.model
+        && (current.reasoningEffort ?? '') === (selection.reasoningEffort ?? '')
+      if (!same) agent.model?.select(selection)
+      return selection
     } catch (error) {
       this.logger?.warn?.(`botmode: model selection for ${bot.name} failed: ${String(error)}`)
+      return selection
     }
+  }
+
+  /**
+   * Turn a text prompt plus already-uploaded image references into admitted
+   * message content. A route that declares text-only input is refused here,
+   * before anything enters the Session log.
+   */
+  async #promptContent(prompt, images, selection) {
+    if (images.length === 0) return undefined
+    const accepts = await modelAcceptsImages(this.ctx, selection)
+    if (accepts === false) {
+      const label = selection ? `${selection.provider}/${selection.model}` : 'this model'
+      throw new Error(`Model "${label}" does not accept image input. Give this Bot a vision model first.`)
+    }
+    const attachments = this.ctx.get('attachments')
+    if (!attachments || typeof attachments.admitPromptContent !== 'function') {
+      throw new Error('Image input is unavailable in this Host.')
+    }
+    const parts = []
+    if (prompt !== '') parts.push({ type: 'text', text: prompt })
+    for (const image of images) {
+      parts.push({ type: 'image', attachment: image, encodedBytes: Number(image.bytes) || 0 })
+    }
+    return attachments.admitPromptContent(parts)
   }
 
   async #waitIdle(agent) {

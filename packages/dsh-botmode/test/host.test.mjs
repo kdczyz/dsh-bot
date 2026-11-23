@@ -13,6 +13,7 @@ import { Rooms } from '../host/rooms.js'
 import { BotApi } from '../host/api.js'
 import { syncBotFiles, personaBlock } from '../host/persona.js'
 import { Approvals } from '../host/approvals.js'
+import { botModelCatalog, modelAcceptsImages, resolveBotSelection } from '../host/models.js'
 
 const root = await mkdtemp(join(tmpdir(), 'botmode-test-'))
 const logger = { info() {}, warn() {}, error() {} }
@@ -62,7 +63,7 @@ function fakeAgent(id, log = []) {
   }
   const agent = {
     session,
-    model: { select() {} },
+    model: { selected: [], select(selection) { this.selected.push(selection) } },
     ctx: { effect(fn) { return fn() }, get() { return undefined } },
     followup(message) {
       busy = true
@@ -111,6 +112,28 @@ const ctx = {
       }
     }
     if (name === 'sessions') return { flush: async () => true }
+    if (name === 'agentDefaultModel') return { currentSelection: () => ({ provider: 'prov', model: 'default-model' }) }
+    if (name === 'llm') {
+      return {
+        listProviders: () => [{ id: 'prov', name: 'Provider' }],
+        async listModels(provider) { return provider === 'prov' ? [{ id: 'default-model', name: 'Default model' }, { id: 'text-only', name: 'Text only' }] : [] },
+        async resolveModelInfo(provider, id) {
+          return {
+            provider, id, name: id,
+            inputModalities: id === 'text-only' ? ['text'] : ['text', 'image'],
+            reasoning: id === 'default-model' ? { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' } : undefined,
+          }
+        },
+      }
+    }
+    if (name === 'attachments') {
+      return {
+        async admitPromptContent(parts) { return parts.map(part => part.type === 'image' ? { type: 'image', attachment: part.attachment } : part) },
+        async saveImages(inputs) {
+          return inputs.map(input => ({ attachmentId: 'sha256:uploaded', mediaType: input.mediaType, bytes: input.data.byteLength, width: 1, height: 1, ...input.name ? { name: input.name } : {} }))
+        },
+      }
+    }
     if (name === 'tools') return { definitions: () => [{ name: 'bash' }] }
     if (name === 'connection') return undefined
     return undefined
@@ -125,6 +148,7 @@ agents.get('s_alpha').setReply('alpha reply')
 const result = await dispatcher.enqueue('bot_alpha', 'hello')
 assert.equal(result.ok, true)
 assert.equal(result.text, 'alpha reply')
+assert.deepEqual(agents.get('s_alpha').model.selected.at(-1), { provider: 'prov', model: 'default-model' })
 
 // FIFO: two turns do not interleave.
 agents.get('s_alpha').setReply('second')
@@ -133,6 +157,69 @@ const first = dispatcher.enqueue('bot_alpha', 'one')
 const second = dispatcher.enqueue('bot_alpha', 'two')
 await Promise.all([first, second])
 assert.deepEqual(order, ['start:one', 'end:one', 'start:two', 'end:two'])
+
+// --- per-Bot model: DSH default, pinned model, image capability ------------
+{
+  const alphaBot = store.bot('bot_alpha')
+  const image = { attachmentId: 'sha256:test', mediaType: 'image/png', bytes: 12, width: 1, height: 1 }
+  const withImage = await dispatcher.enqueue('bot_alpha', 'look at this', { images: [image] })
+  assert.equal(withImage.ok, true)
+  assert.deepEqual(agents.get('s_alpha')._last.content.at(-1), { type: 'image', attachment: image })
+
+  await store.mutate((state) => {
+    const stored = state.bots.find(bot => bot.id === alphaBot.id)
+    stored.model = { provider: 'prov', model: 'text-only', reasoningEffort: '' }
+  })
+  const rejected = await dispatcher.enqueue('bot_alpha', 'look again', { images: [image] })
+  assert.equal(rejected.ok, false)
+  assert.match(rejected.error, /does not accept image input/)
+  await store.mutate((state) => {
+    const stored = state.bots.find(bot => bot.id === alphaBot.id)
+    stored.model = { provider: '', model: '', reasoningEffort: '' }
+  })
+}
+
+// --- model catalog ---------------------------------------------------------
+{
+  const modelCtx = {
+    get(name) {
+      if (name === 'agentDefaultModel') return { currentSelection: () => ({ provider: 'alpha', model: 'a1' }) }
+      if (name === 'llm') {
+        return {
+          listProviders: () => [{ id: 'alpha', name: 'Alpha' }, { id: 'broken', name: 'Broken' }],
+          async listModels(provider) {
+            if (provider === 'broken') throw new Error('provider offline')
+            return [
+              { id: 'a1', name: 'A One' },
+              { id: 'a2', name: 'A Two', inputModalities: ['text', 'image'] },
+            ]
+          },
+          async resolveModelInfo(provider, id) {
+            if (id === 'a1') {
+              return {
+                provider, id, name: 'A One', inputModalities: ['text'],
+                reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }], defaultEffort: 'low' },
+              }
+            }
+            return { provider, id, name: 'A Two', inputModalities: ['text', 'image'] }
+          },
+        }
+      }
+      return undefined
+    },
+  }
+  const catalog = await botModelCatalog(modelCtx, { force: true })
+  assert.equal(catalog.default.provider, 'alpha')
+  assert.equal(catalog.default.model, 'a1')
+  assert.equal(catalog.groups[0].models[0].vision, false)
+  assert.equal(catalog.groups[0].models[1].vision, true)
+  assert.deepEqual(catalog.groups[0].models[0].reasoning.efforts.map(effort => effort.id), ['low', 'high'])
+  assert.equal(catalog.failures[0].id, 'broken')
+  assert.deepEqual(resolveBotSelection(modelCtx, { model: { provider: '', model: '', reasoningEffort: '' } }), { provider: 'alpha', model: 'a1' })
+  assert.deepEqual(resolveBotSelection(modelCtx, { model: { provider: 'custom', model: 'c1', reasoningEffort: 'high' } }), { provider: 'custom', model: 'c1', reasoningEffort: 'high' })
+  assert.equal(await modelAcceptsImages(modelCtx, { provider: 'alpha', model: 'a2' }), true)
+  assert.equal(await modelAcceptsImages(modelCtx, { provider: 'alpha', model: 'a1' }), false)
+}
 
 // --- rooms -----------------------------------------------------------------
 let beta
@@ -208,6 +295,30 @@ function fakeResponse() {
   assert.equal(payload.ok, true)
   assert.ok(payload.state.bots.some(bot => bot.name === 'Alpha'))
   assert.ok(Array.isArray(payload.state.tools))
+}
+{
+  const res = fakeResponse()
+  await api.handle(fakeRequest('GET', '/botmode/api/models'), res)
+  assert.equal(res.statusCode, 200)
+  const payload = JSON.parse(res.body)
+  assert.equal(payload.ok, true)
+  assert.ok(payload.catalog.groups.some(group => group.id === 'prov'))
+}
+{
+  const image = Buffer.from([137, 80, 78, 71])
+  const req = {
+    method: 'POST',
+    url: '/botmode/api/image',
+    headers: { 'content-type': 'image/png', 'x-botmode-image-name': encodeURIComponent('shot.png') },
+    async *[Symbol.asyncIterator]() { yield image },
+  }
+  const res = fakeResponse()
+  await api.handle(req, res)
+  assert.equal(res.statusCode, 200)
+  const payload = JSON.parse(res.body)
+  assert.equal(payload.ok, true)
+  assert.equal(payload.attachment.mediaType, 'image/png')
+  assert.equal(payload.attachment.name, 'shot.png')
 }
 {
   const res = fakeResponse()

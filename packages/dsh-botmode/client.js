@@ -81,6 +81,18 @@ window.__ModuleLoader__.load({
         'chat.send': 'Send',
         'chat.stop': 'Stop',
         'chat.older': 'Load older messages',
+        'chat.attach': 'Image',
+        'chat.attachAdd': 'Attach an image',
+        'chat.attachVisionOnly': 'This Bot uses a text-only model; pin a vision model to send images.',
+        'chat.attachType': 'Only PNG, JPEG, WebP or GIF images are accepted.',
+        'chat.attachSize': 'Each image must be 12 MB or smaller.',
+        'chat.attachLimit': 'At most 6 images per message.',
+        'chat.attachRemove': 'Remove',
+        'chat.imageOnly': 'Image only',
+        'detail.model': 'Model',
+        'model.default': 'DSH default',
+        'model.custom': 'Pinned',
+        'model.unknown': 'not in the current catalog',
         'pane.title': 'Bots',
         'pane.search': 'Search Bots',
         'pane.empty': 'No matching Bot',
@@ -131,6 +143,26 @@ window.__ModuleLoader__.load({
         'form.providerPlaceholder': 'leave empty for the default',
         'form.model': 'Model',
         'form.modelPlaceholder': 'leave empty for the default',
+        'form.modelMode': 'Model source',
+        'form.modelDefault': 'DSH default',
+        'form.modelCustom': 'Pin a model',
+        'form.modelDefaultHint': 'Follow the DSH default model. A later default change reaches this Bot on its next turn.',
+        'form.modelDefaultNow': 'Current default: {model}',
+        'form.modelLoading': 'Reading the DSH model catalog…',
+        'form.modelError': 'The model catalog is unavailable: {msg}. You can still type a provider and model.',
+        'form.modelProvider': 'Provider',
+        'form.modelPick': 'Model',
+        'form.modelPickPlaceholder': 'Choose a model',
+        'form.reasoning': 'Thinking level',
+        'form.reasoningDefault': 'Model default',
+        'form.reasoningNone': 'This model exposes no thinking levels.',
+        'form.vision': 'Vision',
+        'form.visionYes': 'Image input',
+        'form.visionNo': 'Text only',
+        'form.visionUnknown': 'Not declared',
+        'form.modelManual': 'Manual provider / model',
+        'form.modelRefresh': 'Refresh catalog',
+        'form.modelNeed': 'Choose both a provider and a model, or switch back to the DSH default.',
         'form.approval': 'Approval policy',
         'approval.ask': 'Ask me',
         'approval.allowAlways': 'Always allow',
@@ -229,6 +261,18 @@ window.__ModuleLoader__.load({
         'chat.send': '发送',
         'chat.stop': '停止',
         'chat.older': '加载更早的消息',
+        'chat.attach': '图片',
+        'chat.attachAdd': '附加一张图片',
+        'chat.attachVisionOnly': '这个 Bot 当前是纯文本模型；指定一个视觉模型后才能发图。',
+        'chat.attachType': '只支持 PNG、JPEG、WebP、GIF 图片。',
+        'chat.attachSize': '每张图片不超过 12 MB。',
+        'chat.attachLimit': '每条消息最多 6 张图片。',
+        'chat.attachRemove': '移除',
+        'chat.imageOnly': '仅图片',
+        'detail.model': '模型',
+        'model.default': 'DSH 默认',
+        'model.custom': '单独指定',
+        'model.unknown': '不在当前模型目录里',
         'pane.title': 'Bot 会话',
         'pane.search': '搜索 Bot',
         'pane.empty': '没有匹配的 Bot',
@@ -279,6 +323,26 @@ window.__ModuleLoader__.load({
         'form.providerPlaceholder': '留空使用默认',
         'form.model': '模型',
         'form.modelPlaceholder': '留空使用默认',
+        'form.modelMode': '模型来源',
+        'form.modelDefault': 'DSH 默认',
+        'form.modelCustom': '单独指定',
+        'form.modelDefaultHint': '跟随 DSH 的默认模型；以后改默认模型，这个 Bot 下一轮就会用上。',
+        'form.modelDefaultNow': '当前默认：{model}',
+        'form.modelLoading': '正在读取 DSH 模型目录…',
+        'form.modelError': '模型目录不可用：{msg}。仍可手动填写提供方与模型。',
+        'form.modelProvider': '提供方',
+        'form.modelPick': '模型',
+        'form.modelPickPlaceholder': '选择一个模型',
+        'form.reasoning': '思考档位',
+        'form.reasoningDefault': '模型默认',
+        'form.reasoningNone': '这个模型没有可调的思考档位。',
+        'form.vision': '视觉',
+        'form.visionYes': '支持图片输入',
+        'form.visionNo': '仅文本',
+        'form.visionUnknown': '未声明',
+        'form.modelManual': '手动填写提供方 / 模型',
+        'form.modelRefresh': '刷新目录',
+        'form.modelNeed': '提供方和模型要一起选；否则切回 DSH 默认。',
         'form.approval': '审批策略',
         'approval.ask': '每次询问我',
         'approval.allowAlways': '总是允许',
@@ -367,6 +431,56 @@ window.__ModuleLoader__.load({
     function initialOf(name) {
       const text = String(name || '').trim()
       return text === '' ? '?' : Array.from(text)[0].toUpperCase()
+    }
+
+    /* One catalog lookup shared by the Bot form, its detail page and the chat. */
+    const EMPTY_MODEL = { provider: '', model: '', reasoningEffort: '' }
+
+    function modelEntryOf(catalog, selection) {
+      if (!catalog || !selection || !selection.provider || !selection.model) return undefined
+      const group = (catalog.groups || []).find(item => item.id === selection.provider)
+      return group ? (group.models || []).find(item => item.id === selection.model) : undefined
+    }
+
+    function effectiveModelOf(catalog, model) {
+      if (model && model.provider && model.model) {
+        return { provider: model.provider, model: model.model, ...(model.reasoningEffort ? { reasoningEffort: model.reasoningEffort } : {}) }
+      }
+      return catalog && catalog.default ? catalog.default : undefined
+    }
+
+    function modelLabelOf(catalog, selection) {
+      if (!selection || !selection.provider || !selection.model) return ''
+      const entry = modelEntryOf(catalog, selection)
+      return entry ? entry.name : `${selection.provider}/${selection.model}`
+    }
+
+    function reasoningNameOf(catalog, selection) {
+      if (!selection || !selection.reasoningEffort) return ''
+      const entry = modelEntryOf(catalog, selection)
+      const effort = entry && entry.reasoning ? entry.reasoning.efforts.find(item => item.id === selection.reasoningEffort) : undefined
+      return effort ? effort.name : selection.reasoningEffort
+    }
+
+    function modelVisionOf(catalog, selection) {
+      const entry = modelEntryOf(catalog, selection)
+      return entry ? entry.vision : undefined
+    }
+
+    function describeModel(t, catalog, model, options = {}) {
+      const selection = effectiveModelOf(catalog, model)
+      if (!selection) return model && model.provider && model.model ? t('model.unknown') : t('model.default')
+      if (options.optional && !catalog) return ''
+      const label = modelLabelOf(catalog, selection)
+      const source = model && model.provider && model.model ? t('model.custom') : t('model.default')
+      const parts = [`${source} · ${selection.provider}/${selection.model}`]
+      if (label && label !== selection.model) parts.push(label)
+      const effort = reasoningNameOf(catalog, selection)
+      if (effort) parts.push(effort)
+      const vision = modelVisionOf(catalog, selection)
+      if (vision === true) parts.push(t('form.visionYes'))
+      else if (vision === false) parts.push(t('form.visionNo'))
+      return parts.join(' · ')
     }
 
     function setupInChat(draft, team, lang, update = false) {
@@ -461,6 +575,27 @@ window.__ModuleLoader__.load({
       .bm-swatch { width: 24px; height: 24px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; padding: 0; }
       .bm-swatch[data-active='true'] { border-color: var(--dsw-alias-label-primary); }
       .bm-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+      .bm-model-box { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--dsw-radius-md);
+        border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); }
+      .bm-model-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .bm-model-title { font-size: 12px; line-height: 16px; color: var(--dsw-alias-label-secondary); }
+      .bm-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 7px; background: var(--dsw-alias-bg-layer-2);
+        border: 0.5px solid var(--dsw-alias-border-l2); }
+      .bm-seg button { appearance: none; border: 0; background: transparent; font: inherit; font-size: 11px; line-height: 16px;
+        padding: 2px 9px; border-radius: 5px; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+      .bm-seg button[data-active='true'] { background: var(--dsw-alias-button-ghost-active-fill); color: var(--dsw-alias-label-primary); }
+      .bm-model-head .bm-btn { margin-left: auto; }
+      .bm-model-hint { font-size: 11px; line-height: 17px; color: var(--dsw-alias-label-tertiary); }
+      .bm-model-now { font-size: 11px; line-height: 17px; color: var(--dsw-alias-label-secondary); }
+      .bm-model-empty { font-size: 12px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
+      .bm-model-caps { display: flex; gap: 6px; flex-wrap: wrap; }
+      .bm-cap { font-size: 10.5px; line-height: 16px; padding: 1px 7px; border-radius: 999px;
+        border: 0.5px solid var(--dsw-alias-border-l3); color: var(--dsw-alias-label-tertiary); white-space: nowrap; }
+      .bm-cap[data-state='yes'] { color: var(--dsw-alias-label-success, #2f9e6e); border-color: color-mix(in srgb, #2f9e6e 45%, transparent); }
+      .bm-cap[data-state='no'] { color: var(--dsw-alias-label-tertiary); }
+      .bm-model-pill { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        font-size: 10.5px; line-height: 16px; padding: 1px 8px; border-radius: 999px;
+        color: var(--dsw-alias-label-tertiary); border: 0.5px solid var(--dsw-alias-border-l3); }
       .bm-error { font-size: 12px; line-height: 18px; padding: 8px 10px; border-radius: var(--dsw-radius-md);
         color: var(--dsw-alias-label-error); background: var(--dsw-alias-bg-layer-1);
         border: 0.5px solid var(--dsw-alias-border-l3); }
@@ -666,6 +801,19 @@ window.__ModuleLoader__.load({
       .bm-turn-notice { font-size: 11.5px; color: var(--dsw-alias-label-tertiary); }
       .bm-compose { flex: none; border-top: 0.5px solid var(--dsw-alias-border-l2); padding: 10px 12px 12px;
         display: flex; gap: 8px; align-items: flex-end; }
+      .bm-compose-col { flex-direction: column; align-items: stretch; }
+      .bm-compose-row { display: flex; gap: 8px; align-items: flex-end; width: 100%; }
+      .bm-compose-row textarea { flex: 1; }
+      .bm-attach-btn { flex: none; height: 34px; }
+      .bm-attach-list { display: flex; gap: 8px; flex-wrap: wrap; }
+      .bm-attach-item { display: flex; align-items: center; gap: 6px; max-width: 220px; padding: 3px 6px;
+        border-radius: 7px; background: var(--dsw-alias-bg-layer-1); border: 0.5px solid var(--dsw-alias-border-l2); }
+      .bm-attach-item img { width: 28px; height: 28px; object-fit: cover; border-radius: 5px; flex: none; }
+      .bm-attach-name { font-size: 10.5px; line-height: 15px; color: var(--dsw-alias-label-secondary);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .bm-attach-remove { appearance: none; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary);
+        font: inherit; font-size: 14px; line-height: 16px; cursor: pointer; padding: 0 2px; flex: none; }
+      .bm-attach-remove:hover { color: var(--dsw-alias-label-error); }
       .bm-compose textarea { flex: 1; resize: none; min-height: 34px; max-height: 160px; font: inherit; font-size: 13px;
         line-height: 20px; padding: 7px 10px; box-sizing: border-box; color: var(--dsw-alias-label-primary);
         background: var(--dsw-alias-bg-layer-1); border: 0.5px solid var(--dsw-alias-border-l2);
@@ -727,6 +875,7 @@ window.__ModuleLoader__.load({
         try { workspaceStore = ctx.get('workspaces') } catch (_error) { workspaceStore = undefined }
         const locale = ctx.get('locale')
         const hostStore = createStore({ state: null, status: 'loading', error: '' })
+        const modelStore = createStore({ status: 'idle', catalog: null, error: '' })
         const hostRequest = async (path, init) => {
           const response = await fetch(`/botmode/api/${path}`, {
             credentials: 'include', cache: 'no-store', ...init,
@@ -758,6 +907,26 @@ window.__ModuleLoader__.load({
           })
           hostStore.set({ state: response.state, status: 'ready', error: '' })
           return response.result
+        }
+        let modelLoad = null
+        const loadModels = async (force = false) => {
+          if (modelLoad) return modelLoad
+          modelStore.set({ ...modelStore.getSnapshot(), status: 'loading', error: '' })
+          modelLoad = hostRequest(`models${force ? '?force=1' : ''}`)
+            .then((payload) => {
+              modelStore.set({ status: 'ready', catalog: payload.catalog, error: '' })
+              return payload.catalog
+            })
+            .catch((error) => {
+              modelStore.set({
+                status: 'error',
+                catalog: modelStore.getSnapshot().catalog,
+                error: error && error.message ? error.message : String(error),
+              })
+              return undefined
+            })
+            .finally(() => { modelLoad = null })
+          return modelLoad
         }
         // Components keep their old roster/groups props; both now read the Host
         // snapshot, so every browser and cold Bot sees the same data.
@@ -1036,11 +1205,153 @@ window.__ModuleLoader__.load({
           const [draft, setDraft] = useState(props.initial)
           const [busy, setBusy] = useState(false)
           const [error, setError] = useState('')
+          const models = props.models || { status: 'idle', catalog: null, error: '' }
+          const catalog = models.catalog
+          const groups = (catalog && Array.isArray(catalog.groups)) ? catalog.groups : []
+          const current = draft.model || EMPTY_MODEL
+          const mode = current.provider && current.model ? 'custom' : 'default'
+          const group = groups.find(item => item.id === current.provider)
+          const entry = group ? (group.models || []).find(item => item.id === current.model) : undefined
+          const efforts = (entry && entry.reasoning && Array.isArray(entry.reasoning.efforts)) ? entry.reasoning.efforts : []
+          const setModel = (patch) => setDraft({ ...draft, model: { ...EMPTY_MODEL, ...(draft.model || {}), ...patch } })
+          const chooseMode = (next) => {
+            if (next === 'default') {
+              setModel({ provider: '', model: '', reasoningEffort: '' })
+              return
+            }
+            const preferred = catalog && catalog.default && groups.some(item => item.id === catalog.default.provider)
+              ? catalog.default
+              : groups[0] ? { provider: groups[0].id, model: (groups[0].models[0] || {}).id } : undefined
+            setModel({
+              provider: preferred ? preferred.provider : '',
+              model: preferred && preferred.model ? preferred.model : '',
+              reasoningEffort: preferred && preferred.reasoningEffort ? preferred.reasoningEffort : '',
+            })
+          }
+          const changeProvider = (providerId) => {
+            const next = groups.find(item => item.id === providerId)
+            setModel({ provider: providerId, model: next && next.models[0] ? next.models[0].id : '', reasoningEffort: '' })
+          }
+          const changeModel = (modelId) => setModel({ provider: current.provider, model: modelId, reasoningEffort: '' })
+          const catalogReady = groups.length > 0
+          const defaultSelection = catalog && catalog.default ? catalog.default : undefined
+          const containerLabel = (item) => {
+            const marker = item.vision === true ? ` · ${t('form.visionYes')}` : item.vision === false ? ` · ${t('form.visionNo')}` : ''
+            return `${item.name}${marker}`
+          }
+          const modelFields = mode === 'default'
+            ? h('div', { className: 'bm-model-default' },
+              h('div', { className: 'bm-model-hint' }, t('form.modelDefaultHint')),
+              defaultSelection
+                ? h('div', { className: 'bm-model-now' }, t('form.modelDefaultNow', {
+                  model: `${defaultSelection.provider}/${defaultSelection.model}${reasoningNameOf(catalog, defaultSelection) ? ` · ${reasoningNameOf(catalog, defaultSelection)}` : ''}`,
+                }))
+                : null,
+              models.status === 'loading' ? h('div', { className: 'bm-model-hint' }, t('form.modelLoading')) : null,
+              models.status === 'error'
+                ? h('div', { className: 'bm-error' }, t('form.modelError', { msg: models.error || '' }))
+                : null)
+            : catalogReady
+              ? h('div', { className: 'bm-model-custom' },
+                h('div', { className: 'bm-row' },
+                  h('label', { className: 'bm-label' }, t('form.modelProvider'),
+                    h('select', {
+                      className: 'bm-input', value: current.provider,
+                      onChange: event => changeProvider(event.target.value),
+                    },
+                      groups.map(item => h('option', { key: item.id, value: item.id }, item.name)),
+                      current.provider && !groups.some(item => item.id === current.provider)
+                        ? h('option', { value: current.provider }, `${current.provider} (${t('model.unknown')})`)
+                        : null)),
+                  h('label', { className: 'bm-label' }, t('form.modelPick'),
+                    h('select', {
+                      className: 'bm-input', value: current.model,
+                      onChange: event => changeModel(event.target.value),
+                    },
+                      h('option', { value: '' }, t('form.modelPickPlaceholder')),
+                      (group ? group.models : []).map(item => h('option', { key: item.id, value: item.id }, containerLabel(item))),
+                      current.model && (!group || !group.models.some(item => item.id === current.model))
+                        ? h('option', { value: current.model }, `${current.model} (${t('model.unknown')})`)
+                        : null))),
+                h('div', { className: 'bm-row' },
+                  h('label', { className: 'bm-label' }, t('form.reasoning'),
+                    efforts.length === 0
+                      ? h('div', { className: 'bm-model-empty' }, t('form.reasoningNone'))
+                      : h('select', {
+                        className: 'bm-input',
+                        value: current.reasoningEffort || '',
+                        onChange: event => setModel({ reasoningEffort: event.target.value }),
+                      },
+                        h('option', { value: '' }, t('form.reasoningDefault')),
+                        efforts.map(effort => h('option', { key: effort.id, value: effort.id }, effort.name)),
+                        current.reasoningEffort && !efforts.some(effort => effort.id === current.reasoningEffort)
+                          ? h('option', { value: current.reasoningEffort }, current.reasoningEffort)
+                          : null)),
+                  h('div', { className: 'bm-label' }, t('form.vision'),
+                    h('div', { className: 'bm-model-caps' },
+                      h('span', {
+                        className: 'bm-cap',
+                        'data-state': entry && entry.vision === true ? 'yes' : entry && entry.vision === false ? 'no' : 'unknown',
+                      }, entry && entry.vision === true
+                        ? t('form.visionYes')
+                        : entry && entry.vision === false ? t('form.visionNo') : t('form.visionUnknown'))))))
+              : h('div', { className: 'bm-model-manual' },
+                models.status === 'loading' ? h('div', { className: 'bm-model-hint' }, t('form.modelLoading')) : null,
+                models.status === 'error'
+                  ? h('div', { className: 'bm-error' }, t('form.modelError', { msg: models.error || '' }))
+                  : null,
+                h('div', { className: 'bm-model-hint' }, t('form.modelManual')),
+                h('div', { className: 'bm-row' },
+                  h('label', { className: 'bm-label' }, t('form.provider'),
+                    h('input', {
+                      className: 'bm-input', value: current.provider,
+                      placeholder: t('form.providerPlaceholder'),
+                      onChange: event => setModel({ provider: event.target.value }),
+                    })),
+                  h('label', { className: 'bm-label' }, t('form.model'),
+                    h('input', {
+                      className: 'bm-input', value: current.model,
+                      placeholder: t('form.modelPlaceholder'),
+                      onChange: event => setModel({ model: event.target.value }),
+                    })),
+                  h('label', { className: 'bm-label' }, t('form.reasoning'),
+                    h('input', {
+                      className: 'bm-input', value: current.reasoningEffort || '',
+                      placeholder: t('form.reasoningDefault'),
+                      onChange: event => setModel({ reasoningEffort: event.target.value }),
+                    }))))
+          const modelBox = h('div', { className: 'bm-model-box' },
+            h('div', { className: 'bm-model-head' },
+              h('span', { className: 'bm-model-title' }, t('form.modelMode')),
+              h('div', { className: 'bm-seg' },
+                h('button', {
+                  type: 'button', 'data-active': mode === 'default',
+                  onClick: () => chooseMode('default'),
+                }, t('form.modelDefault')),
+                h('button', {
+                  type: 'button', 'data-active': mode === 'custom',
+                  onClick: () => chooseMode('custom'),
+                }, t('form.modelCustom'))),
+              props.onReloadModels && (models.status === 'error' || catalogReady)
+                ? h('button', {
+                  type: 'button', className: 'bm-btn small',
+                  onClick: () => props.onReloadModels(true),
+                }, t('form.modelRefresh'))
+                : null),
+            modelFields,
+            catalog && Array.isArray(catalog.failures) && catalog.failures.length > 0
+              ? h('div', { className: 'bm-model-hint' }, catalog.failures.map(failure => `${failure.name}: ${failure.message}`).join(' · '))
+              : null)
           const submit = async (event) => {
             event.preventDefault()
             if (busy) return
             const name = String(draft.name || '').trim()
             if (name === '') return
+            const model = draft.model || EMPTY_MODEL
+            if ((model.provider === '') !== (model.model === '')) {
+              setError(t('form.modelNeed'))
+              return
+            }
             setBusy(true)
             setError('')
             try {
@@ -1092,19 +1403,7 @@ window.__ModuleLoader__.load({
                   style: { background: color }, 'data-active': draft.color === color,
                   onClick: () => setDraft({ ...draft, color }),
                 }))))),
-            h('div', { className: 'bm-row' },
-              h('label', { className: 'bm-label' }, t('form.provider'),
-                h('input', {
-                  className: 'bm-input', value: (draft.model && draft.model.provider) || '',
-                  placeholder: t('form.providerPlaceholder'),
-                  onChange: event => setDraft({ ...draft, model: { ...(draft.model || {}), provider: event.target.value } }),
-                })),
-              h('label', { className: 'bm-label' }, t('form.model'),
-                h('input', {
-                  className: 'bm-input', value: (draft.model && draft.model.model) || '',
-                  placeholder: t('form.modelPlaceholder'),
-                  onChange: event => setDraft({ ...draft, model: { ...(draft.model || {}), model: event.target.value } }),
-                }))),
+            modelBox,
             h('label', { className: 'bm-label' }, t('form.approval'),
               h('select', {
                 className: 'bm-input',
@@ -1341,6 +1640,9 @@ window.__ModuleLoader__.load({
           const [migrating, setMigrating] = useState(false)
           const bot = props.bot
           const summary = props.summary
+          const catalog = props.models && props.models.catalog
+          const modelSelection = effectiveModelOf(catalog, bot.model)
+          const vision = modelVisionOf(catalog, modelSelection)
           const migrate = async () => {
             if (migrating) return
             setMigrating(true)
@@ -1369,6 +1671,14 @@ window.__ModuleLoader__.load({
             h('section', { className: 'bm-block' },
               h('h3', null, t('detail.instructions')),
               h('p', null, bot.instructions || t('form.instructionsPlaceholder'))),
+            h('section', { className: 'bm-block' },
+              h('h3', null, t('detail.model')),
+              h('p', null, describeModel(t, catalog, bot.model)),
+              h('div', { className: 'bm-model-caps' },
+                h('span', {
+                  className: 'bm-cap',
+                  'data-state': vision === true ? 'yes' : vision === false ? 'no' : 'unknown',
+                }, vision === true ? t('form.visionYes') : vision === false ? t('form.visionNo') : t('form.visionUnknown')))),
             h('section', { className: 'bm-block' },
               h('h3', null, t('detail.sessions')),
               props.sessions.length === 0
@@ -1772,6 +2082,55 @@ window.__ModuleLoader__.load({
           const [text, setText] = useState('')
           const [error, setError] = useState('')
           const [busy, setBusy] = useState(false)
+          const [images, setImages] = useState([])
+          const imagesRef = useRef([])
+          imagesRef.current = images
+          const attachRef = useRef(null)
+          const catalog = props.models && props.models.catalog
+          const vision = modelVisionOf(catalog, effectiveModelOf(catalog, props.bot.model))
+          const releaseImages = (list) => {
+            for (const item of list) {
+              try { URL.revokeObjectURL(item.url) } catch (_error) { /* the browser may already have released it */ }
+            }
+          }
+          useEffect(() => () => releaseImages(imagesRef.current), [])
+          const addFiles = (fileList) => {
+            const accepted = []
+            let notice = ''
+            for (const file of Array.from(fileList || [])) {
+              if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) { notice = t('chat.attachType'); continue }
+              if (file.size > 12 * 1024 * 1024) { notice = t('chat.attachSize'); continue }
+              accepted.push({ id: newId(), file, url: URL.createObjectURL(file), name: file.name || 'image' })
+            }
+            const room = Math.max(0, 6 - imagesRef.current.length)
+            if (accepted.length > room) notice = t('chat.attachLimit')
+            setImages(current => [...current, ...accepted.slice(0, room)])
+            if (notice) setError(notice)
+          }
+          const removeImage = (id) => {
+            setImages((current) => {
+              const item = current.find(image => image.id === id)
+              if (item) releaseImages([item])
+              return current.filter(image => image.id !== id)
+            })
+          }
+          const uploadImage = async (file) => {
+            const response = await fetch('/botmode/api/image', {
+              method: 'POST',
+              credentials: 'include',
+              headers: {
+                'content-type': file.type,
+                'x-botmode-image-name': encodeURIComponent(file.name || 'image'),
+              },
+              body: await file.arrayBuffer(),
+            })
+            let payload
+            try { payload = await response.json() } catch (_error) { payload = null }
+            if (!payload || payload.ok !== true) {
+              throw new Error((payload && payload.error) || `Image upload answered ${response.status}`)
+            }
+            return payload.attachment
+          }
           const logRef = useRef(null)
           const reference = useMemo(() => {
             try {
@@ -1810,13 +2169,22 @@ window.__ModuleLoader__.load({
           const send = async (event) => {
             event.preventDefault()
             const value = text.trim()
-            if (value === '' || busy || session === null) return
+            if (busy || session === null) return
+            if (value === '' && images.length === 0) return
             setBusy(true)
             setError('')
             try {
+              const attachments = []
+              for (const image of images) attachments.push(await uploadImage(image.file))
               // Every Bot turn goes through the Host FIFO so a teammate message
               // or Routine can never write the same Session concurrently.
-              await hostCommand('bot.dispatch', { botId: props.bot.id, text: value })
+              await hostCommand('bot.dispatch', {
+                botId: props.bot.id,
+                text: value,
+                ...attachments.length > 0 ? { images: attachments } : {},
+              })
+              releaseImages(images)
+              setImages([])
               setText('')
             } catch (failure) {
               setError(failure && failure.message ? failure.message : String(failure))
@@ -1835,6 +2203,13 @@ window.__ModuleLoader__.load({
               h('span', { className: 'bm-role' }, props.bot.role || '—')),
             h('span', { className: 'bm-chat-status', 'data-running': Boolean(snapshot.running) },
               snapshot.running ? t('chat.working') : t('chat.idle')),
+            h('span', {
+              className: 'bm-model-pill',
+              title: describeModel(t, catalog, props.bot.model, { optional: true }),
+            }, modelLabelOf(catalog, effectiveModelOf(catalog, props.bot.model))
+              || (props.bot.model && props.bot.model.provider && props.bot.model.model
+                ? `${props.bot.model.provider}/${props.bot.model.model}`
+                : t('model.default'))),
             h('div', { className: 'bm-chat-tabs' },
               h('button', { type: 'button', 'data-active': tab === 'chat', onClick: () => setTab('chat') }, t('chat.tab')),
               h('button', { type: 'button', 'data-active': tab === 'detail', onClick: () => setTab('detail') }, t('chat.detail'))))
@@ -1867,17 +2242,39 @@ window.__ModuleLoader__.load({
                 ? h('div', { className: 'bm-tail' }, h('span', { className: 'bm-spin' }), h('span', { className: 'bm-tail-text' }, t('chat.tail')))
                 : null),
             error ? h('div', { className: 'bm-error bm-chat-error' }, error) : null,
-            h('form', { className: 'bm-compose', onSubmit: send },
-              h('textarea', {
-                value: text, rows: 1, placeholder: t('chat.placeholder', { name: props.bot.name }),
-                onChange: event => setText(event.target.value),
-                onKeyDown: (event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(event) }
-                },
-              }),
-              snapshot.running
-                ? h('button', { type: 'button', className: 'bm-btn', onClick: stop }, t('chat.stop'))
-                : h('button', { type: 'submit', className: 'bm-btn primary', disabled: busy || text.trim() === '' }, busy ? t('form.busy') : t('chat.send'))))
+            h('form', { className: 'bm-compose bm-compose-col', onSubmit: send },
+              images.length > 0
+                ? h('div', { className: 'bm-attach-list' }, images.map(image => h('div', { key: image.id, className: 'bm-attach-item' },
+                  h('img', { src: image.url, alt: image.name }),
+                  h('span', { className: 'bm-attach-name' }, image.name),
+                  h('button', {
+                    type: 'button', className: 'bm-attach-remove', title: t('chat.attachRemove'),
+                    onClick: () => removeImage(image.id),
+                  }, '×'))))
+                : null,
+              h('div', { className: 'bm-compose-row' },
+                h('button', {
+                  type: 'button',
+                  className: 'bm-btn small bm-attach-btn',
+                  disabled: vision === false || busy,
+                  title: vision === false ? t('chat.attachVisionOnly') : t('chat.attachAdd'),
+                  onClick: () => { if (attachRef.current) attachRef.current.click() },
+                }, t('chat.attach')),
+                h('input', {
+                  ref: attachRef, type: 'file', hidden: true, multiple: true,
+                  accept: 'image/png,image/jpeg,image/webp,image/gif',
+                  onChange: (event) => { addFiles(event.target.files); event.target.value = '' },
+                }),
+                h('textarea', {
+                  value: text, rows: 1, placeholder: t('chat.placeholder', { name: props.bot.name }),
+                  onChange: event => setText(event.target.value),
+                  onKeyDown: (event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(event) }
+                  },
+                }),
+                snapshot.running
+                  ? h('button', { type: 'button', className: 'bm-btn', onClick: stop }, t('chat.stop'))
+                  : h('button', { type: 'submit', className: 'bm-btn primary', disabled: busy || (text.trim() === '' && images.length === 0) }, busy ? t('form.busy') : t('chat.send')))))
         }
 
         function GroupForm(props) {
@@ -2022,6 +2419,10 @@ window.__ModuleLoader__.load({
             rawSessionSnapshot,
           )
           const hostSnapshot = useSyncExternalStore(hostStore.subscribe, hostStore.getSnapshot)
+          const models = useSyncExternalStore(modelStore.subscribe, modelStore.getSnapshot)
+          useEffect(() => {
+            if (modelStore.getSnapshot().status === 'idle') void loadModels()
+          }, [])
           const sections = (hostSnapshot.state && hostSnapshot.state.sections) || []
           const routines = (hostSnapshot.state && hostSnapshot.state.routines) || []
           const approvals = (hostSnapshot.state && hostSnapshot.state.approvals) || []
@@ -2188,6 +2589,7 @@ window.__ModuleLoader__.load({
               bot: activeBot,
               summary: sessionOf(list, activeBot),
               sessions: activeRows,
+              models,
               routines: routines.filter(routine => routine.botId === activeBot.id),
               onCommand: hostCommand,
               brief: bots.length >= 2 ? h(BriefBox, { bots, onCommand: hostCommand }) : null,
@@ -2221,6 +2623,8 @@ window.__ModuleLoader__.load({
                   bot: form.bot,
                   lang: activeLang,
                   sections,
+                  models,
+                  onReloadModels: (force) => { void loadModels(force) },
                   initial: form.mode === 'create'
                     ? {
                       name: '', role: '', instructions: '',
@@ -2255,6 +2659,7 @@ window.__ModuleLoader__.load({
                   key: activeSessionId,
                   sessionId: activeSessionId,
                   bot: activeBot,
+                  models,
                   detail: detailBody,
                   onActivity: botActivity(activeBot),
                   onSeen: botSeen(activeBot),

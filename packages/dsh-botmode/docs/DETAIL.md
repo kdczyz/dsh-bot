@@ -30,6 +30,8 @@ surface of its own:
 
 - the Bot's messages and the user's messages render as bubbles, with tool calls
   as compact rows and streamed text as a live bubble;
+- the header shows the model this Bot actually uses, the composer can attach up
+  to six images, and a text-only route refuses images on the Host;
 - the composer sends into that Bot's session and **Enter** sends, **Shift+Enter**
   adds a line; **Stop** cancels a running turn;
 - older messages load from the session history when the window starts mid-log;
@@ -37,8 +39,11 @@ surface of its own:
   action list without leaving Bot mode.
 
 The chat is a focused replica, not the full Harness conversation: Markdown is
-plain text, and approvals, attachments, model picking and slash commands stay in
-**Open in Harness**.
+plain text, and approvals and slash commands stay in **Open in Harness**. Images
+are supported when the Bot's model declares image input: the composer uploads
+each file to the Host attachment store, then the turn carries durable image
+references into the Bot Session. A text-only model refuses the turn before the
+message is appended.
 
 ## Two separate spaces
 
@@ -131,7 +136,10 @@ files in its first turn, and `team_board` is unavailable. Restart DSH (or the
   browser that never created a Bot does not know its directory, so the mode
   filter cannot hide that Bot's workspace from Harness there.
 - Each Bot workspace appears in Harness mode as a normal workspace (it is one).
-- A Bot's model is chosen in its chat; there is no per-Bot model pin yet.
+- A Bot's model is a Host-side binding: **DSH default** (empty provider/model,
+  re-read before every turn) or a pinned provider/model plus a thinking level.
+  The form reads the live model directory and marks each model's reasoning
+  levels and image-input capability; the chat header shows the effective model.
 
 ## Verified in this installation
 

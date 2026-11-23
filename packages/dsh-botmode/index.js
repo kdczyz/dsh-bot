@@ -20,6 +20,7 @@ import { Routines } from './host/routines.js'
 import { BotApi, PREFIX } from './host/api.js'
 import { Approvals } from './host/approvals.js'
 import { personaBlock, syncBotFiles, syncTeamFiles } from './host/persona.js'
+import { botModelCatalog, resolveBotSelection } from './host/models.js'
 
 export const name = 'botmode'
 export const inject = ['commands', 'tools']
@@ -99,6 +100,7 @@ export function apply(ctx) {
     sendToRoom: (roomId, text) => rooms.send(roomId, text),
     controlRoom: (roomId, action) => rooms.control(roomId, action),
     saveRoutine: (routineId, draft) => routines.save(routineId, draft),
+    modelCatalog: (options) => botModelCatalog(ctx, options),
   }
   ctx.effect(() => ctx.reflect.provide('bots', botsService), 'botmode: ctx.bots service')
 
@@ -182,10 +184,10 @@ export function apply(ctx) {
     } catch (error) {
       logger?.warn?.(`botmode: approval policy for ${bot.name} failed: ${String(error)}`)
     }
-    if (bot.model.provider !== '' && bot.model.model !== '') {
+    // The Bot's own binding wins; an empty binding follows the DSH default.
+    const selection = resolveBotSelection(ctx, bot)
+    if (selection) {
       try {
-        const selection = { provider: bot.model.provider, model: bot.model.model }
-        if (bot.model.reasoningEffort !== '') selection.reasoningEffort = bot.model.reasoningEffort
         agent.model.select(selection)
       } catch (error) {
         logger?.warn?.(`botmode: model for ${bot.name} failed: ${String(error)}`)

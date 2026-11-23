@@ -2,7 +2,7 @@
 
 给 DeepSeek Harness（dsh）加一个 **Bot 模式**：侧边栏一个切换入口，进入一个独立的 Bot 团队页面。每个 Bot 有自己的目录、人格、记忆、模型绑定、工具白名单和永久会话；Bot 之间可以互相派活；2–6 个 Bot 能进 Group Room 串行开会；Host 侧持久 Routines 能在会话冷却后按 cron 唤醒 Bot。
 
-当前版本：`0.3.0`（Host 编排 + Client 页面双半区均已落地）。
+当前版本：`0.4.0`（Host 编排 + Client 页面双半区均已落地；Bot 可单独绑定模型、思考档位与视觉能力）。
 
 ## 它解决什么
 
@@ -39,9 +39,9 @@ dsh plugin --profile desktop install /Users/a1412/Desktop/dsh-bot/packages/dsh-b
 ## 使用
 
 1. 侧边栏点机器人图标，或底部 `Bot 模式`，进入 Bot 页面。
-2. `新建` 一个 Bot：名字、角色、常驻指令、分组、模型（provider/model 留空则用默认）、工具白名单、审批策略。
+2. `新建` 一个 Bot：名字、角色、常驻指令、分组、模型、工具白名单、审批策略。模型默认跟随 **DSH 默认模型**；也可以单独指定 provider/model、思考档位（reasoning effort）和视觉能力。表单从 Host 的实时模型目录读取：每个模型会标出可选的思考档位与是否支持图片输入，纯文本模型不能给 Bot 发图。
 3. 创建后会立刻生成目录与身份文件，并创建一个 canonical Session。
-4. 在 Bot 详情里直接聊天；回复按官方轨迹样式渲染：思考过程可折叠、正文 Markdown/代码块、工具调用行可展开参数与输出，流式时有 shimmer 与光标。`定时例程` 区域可以建 cron、立即跑、暂停、删除。
+4. 在 Bot 详情里直接聊天；回复按官方轨迹样式渲染：思考过程可折叠、正文 Markdown/代码块、工具调用行可展开参数与输出，流式时有 shimmer 与光标。输入框可附加 PNG/JPEG/WebP/GIF 图片（最多 6 张、每张 12 MB），前提是这个 Bot 当前绑定的模型声明了图片输入能力；纯文本模型会在发送时被 Host 拒绝。`定时例程` 区域可以建 cron、立即跑、暂停、删除。
 5. 建 Group Room：选 2–6 个 Bot，选路由模式，发一条消息。`@某个Bot` 指定先手；回复里 `@别人` 接力，`@user` 会暂停并标记“需要你”。
 6. 需要审批时，页面顶部出现审批条：允许一次 / 本会话允许 / 总是允许 / 拒绝。
 
@@ -54,12 +54,13 @@ packages/dsh-botmode/
   host/
     store.js            state.json 原子写 + 串行 mutate；Bot 目录管理
     persona.js          SOUL.md / MEMORY.md / TEAM.md / team skill 渲染与落盘
-    dispatch.js         每 Bot FIFO、会话恢复、回复提取、16k 截断落盘
+    dispatch.js         每 Bot FIFO、会话恢复、模型绑定、图片准入、回复提取、16k 截断落盘
+    models.js           实时模型目录、DSH 默认模型解析、思考档位与视觉能力
     rooms.js            Group Room 状态机（预算、@、NO_REPLY、pause/resume）
     routines.js         持久 cron 调度器（冷会话唤醒）
     cron.js             五段 cron 解析与下一次时间
     approvals.js        Bot 审批桥（once/session/always/deny + 超时）
-    api.js              /botmode/api/state + /botmode/api/command
+    api.js              /botmode/api/state + /models + /image + /command
   test/host.test.mjs    Host 逻辑无头测试
   cordis.patch.yml      插入 Host 行
   package.json          dsh.bundle.patch + dsh.client
@@ -84,6 +85,8 @@ $DSH_HOME/botmode/
 所有请求先过 dsh 的 Connection 同源/登录栅栏；未登录返回 401。
 
 - `GET /botmode/api/state` → roster、sections、rooms（含 transcript/预算/运行态）、routines、approvals、工具名、状态根
+- `GET /botmode/api/models[?force=1]` → 实时 provider/model 目录、每个模型的思考档位与 `vision` 能力、当前 DSH 默认选择
+- `POST /botmode/api/image`，body 为图片二进制，`content-type` 为 `image/png|jpeg|webp|gif` → `{ ok, attachment }`
 - `POST /botmode/api/command`，body `{ type, ... }`
 
 命令：
@@ -92,7 +95,7 @@ $DSH_HOME/botmode/
 | --- | --- | --- |
 | `bot.save` | `botId?`, `draft` | 新建/更新；新建会建目录、建会话、写身份文件 |
 | `bot.delete` | `botId` | 删记录、停调度、删目录、重写团队文件 |
-| `bot.dispatch` | `botId`, `text` | 入队一条用户消息 |
+| `bot.dispatch` | `botId`, `text`, `images?` | 入队一条用户消息；`images` 是 `/botmode/api/image` 返回的附件引用数组 |
 | `bot.stop` | `botId` | 取消当前 turn |
 | `section.save` / `section.delete` | `sectionId?`, `name` | 分组 |
 | `room.save` / `room.delete` | `roomId?`, `draft` | Group Room |
@@ -124,13 +127,14 @@ Host 注册两个全局工具（Bot 会话里可用，非 Bot 会话调用会返
 node packages/dsh-botmode/test/host.test.mjs
 ```
 
-覆盖：cron 解析、store/身份文件、Dispatcher FIFO 与回复提取、Room 状态机、审批策略、API state/command。
+覆盖：cron 解析、store/身份文件、Dispatcher FIFO、默认模型与单独模型绑定、图片能力校验与图片消息、模型目录（含 provider 失败隔离）、Room 状态机、审批策略、API state/models/command。
 
 ## 边界与已知限制
 
 - `/new`、`/reset` 的压缩依赖当前组合里装了 compaction 引擎；没有引擎时命令会返回明确的失败文本，不会静默换会话。
 - Group Room 的 `auto` 是“显式 @ 优先，否则 lead/first”，没有单独的小模型 group_router。
-- Bot 的模型/工具变更在**下一次 turn**生效（模型）或**下一次会话恢复**生效（工具/人格 section）。
+- Bot 的模型变更在**下一次 turn**前由 Host 重新绑定（空绑定会重新读取 DSH 默认模型）；工具/人格 section 在下一次会话恢复时生效。
+- 图片输入需要模型在提供方声明的 `inputModalities` 里包含 `image`；目录里标为“未声明”的模型不会被提前拦截，由适配器在请求时决定。
 - 审批条依赖 Bot 页面打开；无人值守时 2 分钟自动拒绝，避免 Routine 卡死。
 - 方案 B（子进程隔离）未实现；所有 Bot 共用一个 Host 进程、各自独立会话与目录。
 - `lib/` 编译产物未生成，当前直接发 ESM 源码；Node 内置模块 + 相对导入，避免 profile 解析第三方依赖。

@@ -2,7 +2,9 @@
 
 DeepSeek Harness 的 Bot 团队模式插件（Host + Web Client 双半区）。
 
-- 每个 Bot 独立目录、SOUL/MEMORY、模型、工具白名单、审批策略、永久会话
+- 每个 Bot 独立目录、SOUL/MEMORY、永久会话
+- 每个 Bot 可单独绑定模型：DSH 默认（空绑定，下一轮重新读取）、provider/model、思考档位；模型目录标出是否支持图片输入
+- Bot 聊天可发图片（PNG/JPEG/WebP/GIF），纯文本模型由 Host 在入队前拒绝
 - `message_agent` 异步队友消息（每 Bot FIFO，`expectReply` 回复回送，>16k 落盘）
 - Group Room 2–6 人，`@`/lead/everyone 路由，预算暂停，`@user` 升级
 - Host 持久 Routines：cron 解析 + 冷会话唤醒，定时器在 `ctx.effect()` 内
@@ -17,7 +19,7 @@ dsh plugin --profile desktop install /Users/a1412/Desktop/dsh-bot/packages/dsh-b
 
 或使用 Plugin Manager 的 `install_bundle`，target 传本目录绝对路径。安装后 Host 行 `include:botmode`，Client 模块 `@local/dsh-botmode/client`。
 
-状态根：`$DSH_HOME/botmode`。HTTP：`/botmode/api/state`、`/botmode/api/command`。
+状态根：`$DSH_HOME/botmode`。HTTP：`/botmode/api/state`、`/botmode/api/models`、`/botmode/api/image`、`/botmode/api/command`。
 
 测试：
 
