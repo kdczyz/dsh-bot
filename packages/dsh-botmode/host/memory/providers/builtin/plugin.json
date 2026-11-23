@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "builtin",
+  "displayName": "Builtin File (仅 MEMORY.md)",
+  "version": "1.0.0",
+  "description": "轻量纯文件模式，不连接外部记忆服务，仅使用每个 Bot 目录下的 MEMORY.md 长期记忆文件。",
+  "author": "dsh-botmode",
+  "homepage": "",
+  "entry": "index.js",
+  "aliases": [
+    "none",
+    "default",
+    "file"
+  ],
+  "tools": [
+    "memory_search",
+    "memory_save"
+  ],
+  "configSchema": []
+}

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "local_sqlite",
+  "displayName": "Local SQLite FTS5 (内置本地记忆库)",
+  "version": "1.0.0",
+  "description": "零外部依赖、纯 Node 22 原生 SQLite + FTS5（trigram 中英文分词）本地记忆库，无需启动外部网关，按 Bot 自动隔离对话、事实与场景块。",
+  "author": "dsh-botmode",
+  "homepage": "",
+  "entry": "index.js",
+  "aliases": [
+    "sqlite",
+    "local"
+  ],
+  "tools": [
+    "memory_search",
+    "memory_conversation_search",
+    "memory_read_scene",
+    "memory_save"
+  ],
+  "configSchema": [
+    {
+      "key": "recallLimit",
+      "label": "单次召回条数",
+      "type": "integer",
+      "default": 6,
+      "minimum": 1,
+      "maximum": 20,
+      "description": "每轮 prefetch 检索的最大记忆条数"
+    }
+  ]
+}

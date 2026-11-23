@@ -2,11 +2,11 @@
  * The Host API the Bot page talks to.
  *
  * One authenticated, same-origin JSON surface behind `/botmode/api/`:
- *   GET  state     — the roster, Sections, Rooms, Routines and live status
+ *   GET  state     — roster, Sections, Rooms, Routines, Memory Hub and live status
+ *   GET  models    — live DSH provider/model catalog
+ *   GET  memory    — full Memory Hub status, installed plugins, catalog & health
+ *   POST image     — upload one image attachment
  *   POST command   — one typed mutation or action
- *
- * Every request passes the composition's Connection fence first, so a browser
- * without the login cookie or a cross-site caller never reaches a Bot session.
  */
 import { newId } from './store.js'
 import { syncBotFiles, syncTeamFiles } from './persona.js'
@@ -48,13 +48,14 @@ const readBody = async (req) => {
 const stringOr = (value, fallback = '') => (typeof value === 'string' ? value : fallback)
 
 export class BotApi {
-  constructor({ ctx, store, dispatcher, rooms, routines, approvals, logger }) {
+  constructor({ ctx, store, dispatcher, rooms, routines, approvals, memory, logger }) {
     this.ctx = ctx
     this.store = store
     this.dispatcher = dispatcher
     this.rooms = rooms
     this.routines = routines
     this.approvals = approvals ?? { list: () => [], decide: async () => ({}) }
+    this.memory = memory ?? null
     this.logger = logger
   }
 
@@ -73,6 +74,7 @@ export class BotApi {
     try {
       if (route === 'state' && req.method === 'GET') {
         await this.store.load()
+        if (this.memory) await this.memory.ensureReady().catch(() => undefined)
         sendJson(res, 200, { ok: true, state: this.publicState() })
         return
       }
@@ -80,6 +82,12 @@ export class BotApi {
         const force = url.searchParams.get('force') === '1'
         const catalog = await botModelCatalog(this.ctx, { force })
         sendJson(res, 200, { ok: true, catalog })
+        return
+      }
+      if (route === 'memory' && req.method === 'GET') {
+        await this.store.load()
+        const memory = this.memory ? await this.memory.status() : null
+        sendJson(res, 200, { ok: true, memory })
         return
       }
       if (route === 'image' && req.method === 'POST') {
@@ -150,20 +158,28 @@ export class BotApi {
         queued: status.busy[bot.id]?.queued ?? 0,
         last: status.last[bot.id] ?? undefined,
         inRoom: this.dispatcher.inRoom(bot.id),
+        roomSpeaking: this.dispatcher.roomSpeaking?.(bot.id) === true,
+        activeRoomId: this.dispatcher.activeRoomId?.(bot.id) ?? '',
       })),
-      rooms: state.rooms.map(room => ({
-        ...room,
-        running: this.rooms.state(room.id).running,
-        members: room.memberIds.map((id) => {
-          const bot = this.store.bot(id)
-          return bot ? { id: bot.id, name: bot.name, role: bot.role, color: bot.color } : { id, name: id, role: '' }
-        }),
-      })),
+      rooms: state.rooms.map((room) => {
+        const runtime = this.rooms.state(room.id)
+        return {
+          ...room,
+          running: runtime.running,
+          stopping: runtime.stopping,
+          currentSpeakerId: runtime.currentSpeakerId || '',
+          members: room.memberIds.map((id) => {
+            const bot = this.store.bot(id)
+            return bot ? { id: bot.id, name: bot.name, role: bot.role, color: bot.color } : { id, name: id, role: '' }
+          }),
+        }
+      }),
       routines: state.routines.map(routine => ({
         ...routine,
         botName: this.store.bot(routine.botId)?.name ?? '',
       })),
       approvals: this.approvals ? this.approvals.list() : [],
+      memory: this.memory ? this.memory.publicSummary() : null,
       tools: (() => {
         try {
           const tools = this.ctx.get('tools')
@@ -194,6 +210,10 @@ export class BotApi {
         mode: payload?.draft?.mode,
         leadBotId: payload?.draft?.leadBotId,
         color: payload?.draft?.color,
+        purpose: payload?.draft?.purpose,
+        notes: payload?.draft?.notes,
+        maxRounds: payload?.draft?.maxRounds,
+        maxMessages: payload?.draft?.maxMessages,
       })
       case 'room.delete': return this.rooms.remove(stringOr(payload.roomId))
       case 'room.send': return this.rooms.send(stringOr(payload.roomId), stringOr(payload.text))
@@ -209,8 +229,44 @@ export class BotApi {
       case 'routine.toggle': return this.routines.setEnabled(stringOr(payload.routineId), payload?.enabled === true)
       case 'routine.run': return this.routines.runNow(stringOr(payload.routineId))
       case 'approval.decide': return this.approvals.decide(stringOr(payload.approvalId), stringOr(payload.decision))
+      case 'memory.select': return this.#requireMemory().select(stringOr(payload.providerId))
+      case 'memory.configure': return this.#requireMemory().configure({
+        providerId: stringOr(payload.providerId),
+        teamId: payload?.teamId,
+        userId: payload?.userId,
+        prefetchEnabled: payload?.prefetchEnabled,
+        syncEnabled: payload?.syncEnabled,
+        syncGroupRooms: payload?.syncGroupRooms,
+        config: payload?.config,
+      })
+      case 'memory.test': return this.#requireMemory().test(stringOr(payload.providerId))
+      case 'memory.install': return this.#requireMemory().install(stringOr(payload.source), {
+        overwrite: payload?.overwrite === true,
+        activate: payload?.activate === true,
+      })
+      case 'memory.uninstall': return this.#requireMemory().uninstall(stringOr(payload.providerId))
+      case 'memory.search': return this.searchBotMemory(payload)
       default: throw new Error(`Unknown command "${type}".`)
     }
+  }
+
+  #requireMemory() {
+    if (!this.memory) throw new Error('Memory Hub is unavailable in this Host.')
+    return this.memory
+  }
+
+  async searchBotMemory(payload) {
+    const memory = this.#requireMemory()
+    const botId = stringOr(payload.botId)
+    const bot = botId ? this.store.bot(botId) : this.store.state.bots[0]
+    if (!bot) throw new Error('Select a Bot first.')
+    const query = stringOr(payload.query).trim()
+    if (query === '') throw new Error('Write a search query first.')
+    return memory.searchMemoryForBot(bot, {
+      query,
+      limit: Number(payload.limit) || 8,
+      typeFilter: stringOr(payload.typeFilter),
+    })
   }
 
   async saveBot(payload) {
@@ -287,8 +343,6 @@ export class BotApi {
     })
     const bot = existing ?? created
     await this.store.ensureBotDir(bot)
-    // ensureBotDir assigns the directory in memory; flush it before any await
-    // that could fail, so a restart never strands the assets on disk.
     await this.store.mutate(() => {})
     if (bot.sessionId === '') {
       try {
@@ -313,6 +367,8 @@ export class BotApi {
       }
       for (const room of state.rooms) {
         room.memberIds = room.memberIds.filter(id => id !== botId)
+        if (room.memberSessions) delete room.memberSessions[botId]
+        if (room.watermarks) delete room.watermarks[botId]
       }
     })
     await this.store.removeBotDir(bot)
@@ -340,7 +396,6 @@ export class BotApi {
     return result
   }
 
-  /** Rewrite every Bot's identity files so rosters in SOUL.md never go stale. */
   async syncAll() {
     for (const bot of this.store.state.bots) {
       await syncBotFiles(this.store, bot, this.store.state).catch((error) => {
@@ -387,7 +442,6 @@ export class BotApi {
     return { sectionId }
   }
 
-  /** Next occurrence preview for the UI. */
   previewCron(expression) {
     const next = nextCronTime(expression, new Date())
     return next ? next.toISOString() : undefined

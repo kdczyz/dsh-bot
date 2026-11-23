@@ -44,10 +44,17 @@ window.__ModuleLoader__.load({
         'group.name': 'Name',
         'group.namePlaceholder': 'e.g. Research desk',
         'group.mode': 'Routing',
-        'group.modeAuto': 'Lead first, then @mentions',
-        'group.modeEveryone': 'Everyone each round',
+        'group.modeAuto': 'Smart multi-round (auto)',
+        'group.modeEveryone': 'Everyone round-robin',
+        'group.modeLead': 'Lead first, then @mentions',
         'group.lead': 'Lead Bot',
         'group.leadAuto': 'First member',
+        'group.purpose': 'Room purpose',
+        'group.purposePlaceholder': 'Optional shared goal for this room (injected into room turns only)',
+        'group.notes': 'Shared notes',
+        'group.notesPlaceholder': 'Optional standing facts or constraints shared by all members',
+        'group.maxRounds': 'Max rounds',
+        'group.maxMessages': 'Max messages',
         'group.members': 'Members',
         'group.create': 'Create group',
         'group.delete': 'Delete group',
@@ -189,11 +196,60 @@ window.__ModuleLoader__.load({
         'routine.hint': 'The Host evaluates this cron itself and wakes the Bot even after a restart. Example: 0 9 * * 1-5.',
         'routine.create': 'Create routine',
         'group.running': 'Routing…',
+        'group.speaking': '{name} speaking…',
+        'group.settled': 'Settled',
+        'group.capped': 'Capped',
         'group.needsYou': 'needs you',
+        'group.budget': '{r}/{mr} rounds · {m}/{mm} msgs',
         'group.continue': 'Continue',
         'group.stop': 'Stop',
-        'group.pausedBudget': 'The dispatch budget is spent. Continue with a fresh budget, or stop.',
+        'group.interjectPlaceholder': 'Interject to supersede the current round…',
+        'group.pausedBudget': 'The dispatch budget is spent (capped). Continue with a fresh budget, or stop.',
         'group.pausedMention': 'A Bot asked for a human decision.',
+        'group.actPassed': '{name} passed this round',
+        'group.actSettled': 'Discussion settled naturally ({reason})',
+        'group.actCapped': 'Reached budget cap ({reason})',
+        'group.actCancelled': 'Previous round cancelled ({reason})',
+        'group.actContinued': 'Budget extended by user',
+        'group.actEscalation': '{name} asked for human input',
+        'pane.memory': 'Memory Hub',
+        'memory.title': 'Team Memory Hub',
+        'memory.subtitle': 'One pluggable memory provider shared across all Bots, isolated per Bot by agent_id. Switch built-in providers or download new ones.',
+        'memory.test': 'Test health',
+        'memory.testing': 'Testing…',
+        'memory.modeGateway': 'Gateway online',
+        'memory.modeFallback': 'Local SQLite fallback',
+        'memory.modeLocal': 'Local SQLite',
+        'memory.modeBuiltin': 'MEMORY.md only',
+        'memory.modeOffline': 'Offline',
+        'memory.globalSettings': 'Shared memory settings',
+        'memory.teamId': 'Team ID',
+        'memory.userId': 'User ID',
+        'memory.prefetch': 'Auto prefetch before turns',
+        'memory.sync': 'Auto sync completed turns',
+        'memory.syncRooms': 'Sync Group Room replies',
+        'memory.saveSettings': 'Save settings',
+        'memory.saved': 'Saved.',
+        'memory.providers': 'Installed memory providers',
+        'memory.use': 'Activate',
+        'memory.inUse': 'Active',
+        'memory.bundled': 'Built-in',
+        'memory.downloaded': 'Downloaded',
+        'memory.uninstall': 'Uninstall',
+        'memory.config': 'Configure',
+        'memory.hideConfig': 'Close config',
+        'memory.saveConfig': 'Save & reload',
+        'memory.installTitle': 'Download / install another memory provider',
+        'memory.installHint': 'Install from curated templates, npm package (npm:<pkg>), Git repo URL, .tgz archive URL, or a local plugin folder containing plugin.json.',
+        'memory.installPlaceholder': 'e.g. npm:@scope/dsh-memory-xxx, https://github.com/..., or /path/to/plugin',
+        'memory.installBtn': 'Download & activate',
+        'memory.catalogTitle': 'Available catalog providers',
+        'memory.catalogInstall': 'Install & activate',
+        'memory.installed': 'Installed',
+        'memory.searchTitle': 'Test per-Bot memory recall',
+        'memory.searchPlaceholder': 'Query memories for the selected Bot…',
+        'memory.searchBtn': 'Search',
+        'memory.searchEmpty': 'No matching memories.',
       },
       zh: {
         'meta.title': 'Bot 模式',
@@ -224,10 +280,17 @@ window.__ModuleLoader__.load({
         'group.name': '群名称',
         'group.namePlaceholder': '例如：调研小组',
         'group.mode': '路由方式',
-        'group.modeAuto': 'Lead 先答，再按 @ 接力',
-        'group.modeEveryone': '每轮所有人',
+        'group.modeAuto': '智能多轮（全员 / @ 接力）',
+        'group.modeEveryone': '全员顺位轮转',
+        'group.modeLead': 'Lead 统筹，再按 @ 接力',
         'group.lead': 'Lead Bot',
         'group.leadAuto': '默认第一个成员',
+        'group.purpose': '群聊目标',
+        'group.purposePlaceholder': '可选：本群共同目标（仅随群消息注入，不污染 Bot 人格）',
+        'group.notes': '共享笔记',
+        'group.notesPlaceholder': '可选：全体成员共享的事实、约定或约束',
+        'group.maxRounds': '轮次上限',
+        'group.maxMessages': '消息上限',
         'group.members': '成员',
         'group.create': '创建群聊',
         'group.delete': '删除群聊',
@@ -369,11 +432,60 @@ window.__ModuleLoader__.load({
         'routine.hint': 'Host 自己计算 cron，重启后也会唤醒 Bot。例如：0 9 * * 1-5。',
         'routine.create': '创建例程',
         'group.running': '调度中…',
+        'group.speaking': '{name} 发言中…',
+        'group.settled': '已收敛',
+        'group.capped': '已达上限',
         'group.needsYou': '需要你',
+        'group.budget': '{r}/{mr} 轮 · {m}/{mm} 条',
         'group.continue': '继续',
         'group.stop': '停止',
-        'group.pausedBudget': '本轮调度预算已用完。可以按新预算继续，或停止。',
+        'group.interjectPlaceholder': '随时插话：新消息将打断旧轮次并开启新纪元…',
+        'group.pausedBudget': '已达到本轮上限（capped）。可点击继续追加预算，或停止。',
         'group.pausedMention': '有 Bot 请求人类决定。',
+        'group.actPassed': '{name} 本轮已跳过 (pass)',
+        'group.actSettled': '讨论已自然收敛（{reason}）',
+        'group.actCapped': '已触发预算熔断（{reason}）',
+        'group.actCancelled': '旧轮次已取消（{reason}）',
+        'group.actContinued': '用户已继续扩展预算',
+        'group.actEscalation': '{name} 请求人类介入',
+        'pane.memory': '记忆库',
+        'memory.title': '团队记忆库（Memory Hub）',
+        'memory.subtitle': '所有 Bot 共用一套可插拔记忆库插件，按 agent_id 为每个 Bot 隔离记忆。默认内置 Memory_tencentdb，支持下载与随时切换其他记忆库。',
+        'memory.test': '检测连接',
+        'memory.testing': '检测中…',
+        'memory.modeGateway': 'Gateway 在线',
+        'memory.modeFallback': '本地 SQLite 兜底中',
+        'memory.modeLocal': '本地 SQLite',
+        'memory.modeBuiltin': '仅 MEMORY.md',
+        'memory.modeOffline': '离线',
+        'memory.globalSettings': '全局记忆策略',
+        'memory.teamId': '团队 ID (team_id)',
+        'memory.userId': '用户 ID (user_id)',
+        'memory.prefetch': '发言前自动召回记忆 (prefetch)',
+        'memory.sync': '回合结束后自动写入记忆 (syncTurn)',
+        'memory.syncRooms': '同步群聊有效发言到记忆库',
+        'memory.saveSettings': '保存策略',
+        'memory.saved': '已保存。',
+        'memory.providers': '已安装的记忆库插件',
+        'memory.use': '切换启用',
+        'memory.inUse': '当前使用',
+        'memory.bundled': '内置',
+        'memory.downloaded': '已下载',
+        'memory.uninstall': '卸载',
+        'memory.config': '配置',
+        'memory.hideConfig': '收起配置',
+        'memory.saveConfig': '保存并重载',
+        'memory.installTitle': '下载 / 安装其他记忆库插件',
+        'memory.installHint': '支持一键安装目录模板，或填写 npm 包（npm:<包名>）、Git 仓库地址、.tgz 链接或包含 plugin.json 的本地目录路径。',
+        'memory.installPlaceholder': '例如：npm:@scope/dsh-memory-xxx、https://github.com/... 或 /path/to/plugin',
+        'memory.installBtn': '下载并启用',
+        'memory.catalogTitle': '可一键安装的记忆库目录',
+        'memory.catalogInstall': '安装并启用',
+        'memory.installed': '已安装',
+        'memory.searchTitle': '按 Bot 测试记忆召回',
+        'memory.searchPlaceholder': '输入关键词，测试该 Bot 独立空间的记忆检索…',
+        'memory.searchBtn': '检索',
+        'memory.searchEmpty': '未检索到匹配记忆。',
       },
     }
 
@@ -859,6 +971,34 @@ window.__ModuleLoader__.load({
       .bm-room-alert span { flex: 1; }
       .bm-needs-you { font-size: 10px; line-height: 16px; padding: 1px 7px; border-radius: 999px;
         background: var(--dsw-alias-label-error); color: #fff; }
+      .bm-status-pill { font-size: 10.5px; line-height: 16px; padding: 1px 8px; border-radius: 999px;
+        border: 0.5px solid var(--dsw-alias-border-l3); color: var(--dsw-alias-label-secondary); white-space: nowrap; }
+      .bm-status-pill[data-kind='settled'] { color: #2f9e6e; border-color: color-mix(in srgb, #2f9e6e 45%, transparent); }
+      .bm-status-pill[data-kind='capped'] { color: #d97706; border-color: color-mix(in srgb, #d97706 45%, transparent); }
+      .bm-status-pill[data-kind='running'] { color: var(--dsw-alias-brand-primary); border-color: var(--dsw-alias-border-selected); }
+      .bm-room-activity { flex: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 16px;
+        border-top: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); }
+      .bm-act-chip { font-size: 11px; line-height: 16px; padding: 1px 8px; border-radius: 999px;
+        background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-tertiary); }
+      .bm-mem-panel { max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+      .bm-mem-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+      .bm-mem-grid { display: flex; flex-direction: column; gap: 10px; }
+      .bm-mem-card { border: 0.5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-lg);
+        background: var(--dsw-alias-card-fill); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+      .bm-mem-card[data-active='true'] { border-color: var(--dsw-alias-border-selected); }
+      .bm-mem-card-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .bm-mem-badge { font-size: 10.5px; line-height: 16px; padding: 1px 7px; border-radius: 999px;
+        border: 0.5px solid var(--dsw-alias-border-l3); color: var(--dsw-alias-label-tertiary); }
+      .bm-mem-badge[data-state='ok'] { color: #2f9e6e; border-color: color-mix(in srgb, #2f9e6e 45%, transparent); }
+      .bm-mem-badge[data-state='warn'] { color: #d97706; border-color: color-mix(in srgb, #d97706 45%, transparent); }
+      .bm-mem-badge[data-state='err'] { color: var(--dsw-alias-label-error); }
+      .bm-mem-checks { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+      .bm-mem-checks label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+      .bm-mem-cfg { display: flex; flex-direction: column; gap: 10px; padding-top: 10px;
+        border-top: 0.5px solid var(--dsw-alias-border-l2); }
+      .bm-mem-results { display: flex; flex-direction: column; gap: 6px; font-size: 12px; line-height: 18px;
+        padding: 10px; border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1);
+        border: 0.5px solid var(--dsw-alias-border-l2); white-space: pre-wrap; }
       .bm-foot-toggle:not([data-wide='true']) span { display: none; }
       .bm-foot-toggle { appearance: none; border: 0; background: transparent; color: var(--dsw-alias-label-secondary);
         font: inherit; font-size: 12px; line-height: 16px; display: inline-flex; align-items: center; gap: 6px;
@@ -982,7 +1122,30 @@ window.__ModuleLoader__.load({
         const rawSessionSnapshot = sessions.list.getSnapshot.bind(sessions.list)
         const rawWorkspaceSnapshot = workspaceSvc.list.getSnapshot.bind(workspaceSvc.list)
         const botDirs = () => roster.getSnapshot().map(bot => bot.dir).filter(dir => typeof dir === 'string' && dir !== '')
-        const botSessionIds = () => new Set(roster.getSnapshot().map(bot => bot.sessionId).filter(Boolean))
+        const botSessionIds = () => {
+          const ids = new Set(roster.getSnapshot().map(bot => bot.sessionId).filter(Boolean))
+          for (const group of groupStore.getSnapshot()) {
+            const memberSessions = group && group.memberSessions
+            if (memberSessions && typeof memberSessions === 'object') {
+              for (const sid of Object.values(memberSessions)) {
+                if (typeof sid === 'string' && sid !== '') ids.add(sid)
+              }
+            }
+          }
+          return ids
+        }
+        const hiddenRoomSessionIds = () => {
+          const ids = new Set()
+          for (const group of groupStore.getSnapshot()) {
+            const memberSessions = group && group.memberSessions
+            if (memberSessions && typeof memberSessions === 'object') {
+              for (const sid of Object.values(memberSessions)) {
+                if (typeof sid === 'string' && sid !== '') ids.add(sid)
+              }
+            }
+          }
+          return ids
+        }
         const underBotDir = (path) => {
           if (typeof path !== 'string' || path === '') return false
           return botDirs().some(dir => path === dir || path.startsWith(`${dir}/`))
@@ -2283,6 +2446,10 @@ window.__ModuleLoader__.load({
           const [members, setMembers] = useState(props.group ? [...props.group.members] : [])
           const [mode, setMode] = useState(props.group && props.group.mode ? props.group.mode : 'auto')
           const [leadBotId, setLeadBotId] = useState(props.group && props.group.leadBotId ? props.group.leadBotId : '')
+          const [purpose, setPurpose] = useState(props.group && props.group.purpose ? props.group.purpose : '')
+          const [notes, setNotes] = useState(props.group && props.group.notes ? props.group.notes : '')
+          const [maxRounds, setMaxRounds] = useState(props.group && props.group.budget ? (props.group.budget.maxRounds || 3) : 3)
+          const [maxMessages, setMaxMessages] = useState(props.group && props.group.budget ? (props.group.budget.maxMessages || 10) : 10)
           const [error, setError] = useState('')
           const toggle = (id) => setMembers(current => (current.includes(id) ? current.filter(item => item !== id) : [...current, id]))
           const submit = (event) => {
@@ -2295,6 +2462,10 @@ window.__ModuleLoader__.load({
               members,
               mode,
               leadBotId: members.includes(leadBotId) ? leadBotId : '',
+              purpose: purpose.trim(),
+              notes: notes.trim(),
+              maxRounds: Math.max(1, Math.min(20, Number(maxRounds) || 3)),
+              maxMessages: Math.max(1, Math.min(60, Number(maxMessages) || 10)),
             })
           }
           return h('form', { className: 'bm-form', onSubmit: submit },
@@ -2312,7 +2483,8 @@ window.__ModuleLoader__.load({
                   onChange: event => setMode(event.target.value),
                 },
                   h('option', { value: 'auto' }, t('group.modeAuto')),
-                  h('option', { value: 'everyone' }, t('group.modeEveryone')))),
+                  h('option', { value: 'everyone' }, t('group.modeEveryone')),
+                  h('option', { value: 'lead' }, t('group.modeLead')))),
               h('label', { className: 'bm-label' }, t('group.lead'),
                 h('select', {
                   className: 'bm-input', value: leadBotId,
@@ -2320,6 +2492,27 @@ window.__ModuleLoader__.load({
                 },
                   h('option', { value: '' }, t('group.leadAuto')),
                   props.bots.filter(bot => members.includes(bot.id)).map(bot => h('option', { key: bot.id, value: bot.id }, bot.name))))),
+            h('div', { className: 'bm-row' },
+              h('label', { className: 'bm-label' }, t('group.maxRounds'),
+                h('input', {
+                  type: 'number', min: 1, max: 20, className: 'bm-input', value: maxRounds,
+                  onChange: event => setMaxRounds(event.target.value),
+                })),
+              h('label', { className: 'bm-label' }, t('group.maxMessages'),
+                h('input', {
+                  type: 'number', min: 1, max: 60, className: 'bm-input', value: maxMessages,
+                  onChange: event => setMaxMessages(event.target.value),
+                }))),
+            h('label', { className: 'bm-label' }, t('group.purpose'),
+              h('input', {
+                className: 'bm-input', value: purpose, placeholder: t('group.purposePlaceholder'),
+                onChange: event => setPurpose(event.target.value),
+              })),
+            h('label', { className: 'bm-label' }, t('group.notes'),
+              h('textarea', {
+                className: 'bm-area', rows: 2, value: notes, placeholder: t('group.notesPlaceholder'),
+                onChange: event => setNotes(event.target.value),
+              })),
             h('div', { className: 'bm-label' }, t('group.members'),
               h('div', { className: 'bm-picks' }, props.bots.map(bot => h('label', {
                 key: bot.id, className: 'bm-pick', 'data-on': members.includes(bot.id),
@@ -2334,6 +2527,17 @@ window.__ModuleLoader__.load({
                 t(props.group ? 'form.save' : 'group.create'))))
         }
 
+        function formatActivityLabel(t, item) {
+          if (!item || !item.kind) return ''
+          if (item.kind === 'passed') return t('group.actPassed', { name: item.botName || 'Bot' })
+          if (item.kind === 'settled') return t('group.actSettled', { reason: item.reason || 'done' })
+          if (item.kind === 'capped') return t('group.actCapped', { reason: item.reason || 'budget' })
+          if (item.kind === 'cancelled') return t('group.actCancelled', { reason: item.reason || 'stop' })
+          if (item.kind === 'continued') return t('group.actContinued')
+          if (item.kind === 'escalation') return t('group.actEscalation', { name: item.botName || 'Bot' })
+          return ''
+        }
+
         function GroupChat(props) {
           const t = useT()
           const [text, setText] = useState('')
@@ -2343,7 +2547,19 @@ window.__ModuleLoader__.load({
           const group = props.group
           const members = props.bots.filter(bot => (group.members || []).includes(bot.id))
           const messages = group.messages || []
-          const paused = group.status === 'paused' || group.needsYou === true
+          const running = group.status === 'running' || group.running === true
+          const capped = group.status === 'capped'
+          const settled = group.status === 'settled'
+          const paused = group.status === 'paused' || capped || group.needsYou === true
+          const budget = group.budget || { rounds: 0, messages: 0, maxRounds: 3, maxMessages: 10 }
+          const currentSpeaker = group.currentSpeakerId
+            ? members.find(bot => bot.id === group.currentSpeakerId)
+            : undefined
+          const recentActivity = (group.activity || []).slice(-6).map(item => ({
+            id: item.id || `${item.kind}-${item.at}`,
+            label: formatActivityLabel(t, item),
+          })).filter(item => item.label !== '')
+
           useEffect(() => {
             const node = logRef.current
             if (node) node.scrollTop = node.scrollHeight
@@ -2371,8 +2587,7 @@ window.__ModuleLoader__.load({
               setError(failure && failure.message ? failure.message : String(failure))
             } finally { setBusy(false) }
           }
-          const running = group.status === 'running' || group.running === true
-          const reason = group.pausedReason === 'budget'
+          const reason = (capped || group.pausedReason === 'budget')
             ? t('group.pausedBudget')
             : t('group.pausedMention')
           return h('div', { className: 'bm-chat' },
@@ -2380,13 +2595,29 @@ window.__ModuleLoader__.load({
               h('span', { className: 'bm-avatar bm-avatar-sm', style: { background: group.color || COLORS[3] } }, initialOf(group.name)),
               h('div', { className: 'bm-chat-title' },
                 h('span', { className: 'bm-name' }, group.name),
-                h('span', { className: 'bm-role' }, t('group.membersCount', { n: members.length }))),
-              running ? h('span', { className: 'bm-chat-status', 'data-running': true }, t('group.running')) : null,
-              paused ? h('span', { className: 'bm-needs-you' }, t('group.needsYou')) : null,
+                h('span', { className: 'bm-role' },
+                  `${t('group.membersCount', { n: members.length })} · ${t('group.budget', {
+                    r: budget.rounds || 0,
+                    mr: budget.maxRounds || 3,
+                    m: budget.messages || 0,
+                    mm: budget.maxMessages || 10,
+                  })}`)),
+              running
+                ? h('span', { className: 'bm-status-pill', 'data-kind': 'running' },
+                  currentSpeaker ? t('group.speaking', { name: currentSpeaker.name }) : t('group.running'))
+                : settled
+                  ? h('span', { className: 'bm-status-pill', 'data-kind': 'settled' }, t('group.settled'))
+                  : capped
+                    ? h('span', { className: 'bm-status-pill', 'data-kind': 'capped' }, t('group.capped'))
+                    : null,
+              running
+                ? h('button', { type: 'button', className: 'bm-btn small', disabled: busy, onClick: () => control('stop') }, t('group.stop'))
+                : null,
+              paused && !capped ? h('span', { className: 'bm-needs-you' }, t('group.needsYou')) : null,
               h('div', { className: 'bm-chat-tabs' },
                 h('button', { type: 'button', 'data-active': true }, t('chat.tab')),
                 h('button', { type: 'button', onClick: props.onEdit }, t('chat.detail')))),
-            paused ? h('div', { className: 'bm-room-alert' },
+            paused && !running ? h('div', { className: 'bm-room-alert' },
               h('span', null, reason),
               h('button', { className: 'bm-btn small primary', disabled: busy, onClick: () => control('continue') }, t('group.continue')),
               h('button', { className: 'bm-btn small', disabled: busy, onClick: () => control('stop') }, t('group.stop'))) : null,
@@ -2398,16 +2629,285 @@ window.__ModuleLoader__.load({
               },
                 message.from === 'user' ? null : h('div', { className: 'bm-msg-name' }, message.name),
                 h('div', null, message.text)))),
+            recentActivity.length > 0
+              ? h('div', { className: 'bm-room-activity' },
+                recentActivity.map(item => h('span', { key: item.id, className: 'bm-act-chip' }, item.label)))
+              : null,
             error ? h('div', { className: 'bm-error bm-chat-error' }, error) : null,
             h('form', { className: 'bm-compose', onSubmit: send },
               h('textarea', {
-                value: text, rows: 1, placeholder: t('group.placeholder'),
+                value: text, rows: 1,
+                placeholder: running ? t('group.interjectPlaceholder') : t('group.placeholder'),
                 onChange: event => setText(event.target.value),
                 onKeyDown: (event) => {
                   if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(event) }
                 },
               }),
               h('button', { type: 'submit', className: 'bm-btn primary', disabled: text.trim() === '' || busy }, t('group.send'))))
+        }
+
+        function MemoryHubPanel(props) {
+          const t = useT()
+          const memory = props.memory || {
+            provider: 'memory_tencentdb',
+            teamId: 'dsh-botmode',
+            userId: 'default',
+            prefetchEnabled: true,
+            syncEnabled: true,
+            syncGroupRooms: true,
+            health: null,
+            providers: [],
+            catalog: [],
+          }
+          const [teamId, setTeamId] = useState(memory.teamId || 'dsh-botmode')
+          const [userId, setUserId] = useState(memory.userId || 'default')
+          const [prefetchEnabled, setPrefetchEnabled] = useState(memory.prefetchEnabled !== false)
+          const [syncEnabled, setSyncEnabled] = useState(memory.syncEnabled !== false)
+          const [syncGroupRooms, setSyncGroupRooms] = useState(memory.syncGroupRooms !== false)
+          const [expandedId, setExpandedId] = useState('')
+          const [cfgDrafts, setCfgDrafts] = useState({})
+          const [installSource, setInstallSource] = useState('')
+          const [searchBotId, setSearchBotId] = useState((props.bots[0] && props.bots[0].id) || '')
+          const [searchQuery, setSearchQuery] = useState('')
+          const [searchOut, setSearchOut] = useState('')
+          const [busy, setBusy] = useState(false)
+          const [notice, setNotice] = useState('')
+          const [error, setError] = useState('')
+
+          useEffect(() => {
+            setTeamId(memory.teamId || 'dsh-botmode')
+            setUserId(memory.userId || 'default')
+            setPrefetchEnabled(memory.prefetchEnabled !== false)
+            setSyncEnabled(memory.syncEnabled !== false)
+            setSyncGroupRooms(memory.syncGroupRooms !== false)
+          }, [memory.teamId, memory.userId, memory.prefetchEnabled, memory.syncEnabled, memory.syncGroupRooms])
+
+          const runAction = async (fn, successMsg = '') => {
+            setBusy(true)
+            setError('')
+            setNotice('')
+            try {
+              const out = await fn()
+              if (successMsg) setNotice(successMsg)
+              return out
+            } catch (failure) {
+              setError(failure && failure.message ? failure.message : String(failure))
+              return undefined
+            } finally {
+              setBusy(false)
+            }
+          }
+
+          const health = memory.health
+          const healthState = !health ? 'warn'
+            : health.ok && health.mode === 'fallback-local' ? 'warn'
+              : health.ok ? 'ok' : 'err'
+          const modeLabel = !health ? t('memory.modeOffline')
+            : health.mode === 'gateway' ? t('memory.modeGateway')
+              : health.mode === 'fallback-local' ? t('memory.modeFallback')
+                : health.mode === 'local-sqlite' ? t('memory.modeLocal')
+                  : health.mode === 'builtin' ? t('memory.modeBuiltin')
+                    : (health.ok ? health.mode : t('memory.modeOffline'))
+
+          const openConfig = (provider) => {
+            if (expandedId === provider.id) { setExpandedId(''); return }
+            setCfgDrafts(prev => ({ ...prev, [provider.id]: { ...(provider.config || {}) } }))
+            setExpandedId(provider.id)
+          }
+
+          const updateDraftField = (providerId, key, value) => {
+            setCfgDrafts(prev => ({
+              ...prev,
+              [providerId]: { ...(prev[providerId] || {}), [key]: value },
+            }))
+          }
+
+          const saveProviderConfig = async (provider) => {
+            const draft = cfgDrafts[provider.id] || {}
+            const coerced = {}
+            for (const field of provider.configSchema || []) {
+              const val = draft[field.key]
+              if (field.type === 'integer' || field.type === 'number') coerced[field.key] = Number(val)
+              else if (field.type === 'boolean') coerced[field.key] = Boolean(val)
+              else coerced[field.key] = String(val ?? '')
+            }
+            await runAction(() => props.onCommand('memory.configure', {
+              providerId: provider.id,
+              config: coerced,
+            }), t('memory.saved'))
+          }
+
+          const doSearch = async (event) => {
+            event.preventDefault()
+            if (!searchQuery.trim()) return
+            const botId = searchBotId || (props.bots[0] && props.bots[0].id) || ''
+            const res = await runAction(() => props.onCommand('memory.search', {
+              botId,
+              query: searchQuery.trim(),
+            }))
+            if (res) setSearchOut(res.text || t('memory.searchEmpty'))
+          }
+
+          return h('div', { className: 'bm-mem-panel' },
+            h('header', { className: 'bm-mem-head' },
+              h('div', null,
+                h('div', { className: 'bm-eyebrow' }, t('pane.memory')),
+                h('h2', { className: 'bm-title' }, t('memory.title')),
+                h('p', { className: 'bm-sub' }, t('memory.subtitle'))),
+              h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
+                h('span', { className: 'bm-mem-badge', 'data-state': healthState }, modeLabel),
+                h('button', {
+                  type: 'button', className: 'bm-btn small', disabled: busy,
+                  onClick: () => runAction(() => props.onCommand('memory.test', { providerId: memory.provider }), ''),
+                }, busy ? t('memory.testing') : t('memory.test')))),
+            health && health.detail ? h('div', { className: 'bm-muted' }, health.detail) : null,
+            error ? h('div', { className: 'bm-error' }, error) : null,
+            notice ? h('div', { className: 'bm-ok' }, notice) : null,
+
+            h('section', { className: 'bm-form' },
+              h('h2', null, t('memory.globalSettings')),
+              h('div', { className: 'bm-row' },
+                h('label', { className: 'bm-label' }, t('memory.teamId'),
+                  h('input', { className: 'bm-input', value: teamId, onChange: e => setTeamId(e.target.value) })),
+                h('label', { className: 'bm-label' }, t('memory.userId'),
+                  h('input', { className: 'bm-input', value: userId, onChange: e => setUserId(e.target.value) }))),
+              h('div', { className: 'bm-mem-checks' },
+                h('label', null,
+                  h('input', { type: 'checkbox', checked: prefetchEnabled, onChange: e => setPrefetchEnabled(e.target.checked) }),
+                  t('memory.prefetch')),
+                h('label', null,
+                  h('input', { type: 'checkbox', checked: syncEnabled, onChange: e => setSyncEnabled(e.target.checked) }),
+                  t('memory.sync')),
+                h('label', null,
+                  h('input', { type: 'checkbox', checked: syncGroupRooms, onChange: e => setSyncGroupRooms(e.target.checked) }),
+                  t('memory.syncRooms'))),
+              h('div', { className: 'bm-form-actions' },
+                h('button', {
+                  type: 'button', className: 'bm-btn primary small', disabled: busy,
+                  onClick: () => runAction(() => props.onCommand('memory.configure', {
+                    teamId: teamId.trim(),
+                    userId: userId.trim(),
+                    prefetchEnabled,
+                    syncEnabled,
+                    syncGroupRooms,
+                  }), t('memory.saved')),
+                }, t('memory.saveSettings')))),
+
+            h('section', { className: 'bm-block' },
+              h('h3', null, t('memory.providers')),
+              h('div', { className: 'bm-mem-grid' }, (memory.providers || []).map(provider => {
+                const isExpanded = expandedId === provider.id
+                const draft = cfgDrafts[provider.id] || provider.config || {}
+                return h('div', { key: provider.id, className: 'bm-mem-card', 'data-active': provider.active === true },
+                  h('div', { className: 'bm-mem-card-top' },
+                    h('strong', { className: 'bm-name' }, provider.displayName),
+                    h('span', { className: 'bm-mem-badge' }, provider.bundled ? t('memory.bundled') : t('memory.downloaded')),
+                    h('span', { className: 'bm-mem-badge' }, `v${provider.version}`),
+                    provider.active
+                      ? h('span', { className: 'bm-mem-badge', 'data-state': 'ok' }, t('memory.inUse'))
+                      : null,
+                    h('div', { style: { marginLeft: 'auto', display: 'flex', gap: '6px' } },
+                      (provider.configSchema || []).length > 0
+                        ? h('button', { type: 'button', className: 'bm-btn small', onClick: () => openConfig(provider) },
+                          isExpanded ? t('memory.hideConfig') : t('memory.config'))
+                        : null,
+                      !provider.active
+                        ? h('button', {
+                          type: 'button', className: 'bm-btn small primary', disabled: busy,
+                          onClick: () => runAction(() => props.onCommand('memory.select', { providerId: provider.id }), ''),
+                        }, t('memory.use'))
+                        : null,
+                      !provider.bundled
+                        ? h('button', {
+                          type: 'button', className: 'bm-btn small danger', disabled: busy,
+                          onClick: () => runAction(() => props.onCommand('memory.uninstall', { providerId: provider.id }), ''),
+                        }, t('memory.uninstall'))
+                        : null)),
+                  provider.description ? h('p', { className: 'bm-muted', style: { margin: 0 } }, provider.description) : null,
+                  isExpanded
+                    ? h('div', { className: 'bm-mem-cfg' },
+                      (provider.configSchema || []).map(field => {
+                        const val = draft[field.key] ?? field.default ?? ''
+                        if (field.type === 'boolean') {
+                          return h('label', { key: field.key, style: { display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '12px' } },
+                            h('input', {
+                              type: 'checkbox', checked: Boolean(val),
+                              onChange: e => updateDraftField(provider.id, field.key, e.target.checked),
+                            }),
+                            field.label || field.key)
+                        }
+                        return h('label', { key: field.key, className: 'bm-label' },
+                          field.label || field.key,
+                          h('input', {
+                            className: 'bm-input',
+                            type: field.secret ? 'password' : (field.type === 'integer' || field.type === 'number' ? 'number' : 'text'),
+                            value: String(val),
+                            placeholder: field.description || '',
+                            onChange: e => updateDraftField(provider.id, field.key, e.target.value),
+                          }))
+                      }),
+                      h('div', { className: 'bm-form-actions' },
+                        h('button', {
+                          type: 'button', className: 'bm-btn small primary', disabled: busy,
+                          onClick: () => saveProviderConfig(provider),
+                        }, t('memory.saveConfig'))))
+                    : null)
+              }))),
+
+            h('section', { className: 'bm-form' },
+              h('h2', null, t('memory.installTitle')),
+              h('p', { className: 'bm-form-hint' }, t('memory.installHint')),
+              h('div', { className: 'bm-compose-row' },
+                h('input', {
+                  className: 'bm-input', value: installSource, placeholder: t('memory.installPlaceholder'),
+                  onChange: e => setInstallSource(e.target.value),
+                }),
+                h('button', {
+                  type: 'button', className: 'bm-btn primary', disabled: busy || installSource.trim() === '',
+                  onClick: async () => {
+                    const ok = await runAction(() => props.onCommand('memory.install', {
+                      source: installSource.trim(),
+                      activate: true,
+                      overwrite: true,
+                    }), t('memory.saved'))
+                    if (ok) setInstallSource('')
+                  },
+                }, t('memory.installBtn'))),
+              (memory.catalog || []).length > 0
+                ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' } },
+                  h('div', { className: 'bm-muted' }, t('memory.catalogTitle')),
+                  (memory.catalog || []).map(item => h('div', { key: item.id, className: 'bm-mem-card' },
+                    h('div', { className: 'bm-mem-card-top' },
+                      h('strong', { className: 'bm-name' }, item.displayName),
+                      h('span', { className: 'bm-mem-badge' }, `v${item.version}`),
+                      h('button', {
+                        type: 'button', className: 'bm-btn small', style: { marginLeft: 'auto' },
+                        disabled: busy || item.installed,
+                        onClick: () => runAction(() => props.onCommand('memory.install', {
+                          source: item.installSource,
+                          activate: true,
+                          overwrite: true,
+                        }), t('memory.saved')),
+                      }, item.installed ? t('memory.installed') : t('memory.catalogInstall'))),
+                    h('p', { className: 'bm-muted', style: { margin: 0 } }, item.description))))
+                : null),
+
+            props.bots.length > 0
+              ? h('form', { className: 'bm-form', onSubmit: doSearch },
+                h('h2', null, t('memory.searchTitle')),
+                h('div', { className: 'bm-row' },
+                  h('select', {
+                    className: 'bm-input', value: searchBotId || props.bots[0].id,
+                    onChange: e => setSearchBotId(e.target.value),
+                  }, props.bots.map(bot => h('option', { key: bot.id, value: bot.id }, bot.name))),
+                  h('div', { className: 'bm-compose-row' },
+                    h('input', {
+                      className: 'bm-input', value: searchQuery, placeholder: t('memory.searchPlaceholder'),
+                      onChange: e => setSearchQuery(e.target.value),
+                    }),
+                    h('button', { type: 'submit', className: 'bm-btn primary', disabled: busy || searchQuery.trim() === '' }, t('memory.searchBtn')))),
+                searchOut !== '' ? h('div', { className: 'bm-mem-results' }, searchOut) : null)
+              : null)
         }
 
         function BotsPage() {
@@ -2426,6 +2926,7 @@ window.__ModuleLoader__.load({
           const sections = (hostSnapshot.state && hostSnapshot.state.sections) || []
           const routines = (hostSnapshot.state && hostSnapshot.state.routines) || []
           const approvals = (hostSnapshot.state && hostSnapshot.state.approvals) || []
+          const memoryHub = (hostSnapshot.state && hostSnapshot.state.memory) || null
           const bots = stored.filter(bot => bot.hidden !== true)
           const lang = useLang()
           const activeLang = (lang && lang.active) || 'en'
@@ -2437,8 +2938,9 @@ window.__ModuleLoader__.load({
           const botSeen = () => () => {}
 
           const sessionRowsOf = (bot) => {
+            const roomSessions = hiddenRoomSessionIds()
             const rows = list.ids
-              .filter(id => id === bot.sessionId || (bot.dir && list.byId[id] && list.byId[id].cwd === bot.dir && list.byId[id].blank !== true))
+              .filter(id => !roomSessions.has(id) && (id === bot.sessionId || (bot.dir && list.byId[id] && list.byId[id].cwd === bot.dir && list.byId[id].blank !== true)))
               .map(id => ({
                 id,
                 title: list.byId[id] ? (list.byId[id].displayTitle || id) : id,
@@ -2457,7 +2959,8 @@ window.__ModuleLoader__.load({
           const selectedBot = selection && selection.kind === 'bot'
             ? bots.find(bot => bot.id === selection.id)
             : undefined
-          const activeBot = selectedBot || (selection && selection.kind === 'group' ? undefined : bots[0])
+          const isMemoryView = selection && selection.kind === 'memory'
+          const activeBot = selectedBot || (selection && (selection.kind === 'group' || selection.kind === 'memory') ? undefined : bots[0])
           const activeGroup = selection && selection.kind === 'group'
             ? groups.find(group => group.id === selection.id)
             : undefined
@@ -2466,12 +2969,17 @@ window.__ModuleLoader__.load({
 
           const openBotEntry = (bot) => { setSelection({ kind: 'bot', id: bot.id }); setForm(null) }
           const openGroupEntry = (group) => { setSelection({ kind: 'group', id: group.id }); setForm(null) }
+          const openMemoryView = () => { setSelection({ kind: 'memory' }); setForm(null) }
           const createGroup = async (draft) => {
             const room = await hostCommand('room.save', { draft: {
               name: draft.name,
               memberIds: draft.members,
               mode: draft.mode || 'auto',
               leadBotId: draft.leadBotId || '',
+              purpose: draft.purpose || '',
+              notes: draft.notes || '',
+              maxRounds: draft.maxRounds || 3,
+              maxMessages: draft.maxMessages || 10,
               color: COLORS[(groups.length + 2) % COLORS.length],
             } })
             setForm(null)
@@ -2482,7 +2990,11 @@ window.__ModuleLoader__.load({
               name: draft.name,
               memberIds: draft.members,
               mode: draft.mode || group.mode || 'auto',
-              leadBotId: draft.leadBotId || group.leadBotId || '',
+              leadBotId: draft.leadBotId || '',
+              purpose: draft.purpose ?? group.purpose ?? '',
+              notes: draft.notes ?? group.notes ?? '',
+              maxRounds: draft.maxRounds ?? (group.budget && group.budget.maxRounds) ?? 3,
+              maxMessages: draft.maxMessages ?? (group.budget && group.budget.maxMessages) ?? 10,
             } })
             setForm(null)
           }
@@ -2580,7 +3092,19 @@ window.__ModuleLoader__.load({
                 h('button', { className: 'bm-section-add', onClick: () => setForm({ mode: 'group' }) }, t('pane.newGroup'))),
               visibleGroups.length === 0
                 ? h('p', { className: 'bm-muted bm-pane-empty' }, t('group.none'))
-                : visibleGroups.map(groupRow)),
+                : visibleGroups.map(groupRow),
+              h('div', { className: 'bm-section' },
+                h('span', null, t('pane.memory'))),
+              h('button', {
+                type: 'button', className: 'bm-frow', 'data-active': isMemoryView === true,
+                onClick: openMemoryView,
+              },
+                h('span', { className: 'bm-avatar bm-avatar-sm', style: { background: '#0e7490' } }, 'M'),
+                h('span', { className: 'bm-frow-text' },
+                  h('span', { className: 'bm-frow-top' },
+                    h('span', { className: 'bm-frow-name' }, t('pane.memory'))),
+                  h('span', { className: 'bm-frow-preview' },
+                    memoryHub ? `${memoryHub.provider}${memoryHub.health && memoryHub.health.mode ? ` · ${memoryHub.health.mode}` : ''}` : 'memory_tencentdb')))),
             h('div', { className: 'bm-pane-foot' },
               h('button', { className: 'bm-btn small', onClick: toHarness }, t('foot.back'))))
 
@@ -2647,6 +3171,12 @@ window.__ModuleLoader__.load({
                   onCancel: () => setForm(null),
                   onDone: () => setForm(null),
                 })
+            : isMemoryView
+              ? h(MemoryHubPanel, {
+                memory: memoryHub,
+                bots,
+                onCommand: hostCommand,
+              })
             : activeGroup
               ? h(GroupChat, {
                 key: activeGroup.id,

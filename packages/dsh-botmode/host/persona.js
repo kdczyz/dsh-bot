@@ -35,18 +35,21 @@ export const renderSoul = (bot, state) => {
     '',
     '## Team',
     '',
-    'You are one Bot in a team. Every Bot has its own workspace, its own memory and its',
-    'own permanent chat. Talk to teammates with the `message_agent` tool:',
+    'You are one Bot in a team. Every Bot has its own workspace, its own memory scope',
+    'and its own permanent chat. Talk to teammates with the `message_agent` tool:',
     '',
     '- `message_agent` target `<name or id>`, message `...` posts an asynchronous message',
     '  into that Bot\'s permanent chat. It returns `dispatched` at once; the reply arrives',
     '  later in your chat when you asked for it with `expectReply`.',
-    '- `bot_team` lists the roster, your own id and the Sections.',
+    '- `bot_team` lists the roster, your own id and the Group Rooms you belong to.',
+    '- `memory_search`, `memory_conversation_search`, `memory_read_scene` and `memory_save`',
+    '  access the team Memory Hub scoped to your own Bot identity.',
     '',
     'Rules:',
     '- Never claim a teammate did something you did not see in your chat.',
-    '- One message per request; do not ping-pong a teammate more than twice.',
-    '- When you are inside a Group Room you cannot use `message_agent`; answer in the room.',
+    '- One message per request; do not ping-pong a teammate endlessly (a hop guard applies).',
+    '- Inside a Group Room you run in an isolated room session and cannot use `message_agent`;',
+    '  answer in the room with @Name to hand off, or reply `(pass)` when you have nothing new to add.',
     '',
     '## Teammates',
     '',
@@ -63,22 +66,23 @@ export const renderTeam = (state) => {
 export const renderTeamSkill = () => [
   '---',
   'name: team',
-  'description: Message the other Bots on this machine, list the roster, and hand work to a teammate.',
+  'description: Message the other Bots on this machine, list the roster, search team memory, and hand work to a teammate.',
   'whenToUse: When a request belongs to another Bot, when you need a decision from a teammate, or before starting work someone else may own.',
   '---',
   '',
   '# Team',
   '',
-  'Use the `message_agent` tool to reach a teammate.',
+  'Use the `message_agent` tool to reach a teammate in 1:1 chats.',
   '',
   '1. `bot_team` action="roster" — who is on the team and what each one owns.',
   '2. `message_agent` target="<name or id>" message="..." — asynchronous delivery into that Bot\'s permanent chat.',
   '3. `message_agent` with `expectReply: true` — the teammate\'s answer arrives later in your chat.',
+  '4. `memory_search` / `memory_save` — recall or store long-term memories scoped to your Bot.',
   '',
   'Rules:',
   '- Include the context the other Bot cannot see.',
   '- Do not resend the same request; wait for the reply.',
-  '- Inside a Group Room, answer in the room instead.',
+  '- Inside a Group Room, reply in the room using `@Name` for handoff or `(pass)` when silent.',
   '',
 ].join('\n')
 
@@ -87,10 +91,10 @@ export const syncBotFiles = async (store, bot, state) => {
   const dir = bot.dir
   await writeTextFile(join(dir, 'bot.json'), `${JSON.stringify(bot, null, 2)}\n`)
   await writeTextFile(join(dir, 'SOUL.md'), renderSoul(bot, state))
-  const memoryPaths = join(dir, 'MEMORY.md')
-  const memory = await readTextFile(memoryPaths, '')
+  const memoryPath = join(dir, 'MEMORY.md')
+  const memory = await readTextFile(memoryPath, '')
   if (memory === '') {
-    await writeTextFile(memoryPaths, [
+    await writeTextFile(memoryPath, [
       `# ${bot.name} — memory`,
       '',
       'Durable notes this Bot keeps for itself. Edit this file when something must survive',
@@ -113,7 +117,7 @@ export const syncTeamFiles = async (store, state) => {
   })), null, 2)}\n`)
 }
 
-export const personaBlock = async (store, bot, state) => {
+export const personaBlock = async (store, bot, state, options = {}) => {
   const dir = bot.dir
   const soul = dir ? await readTextFile(join(dir, 'SOUL.md'), '') : ''
   const memory = dir ? await readTextFile(join(dir, 'MEMORY.md'), '') : ''
@@ -121,6 +125,23 @@ export const personaBlock = async (store, bot, state) => {
   const roster = teammates.length === 0
     ? '(no other Bots yet)'
     : teammates.map(member => `- ${member.name}${member.role ? ` — ${member.role}` : ''} [id: ${member.id}]`).join('\n')
+  const isRoomSession = options.kind === 'room'
+  const memoryHubBlock = typeof options.memoryPromptBlock === 'string' ? options.memoryPromptBlock.trim() : ''
+  const rules = isRoomSession
+    ? [
+      `- This is an isolated Group Room session for ${bot.name}. Your workspace is ${bot.dir || '(unknown)'}.`,
+      '- Never call `message_agent` here; address teammates in the room with `@Name`.',
+      '- Reply with exactly `(pass)` when consensus is reached or you have nothing new to add.',
+      '- Do not leak private 1:1 conversations into the group room.',
+      '- Prefer the tools you were given; if a tool is missing you may not use it.',
+    ]
+    : [
+      `- Your permanent chat is this Session; it never resets. Your workspace is ${bot.dir || '(unknown)'}.`,
+      '- Use `message_agent` for teammate contact. Keep each message self-contained.',
+      '- Inside a Group Room you run in a separate room session and reply there instead of using `message_agent`.',
+      '- Prefer the tools you were given; if a tool is missing you may not use it.',
+    ]
+
   return [
     soul.trim() || `# ${bot.name}\n\n${bot.role || ''}\n\n${bot.instructions || ''}`,
     '',
@@ -130,11 +151,9 @@ export const personaBlock = async (store, bot, state) => {
     '',
     '## Working rules',
     '',
-    `- Your permanent chat is this Session; it never resets. Your workspace is ${bot.dir || '(unknown)'}.`,
-    '- Use `message_agent` for teammate contact. Keep each message self-contained.',
-    '- Inside a Group Room you cannot use `message_agent`; reply in the room and use @Name to hand off.',
-    '- Prefer the tools you were given; if a tool is missing you may not use it.',
-    memory.trim() !== '' ? `\n## Your memory\n\n${memory.trim()}` : '',
+    ...rules,
+    memoryHubBlock !== '' ? `\n${memoryHubBlock}` : '',
+    memory.trim() !== '' ? `\n## Your memory (MEMORY.md)\n\n${memory.trim()}` : '',
     '',
   ].join('\n')
 }

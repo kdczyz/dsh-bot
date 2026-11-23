@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "id": "memory_tencentdb",
+  "displayName": "Memory_tencentdb (四层语义记忆库)",
+  "version": "1.0.0",
+  "description": "TencentDB Agent Memory 四层记忆系统（L0 对话记录、L1 原子记忆、L2 场景块、L3 人格核心），默认对接本机/远程 v3 Gateway，并支持零依赖本地 SQLite FTS5 自动降级兜底。",
+  "author": "TencentDB Agent Memory / dsh-botmode",
+  "homepage": "https://github.com/TencentCloud/TencentDB-Agent-Memory",
+  "entry": "index.js",
+  "aliases": [
+    "tdai",
+    "memory-tencentdb",
+    "tencentdb"
+  ],
+  "tools": [
+    "memory_tencentdb_memory_search",
+    "memory_tencentdb_conversation_search",
+    "memory_tencentdb_read_scene"
+  ],
+  "configSchema": [
+    {
+      "key": "gatewayHost",
+      "label": "Gateway 主机",
+      "type": "text",
+      "default": "127.0.0.1",
+      "description": "memory-tencentdb Gateway 服务地址（环境变量 MEMORY_TENCENTDB_GATEWAY_HOST 可覆盖）"
+    },
+    {
+      "key": "gatewayPort",
+      "label": "Gateway 端口",
+      "type": "integer",
+      "default": 8420,
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "memory-tencentdb Gateway HTTP 端口（默认 8420）"
+    },
+    {
+      "key": "gatewayApiKey",
+      "label": "Gateway API Key",
+      "type": "text",
+      "secret": true,
+      "default": "",
+      "description": "可选 Bearer Token（与 Gateway 侧 TDAI_GATEWAY_API_KEY 一致；留空按本地无鉴权模式发 local）"
+    },
+    {
+      "key": "serviceId",
+      "label": "Service ID",
+      "type": "text",
+      "default": "default",
+      "description": "请求头 x-tdai-service-id（单机模式默认 default）"
+    },
+    {
+      "key": "recallLimit",
+      "label": "单次召回条数",
+      "type": "integer",
+      "default": 5,
+      "minimum": 1,
+      "maximum": 20,
+      "description": "每轮 prefetch 从 L1 原子记忆检索的最大条数"
+    },
+    {
+      "key": "timeoutMs",
+      "label": "请求超时 (ms)",
+      "type": "integer",
+      "default": 8000,
+      "minimum": 1000,
+      "maximum": 60000,
+      "description": "访问 Gateway HTTP API 的单次超时时间"
+    },
+    {
+      "key": "fallbackLocal",
+      "label": "Gateway 不可达时自动本地兜底",
+      "type": "boolean",
+      "default": true,
+      "description": "当 8420 网关未启动时，自动回退到 Node 内置 SQLite FTS5 按 Bot 隔离存取记忆，网关恢复后自动切回"
+    }
+  ]
+}
