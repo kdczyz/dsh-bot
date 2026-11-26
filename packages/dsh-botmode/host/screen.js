@@ -11,7 +11,7 @@
  */
 import { Buffer } from 'node:buffer'
 import { execFile, execFileSync, spawn } from 'node:child_process'
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs'
+import { closeSync, existsSync, globSync, mkdirSync, openSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -21,8 +21,18 @@ const execFileAsync = promisify(execFile)
 const DEFAULT_GATEWAY = 'http://127.0.0.1:6200'
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const PY_DEPS_CHECK = 'import fastapi, uvicorn, PIL, Xlib, websockets, httpx'
+// Keep in sync with botscreen/requirements.txt. Checking every runtime import avoids
+// half-bootstrapped environments where the gateway process starts but immediately exits.
+const PY_DEPS_CHECK = 'import fastapi, uvicorn, multipart, PIL, Xlib, websockets, httpx, mss'
 const _pyChecked = new Map()
+
+const AUTO_SYSTEM_PACKAGES = [
+  'xvfb', 'x11vnc', 'websockify', 'novnc', 'xauth',
+  'xfwm4', 'xfdesktop4', 'xfconf', 'dbus-x11', 'tint2', 'picom', 'pcmanfm',
+  'xterm', 'xdotool', 'xclip',
+  'glib-networking', 'gvfs', 'gvfs-daemons', 'feh',
+  'adwaita-icon-theme', 'fonts-noto-color-emoji', 'fonts-noto-cjk',
+]
 
 function hasPythonDepsSync(py) {
   if (_pyChecked.has(py)) return _pyChecked.get(py)
@@ -33,6 +43,99 @@ function hasPythonDepsSync(py) {
   } catch (_error) {
     _pyChecked.set(py, false)
     return false
+  }
+}
+
+function isUsableVenv(python) {
+  if (python === 'python3' || !existsSync(python)) return false
+  try {
+    execFileSync(python, ['-c', 'import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix else 1)'], {
+      stdio: 'ignore',
+      timeout: 4000,
+    })
+    return true
+  } catch (_error) {
+    return false
+  }
+}
+
+function runQuiet(cmd, args, options = {}) {
+  try {
+    execFileSync(cmd, args, { stdio: 'ignore', timeout: 120_000, ...options })
+    return true
+  } catch (_error) {
+    return false
+  }
+}
+
+function findVenvWheel(dir) {
+  const matches = globSync(join(dir, 'pip-*.whl'))
+  return matches[0] ? join(dir, matches[0]) : ''
+}
+
+async function ensurePipInVenv(python, pluginRoot) {
+  if (runQuiet(python, ['-m', 'pip', '--version'], { timeout: 30_000 })) return
+  // `ensurepip` exists on most distributions but is absent on minimal Python builds.
+  if (runQuiet(python, ['-m', 'ensurepip', '--upgrade'], { timeout: 120_000 })
+    && runQuiet(python, ['-m', 'pip', '--version'], { timeout: 30_000 })) return
+  // The bundle vendors pip/setuptools wheels so a fresh install works even when the
+  // host Python has no ensurepip and no pip of its own. PYTHONPATH is used only for
+  // this bootstrap; `--ignore-installed` forces pip into the venv site-packages.
+  const vendorDir = join(pluginRoot, 'vendor', 'pip')
+  const seedWheel = findVenvWheel(vendorDir)
+  if (!seedWheel) throw new Error('venv 缺少 pip，且未找到 ensurepip 或内置 pip wheel')
+  const pythonRoot = resolve(dirname(python), '..')
+  const runtimeVendor = join(pythonRoot, 'vendor', 'pip')
+  const env = { ...process.env }
+  // Tests and embedded installs can place the wheels next to the venv rather than
+  // in the installed plugin bundle.
+  const wheelDirs = [runtimeVendor, vendorDir]
+  const seedDir = wheelDirs.find(dir => findVenvWheel(dir))
+  const activeVendor = seedDir || vendorDir
+  const activeWheel = seedDir ? findVenvWheel(seedDir) : seedWheel
+  env.PYTHONPATH = env.PYTHONPATH ? `${activeWheel}${env.PYTHONPATH.includes(activeWheel) ? '' : `:${activeWheel}`}:${env.PYTHONPATH}` : activeWheel
+  await execFileAsync(python, [
+    '-m', 'pip', 'install', '--no-index', '--find-links', activeVendor,
+    '--ignore-installed', '--upgrade', 'pip', 'setuptools',
+  ], { env, timeout: 180_000 })
+  if (!runQuiet(python, ['-m', 'pip', '--version'], { timeout: 30_000 })) {
+    throw new Error('vendored pip wheel 安装后仍无法使用 python -m pip')
+  }
+}
+
+function ensureSystemDependencies(logger) {
+  if (process.env.BOTSCREEN_AUTO_INSTALL_DEPS === '0') {
+    logger?.warn?.('botmode: system dependency auto-install disabled by BOTSCREEN_AUTO_INSTALL_DEPS=0')
+    return
+  }
+  const requiredBins = [
+    'Xvfb', 'x11vnc', 'websockify', 'xauth', 'xdotool', 'xclip', 'xfwm4',
+    'xterm', 'feh', 'VNC_WEB_DIR',
+  ]
+  const missingBins = requiredBins.filter(name =>
+    name === 'VNC_WEB_DIR'
+      ? !existsSync(join(process.env.BOTSCREEN_VNC_WEB || '/usr/share/novnc', 'vnc.html'))
+      : !runQuiet('sh', ['-c', `command -v ${name} >/dev/null 2>&1`], { timeout: 10_000 }),
+  )
+  if (!missingBins.length) return
+  if (!runQuiet('sh', ['-c', 'command -v apt-get >/dev/null 2>&1'], { timeout: 10_000 })) {
+    logger?.warn?.(`botmode: missing BotScreen system components (${missingBins.join(', ')}); install them manually`)
+    return
+  }
+  const sudo = runQuiet('sh', ['-c', 'command -v sudo >/dev/null 2>&1 && sudo -n true'], { timeout: 10_000 })
+    ? ['sudo', '-n']
+    : []
+  logger?.info?.(`botmode: installing BotScreen system components: ${missingBins.join(', ')}`)
+  if (!runQuiet('apt-get', ['update', '-qq'], { timeout: 300_000 })) {
+    throw new Error('apt-get update 失败，无法自动安装 BotScreen 系统依赖')
+  }
+  const env = { ...process.env, DEBIAN_FRONTEND: 'noninteractive' }
+  const installCmd = sudo.length ? sudo[0] : 'apt-get'
+  const installArgs = sudo.length
+    ? [...sudo.slice(1), 'apt-get', 'install', '-y', '--no-install-recommends', ...AUTO_SYSTEM_PACKAGES]
+    : ['install', '-y', '--no-install-recommends', ...AUTO_SYSTEM_PACKAGES]
+  if (!runQuiet(installCmd, installArgs, { env, timeout: 900_000 })) {
+    throw new Error('apt-get install 失败，无法自动安装 BotScreen 系统依赖')
   }
 }
 
@@ -63,10 +166,11 @@ function findBotscreenRuntime({ botscreenRoot, pythonBin, logDir } = {}) {
     }
 
     const venvBase = logDir || join(homedir(), '.dsh', 'botmode')
+    const defaultVenvPython = join(venvBase, 'screen-venv', 'bin', 'python')
     const pyCandidates = [
       join(dir, '.venv', 'bin', 'python'),
       join(pluginRoot, '.venv', 'bin', 'python'),
-      join(venvBase, 'screen-venv', 'bin', 'python'),
+      defaultVenvPython,
       join(repoRoot, '.venv', 'bin', 'python'),
       'python3',
     ].filter(Boolean)
@@ -77,9 +181,12 @@ function findBotscreenRuntime({ botscreenRoot, pythonBin, logDir } = {}) {
         return { root: dir, python: py, needsBootstrap: false }
       }
     }
-    // Otherwise allow auto-bootstrapping a dedicated venv using python3
+    // Otherwise allow auto-bootstrapping a dedicated venv using python3. If a
+    // candidate venv already exists but is broken/half-created, still bootstrap it
+    // (bootstrapVenv now deletes and recreates invalid venvs safely).
     if (existsSync(join(dir, 'botscreen', 'requirements.txt'))) {
-      return { root: dir, python: join(venvBase, 'screen-venv', 'bin', 'python'), needsBootstrap: true }
+      const brokenVenv = pyCandidates.find(py => py !== 'python3' && existsSync(py) && !isUsableVenv(py))
+      return { root: dir, python: brokenVenv || defaultVenvPython, needsBootstrap: true }
     }
     const fallback = pyCandidates.find(p => p === 'python3' || existsSync(p))
     if (fallback) return { root: dir, python: fallback, needsBootstrap: false }
@@ -89,12 +196,19 @@ function findBotscreenRuntime({ botscreenRoot, pythonBin, logDir } = {}) {
 
 async function bootstrapVenv(runtime, logDir, logPath) {
   const venvDir = resolve(dirname(runtime.python), '..')
+  const pluginRoot = resolve(__dirname, '..')
   const reqFile = join(runtime.root, 'botscreen', 'requirements.txt')
-  if (!existsSync(runtime.python)) {
-    await execFileAsync('python3', ['-m', 'venv', venvDir], { timeout: 60_000 })
+  const invalidVenv = !isUsableVenv(runtime.python)
+  if (!invalidVenv) {
+    // Nothing to do: keep the existing interpreter and its pip as-is.
+  } else {
+    // Minimal Python builds can leave a half-created venv after `venv` fails because
+    // ensurepip is missing. Remove it first so pip can be seeded from the vendor dir.
+    if (existsSync(venvDir)) rmSync(venvDir, { recursive: true, force: true })
+    await execFileAsync('python3', ['-m', 'venv', '--without-pip', venvDir], { timeout: 60_000 })
   }
-  const pipBin = join(venvDir, 'bin', 'pip')
-  await execFileAsync(pipBin, ['install', '-q', '-r', reqFile], { timeout: 180_000 })
+  await ensurePipInVenv(runtime.python, pluginRoot)
+  await execFileAsync(runtime.python, ['-m', 'pip', 'install', '-q', '-r', reqFile], { timeout: 300_000 })
   _pyChecked.delete(runtime.python)
   return runtime.python
 }
@@ -129,6 +243,12 @@ export class ScreenBridge {
     this.#botscreenRoot = String(botscreenRoot || '').trim()
     this.#pythonBin = String(pythonBin || '').trim()
     this.#logDir = String(logDir || '').trim()
+    // A different root/python combination may replace a previously probed executable.
+    // Drop global interpreter probes for explicitly supplied environments so reinstalls
+    // and embedded test fixtures re-evaluate their actual dependencies.
+    for (const python of [this.#pythonBin, join(this.#botscreenRoot, 'screen-venv', 'bin', 'python')]) {
+      if (python) _pyChecked.delete(python)
+    }
 
     // Default auto-spawn is enabled for the standard local gateway (or when explicit root/autoSpawn is given),
     // while preserving safe isolation for tests running against mock gateways on ephemeral ports.
@@ -232,6 +352,15 @@ export class ScreenBridge {
         this.#lastError = `BotScreen Python 依赖初始化失败: ${err instanceof Error ? err.message : String(err)}`
         return { available: false, spawned: false, error: this.#lastError }
       }
+    }
+    try {
+      ensureSystemDependencies(this.logger)
+    } catch (err) {
+      if (logFd !== null) {
+        try { closeSync(logFd) } catch (_e) { /* ignore */ }
+      }
+      this.#lastError = `BotScreen 系统依赖初始化失败: ${err instanceof Error ? err.message : String(err)}`
+      return { available: false, spawned: false, error: this.#lastError }
     }
 
     this.logger?.info?.(`botmode: auto-starting BotScreen gateway at ${this.gatewayUrl} from ${runtime.root}`)
@@ -342,9 +471,10 @@ export class ScreenBridge {
   async health() {
     try {
       const data = await this.#json('/healthz', { timeoutMs: 2500 })
-      this.#gatewayAvailable = true
-      this.#lastError = ''
-      return { available: true, gatewayUrl: this.gatewayUrl, ...data }
+      const available = data?.ok !== false
+      this.#gatewayAvailable = available
+      this.#lastError = available ? '' : `BotScreen 缺少系统组件: ${(data?.missing || []).join(', ') || 'unknown'}`
+      return { available, gatewayUrl: this.gatewayUrl, ...data }
     } catch (error) {
       this.#gatewayAvailable = false
       return { available: false, gatewayUrl: this.gatewayUrl, error: error instanceof Error ? error.message : String(error) }

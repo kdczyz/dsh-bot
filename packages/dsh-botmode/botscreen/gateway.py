@@ -7,6 +7,7 @@ import io
 import json
 import os
 import secrets
+import shutil
 import time
 from contextlib import asynccontextmanager
 from typing import Dict, List, Optional
@@ -171,6 +172,9 @@ async def lifespan(app: FastAPI):
         REGISTRY.workers[next(iter(REGISTRY.workers))].cg.ensure_root()
     except Exception:  # noqa: BLE001
         pass
+    # Make cgroup availability explicit for readiness probes and stop trying to
+    # reconfigure it for every new screen. Degrade cleanly when not permitted.
+    REGISTRY.cgroup_available = bool(REGISTRY.workers and next(iter(REGISTRY.workers.values())).cg.available)
     # 接管网关重启前仍在运行的屏（进程树留在原 cgroup，窗口状态完整保留）
     for worker in REGISTRY.workers.values():
         try:
@@ -278,9 +282,35 @@ async def console() -> Response:
         return HTMLResponse(fh.read())
 
 
+def x_preflight() -> tuple[bool, list[str], str]:
+    """Report missing host components that prevent virtual screens from starting."""
+    missing: list[str] = []
+    required_bins = (
+        "Xvfb", "x11vnc", "websockify", "xauth", "xdotool", "xclip", "xfwm4",
+        "xterm", "feh",
+    )
+    for name in required_bins:
+        if not shutil.which(name):
+            missing.append(f"bin:{name}")
+    novnc_web = os.environ.get("BOTSCREEN_VNC_WEB", "/usr/share/novnc")
+    if not os.path.isfile(os.path.join(novnc_web, "vnc.html")):
+        missing.append(f"web:{novnc_web}/vnc.html")
+    if X_BACKEND == "kasmvnc" and not shutil.which("Xvnc"):
+        missing.append("bin:Xvnc")
+    return not missing, missing, X_BACKEND
+
+
 @app.get("/healthz")
 async def healthz() -> dict:
-    return {"ok": True, "bots": len(registry().workers)}
+    reg = registry()
+    x_ready, missing, backend = x_preflight()
+    return {
+        "ok": x_ready,
+        "bots": len(reg.workers),
+        "cgroup": bool(getattr(reg, "cgroup_available", False)),
+        "x_backend": backend,
+        "missing": missing,
+    }
 
 
 @app.get("/api/screens", dependencies=[Depends(require_admin)])
