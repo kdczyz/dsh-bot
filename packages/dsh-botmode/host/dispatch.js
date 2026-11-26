@@ -13,9 +13,11 @@
  *   ambiguous-target refusal, and session-based Group Room enforcement).
  */
 import { createHash, randomUUID } from 'node:crypto'
+import { mkdir } from 'node:fs/promises'
 import { newId, writeTextFile } from './store.js'
 import { modelAcceptsImages, resolveBotSelection } from './models.js'
-import { isPassReply } from './room-protocol.js'
+import { computeErrorFingerprint, isPassReply } from './room-protocol.js'
+import { extractMutatedPathsFromTool } from './room-locks.js'
 
 const TURN_TIMEOUT_MS = 15 * 60 * 1000
 const MAX_REPLY_CHARS = 16_000
@@ -48,7 +50,8 @@ export class Dispatcher {
   #chains = new Map() // queueKey -> Promise
   #queue = new Map() // queueKey -> queued count
   #runningKeys = new Set() // active queueKeys
-  #speakingRoomBots = new Set() // botIds currently executing a room turn
+  #speakingRoomCounts = new Map() // botId -> active room turn count
+  #roomSpeakers = new Map() // roomId -> Set<botId>
   #activeRooms = new Map() // roomId -> Set<botId>
   #last = new Map() // botId -> last result
   #dmChains = new Map() // botId -> { chainId, hops, lastSenderId, seen: Set<string> }
@@ -101,7 +104,7 @@ export class Dispatcher {
 
   /** True when this Bot belongs to any currently running Group Room or is speaking in one. */
   inRoom(botId) {
-    if (this.#speakingRoomBots.has(botId)) return true
+    if ((this.#speakingRoomCounts.get(botId) ?? 0) > 0) return true
     for (const members of this.#activeRooms.values()) {
       if (members.has(botId)) return true
     }
@@ -109,7 +112,11 @@ export class Dispatcher {
   }
 
   roomSpeaking(botId) {
-    return this.#speakingRoomBots.has(botId)
+    return (this.#speakingRoomCounts.get(botId) ?? 0) > 0
+  }
+
+  roomSpeakers(roomId) {
+    return [...(this.#roomSpeakers.get(roomId) ?? [])]
   }
 
   activeRoomId(botId) {
@@ -157,8 +164,8 @@ export class Dispatcher {
   dispatch(botId, text, options = {}) {
     const bot = this.store.bot(botId)
     if (!bot) return { ok: false, error: 'unknown bot' }
-    // A fresh human message resets the DM loop-guard chain for this Bot.
-    if (options.source === 'api' || options.source === 'command' || options.source === 'chat' || options.source === 'service') {
+    // A fresh human or scheduled routine message resets the DM loop-guard chain for this Bot.
+    if (options.source === 'api' || options.source === 'command' || options.source === 'chat' || options.source === 'service' || options.source === 'routine') {
       this.#dmChains.set(botId, { chainId: newId('chain'), hops: 0, lastSenderId: '', seen: new Set() })
     }
     const queued = this.queueDepth(botId)
@@ -185,16 +192,23 @@ export class Dispatcher {
     const roomId = typeof options.roomId === 'string' ? options.roomId : ''
     if (roomId !== '') {
       const room = this.store.room(roomId)
+      await this.store.ensureBotDir(bot)
+      const desiredCwd = room?.workDir && room.workDir.trim() !== '' ? room.workDir.trim() : bot.dir
       const existingRoomSessionId = room?.memberSessions?.[bot.id] ?? ''
       if (existingRoomSessionId !== '') {
         const resolved = await controller.resolveAgent(existingRoomSessionId)
         if (resolved && resolved.agent) {
-          this.#announce(resolved.agent, bot, { kind: 'room', roomId })
-          return resolved.agent
+          const currentCwd = resolved.agent.cwd ?? resolved.agent.session?.header?.cwd ?? desiredCwd
+          if (!room?.workDir || currentCwd === desiredCwd) {
+            this.#announce(resolved.agent, bot, { kind: 'room', roomId })
+            return resolved.agent
+          }
         }
       }
-      await this.store.ensureBotDir(bot)
-      const created = await controller.create({ cwd: bot.dir, title: `Group: ${room?.name || roomId}` })
+      if (room?.workDir && room.workDir.trim() !== '') {
+        await mkdir(desiredCwd, { recursive: true }).catch(() => undefined)
+      }
+      const created = await controller.create({ cwd: desiredCwd, title: `Group: ${room?.name || roomId}` })
       if (!created || typeof created.sessionId !== 'string') throw new Error('Room session creation failed')
       await this.store.mutate((state) => {
         const storedRoom = state.rooms.find(item => item.id === roomId)
@@ -254,7 +268,15 @@ export class Dispatcher {
     if (rawPrompt === '' && images.length === 0) return { ok: false, error: 'empty message' }
 
     this.#runningKeys.add(queueKey)
-    if (options.roomId) this.#speakingRoomBots.add(botId)
+    if (options.roomId) {
+      this.#speakingRoomCounts.set(botId, (this.#speakingRoomCounts.get(botId) ?? 0) + 1)
+      let set = this.#roomSpeakers.get(options.roomId)
+      if (!set) {
+        set = new Set()
+        this.#roomSpeakers.set(options.roomId, set)
+      }
+      set.add(botId)
+    }
     const startedAt = new Date().toISOString()
     try {
       const agent = await this.#resolveAgent(bot, options)
@@ -286,8 +308,24 @@ export class Dispatcher {
       try { await this.ctx.sessions.flush(session) } catch (_error) { /* durability is best effort here */ }
       const { reply, allTexts } = this.#replySince(session, beforeSeq)
       const failure = this.#failureSince(session, beforeSeq)
+      const metrics = this.#metricsSince(session, beforeSeq, finalPrompt, reply, failure, options.roomId ? (this.store.room(options.roomId)?.workDir || bot.dir) : bot.dir)
       if (failure !== '') {
-        const result = { ok: false, error: failure, sessionId: session.id, startedAt, source: options.source ?? 'chat' }
+        // Auto-recover stale hidden Group Room sessions when the global default model changed
+        // and DSH context compaction cannot switch across incompatible/removed providers.
+        const isModelSwitchCompactionError = Boolean(
+          options.roomId
+          && options._rotatedSession !== true
+          && /cannot switch to .*context compaction failed|no adapter registered for provider/i.test(failure),
+        )
+        if (isModelSwitchCompactionError) {
+          this.logger?.warn?.(`botmode: rotating stale room session for ${bot.name} in ${options.roomId} after model switch compaction failure`)
+          await this.store.mutate((state) => {
+            const storedRoom = state.rooms.find(item => item.id === options.roomId)
+            if (storedRoom?.memberSessions) delete storedRoom.memberSessions[bot.id]
+          }).catch(() => undefined)
+          return this.#runTurn(botId, text, { ...options, _rotatedSession: true }, queueKey)
+        }
+        const result = { ok: false, error: failure, metrics, sessionId: session.id, startedAt, source: options.source ?? 'chat' }
         await this.store.mutate((state) => {
           const stored = state.bots.find(item => item.id === botId)
           if (stored) {
@@ -303,6 +341,7 @@ export class Dispatcher {
         ok: true,
         text: reply,
         allTexts,
+        metrics,
         messageId: message.id,
         sessionId: session.id,
         startedAt,
@@ -340,12 +379,33 @@ export class Dispatcher {
         const stored = state.bots.find(item => item.id === bot.id)
         if (stored) stored.lastError = message
       }).catch(() => undefined)
-      const result = { ok: false, error: message, startedAt, source: options.source ?? 'chat' }
+      const metrics = {
+        toolCallCount: 0,
+        toolNames: [],
+        mutatedFilesCount: 0,
+        taskBoardChanged: false,
+        tokensUsed: Math.ceil(rawPrompt.length / 4),
+        errorFingerprints: [{
+          fingerprint: computeErrorFingerprint('turn', 'exception', message),
+          toolName: 'turn',
+          summary: message.slice(0, 200),
+        }],
+      }
+      const result = { ok: false, error: message, metrics, startedAt, source: options.source ?? 'chat' }
       this.#last.set(botId, result)
       return result
     } finally {
       this.#runningKeys.delete(queueKey)
-      if (options.roomId) this.#speakingRoomBots.delete(botId)
+      if (options.roomId) {
+        const nextCount = (this.#speakingRoomCounts.get(botId) ?? 1) - 1
+        if (nextCount <= 0) this.#speakingRoomCounts.delete(botId)
+        else this.#speakingRoomCounts.set(botId, nextCount)
+        const set = this.#roomSpeakers.get(options.roomId)
+        if (set) {
+          set.delete(botId)
+          if (set.size === 0) this.#roomSpeakers.delete(options.roomId)
+        }
+      }
     }
   }
 
@@ -391,7 +451,10 @@ export class Dispatcher {
   async #waitIdle(agent) {
     let timer
     const timeout = new Promise((_resolve, reject) => {
-      timer = setTimeout(() => reject(new Error('turn timed out after 15 minutes')), TURN_TIMEOUT_MS)
+      timer = setTimeout(() => {
+        try { agent.cancel?.({ kind: 'timeout' }, { keepInbox: true }) } catch (_error) { /* best effort */ }
+        reject(new Error('turn timed out after 15 minutes'))
+      }, TURN_TIMEOUT_MS)
       timer.unref?.()
     })
     try {
@@ -425,6 +488,125 @@ export class Dispatcher {
     return { reply, allTexts }
   }
 
+  /**
+   * Collect tool execution, file mutation, token usage and error fingerprint
+   * telemetry for a single turn from DSH session events since `beforeSeq`.
+   */
+  #metricsSince(session, beforeSeq, promptText, replyText, failure, baseDir = '') {
+    const events = session.ownEvents()
+    const callsById = new Map() // callId -> { name, args }
+    const toolNames = []
+    let mutatedFilesCount = 0
+    let taskBoardChanged = false
+    let reportedTokens = 0
+    let cacheReadTokens = 0
+    let peakContextTokens = 0
+    const errorFingerprints = []
+
+    const parseArgs = (raw) => {
+      if (raw && typeof raw === 'object') return raw
+      if (typeof raw === 'string' && raw.trim() !== '') {
+        try { return JSON.parse(raw) } catch (_error) { return { raw } }
+      }
+      return {}
+    }
+
+    const recordToolCall = (callId, name, rawArgs) => {
+      const toolName = String(name || 'tool')
+      const args = parseArgs(rawArgs)
+      if (callId && callsById.has(callId)) return
+      if (callId) callsById.set(callId, { name: toolName, args })
+      toolNames.push(toolName)
+      if (toolName === 'claim_subtask' || toolName === 'room_finish_task' || toolName === 'room_task_progress') {
+        taskBoardChanged = true
+      }
+      const mutated = extractMutatedPathsFromTool(toolName, args, baseDir)
+      if (mutated.length > 0) mutatedFilesCount += mutated.length
+    }
+
+    for (const event of events) {
+      if (event.seq < beforeSeq) continue
+      const data = event.data ?? {}
+      if (event.type === 'assistant/message') {
+        const usage = data.usage
+        if (usage && typeof usage === 'object') {
+          const inp = Number(usage.inputTokens) || 0
+          const out = Number(usage.outputTokens) || 0
+          const cached = Number(usage.cacheReadTokens) || 0
+          const stepTotal = Number(usage.totalTokens) || (inp + out + cached)
+          // Count incremental uncached work (`inputTokens + outputTokens`) rather than
+          // summing full cached context prefixes quadratically across tool-call steps.
+          const stepIncremental = (inp > 0 || out > 0) ? (inp + out) : stepTotal
+          if (stepIncremental > 0) reportedTokens += stepIncremental
+          if (cached > 0) cacheReadTokens += cached
+          if (stepTotal > peakContextTokens) peakContextTokens = stepTotal
+        }
+        const blocks = data.message?.content
+        if (Array.isArray(blocks)) {
+          for (const block of blocks) {
+            if (block && block.type === 'tool-call') {
+              recordToolCall(block.id || block.callId || '', block.name, block.arguments)
+            }
+          }
+        }
+      } else if (event.type === 'assistant/attempt') {
+        const blocks = data.message?.content
+        if (Array.isArray(blocks)) {
+          for (const block of blocks) {
+            if (block && block.type === 'tool-call') {
+              recordToolCall(block.id || block.callId || '', block.name, block.arguments)
+            }
+          }
+        }
+      } else if (event.type === 'tool/call') {
+        recordToolCall(data.callId || '', data.name, data.arguments)
+      } else if (event.type === 'tool/result') {
+        const msg = data.message ?? data
+        if (msg.isError === true) {
+          const callId = msg.toolCallId || msg.source?.callId || ''
+          const callInfo = callsById.get(callId)
+          const toolName = callInfo?.name || msg.name || 'tool'
+          const errText = textOfBlocks(msg.content) || String(msg.error?.message ?? 'tool error')
+          // Soft-lock coordination notices are normal concurrency signals, not environment faults.
+          if (!errText.includes('正由 @')) {
+            const targetHint = String(
+              callInfo?.args?.command ?? callInfo?.args?.path ?? callInfo?.args?.file_path ?? '',
+            ).slice(0, 120)
+            errorFingerprints.push({
+              fingerprint: computeErrorFingerprint(toolName, targetHint, errText),
+              toolName,
+              summary: `${toolName}${targetHint ? ` (${targetHint})` : ''}: ${oneLine(errText).slice(0, 140)}`,
+            })
+          }
+        }
+      }
+    }
+
+    if (failure !== '') {
+      errorFingerprints.push({
+        fingerprint: computeErrorFingerprint('turn', 'model', failure),
+        toolName: 'turn',
+        summary: oneLine(failure).slice(0, 160),
+      })
+    }
+
+    const heuristicTokens = Math.max(
+      1,
+      Math.ceil((String(promptText ?? '').length + String(replyText ?? '').length) / 4),
+    )
+
+    return {
+      toolCallCount: toolNames.length,
+      toolNames,
+      mutatedFilesCount,
+      taskBoardChanged,
+      tokensUsed: reportedTokens > 0 ? reportedTokens : heuristicTokens,
+      cacheReadTokens,
+      peakContextTokens,
+      errorFingerprints,
+    }
+  }
+
   /** Cancel a live Agent by exact Session ID (used by Group Rooms to stop only the room session). */
   cancelSession(sessionId) {
     if (!sessionId) return { ok: false, error: 'no live session' }
@@ -450,8 +632,9 @@ export class Dispatcher {
     const sender = state.bots.find(bot => bot.id === senderBotId)
     if (!sender) return { ok: false, code: 'not_a_bot', error: 'this Session is not a Bot' }
 
-    // Enforce Group Room isolation strictly by Session ownership (or active room speaking).
-    if ((callerSessionId && this.store.roomByMemberSession(callerSessionId)) || this.roomSpeaking(sender.id)) {
+    // Enforce Group Room isolation strictly by Session ownership (never block a Bot's
+    // independent 1:1 primary chat simply because it is concurrently speaking in a room).
+    if (callerSessionId && this.store.roomByMemberSession(callerSessionId)) {
       return {
         ok: false,
         code: 'unavailable_in_room',
@@ -499,6 +682,8 @@ export class Dispatcher {
       }
     }
     senderChain.seen.add(fingerprint)
+    // Advance sender's own hop budget so repeated Hub-and-Spoke expectReply loops cannot bypass MAX_AGENT_HOPS.
+    senderChain.hops = nextHops
     this.#dmChains.set(sender.id, senderChain)
 
     // Reply-is-final guard: if replying directly back to the teammate who just
@@ -526,9 +711,22 @@ export class Dispatcher {
     const pending = this.enqueue(target.id, body, { source: 'agent' })
     if (effectiveExpectReply) {
       void pending.then(async (result) => {
-        if (!result.ok) return
-        let reply = result.text
-        if (isPassReply(reply)) return
+        if (!result.ok) {
+          const reason = oneLine(result.error || 'unknown error').slice(0, 400)
+          await this.enqueue(sender.id, [
+            `[No reply from ${target.name}]`,
+            `${target.name} failed to complete your request (${reason}). Do not resend blindly; inspect or inform the user.`,
+          ].join('\n\n'), { source: 'agent' })
+          return
+        }
+        let reply = String(result.text ?? '').trim()
+        if (reply === '' || isPassReply(reply)) {
+          await this.enqueue(sender.id, [
+            `[No reply from ${target.name}]`,
+            `${target.name} finished its turn without a substantive reply.`,
+          ].join('\n\n'), { source: 'agent' })
+          return
+        }
         let path = ''
         if (reply.length > MAX_REPLY_CHARS) {
           path = `${sender.dir || this.store.botsRoot}/message-reply-${Date.now()}.md`
@@ -539,7 +737,7 @@ export class Dispatcher {
           `[Reply from ${target.name}]`,
           reply,
         ].join('\n\n'), { source: 'agent' })
-      })
+      }).catch(() => undefined)
     }
     return {
       ok: true,

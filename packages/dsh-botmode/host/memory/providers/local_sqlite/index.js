@@ -106,6 +106,11 @@ export class LocalSqliteMemoryProvider extends MemoryProvider {
     return { ok: true, text: content || `Scene '${raw}' is empty or not found.` }
   }
 
+  async purgeAgent({ teamId = 'dsh-botmode', agentId }) {
+    if (!agentId) return
+    await this.#store.purgeAgent({ teamId, agentId })
+  }
+
   async shutdown() {
     this.#store.close()
   }

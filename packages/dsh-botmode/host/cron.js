@@ -15,7 +15,7 @@ const boundsOf = (index) => {
   if (index === 1) return [0, 23]
   if (index === 2) return [1, 31]
   if (index === 3) return [1, 12]
-  return [0, 6]
+  return [0, 7]
 }
 
 const parseValue = (token, index) => {
@@ -48,7 +48,10 @@ const parseField = (text, index) => {
     }
     if (!Number.isInteger(from) || !Number.isInteger(to)) return undefined
     if (from < min || to > max || from > to) return undefined
-    for (let value = from; value <= to; value += step) allowed.add(value)
+    for (let value = from; value <= to; value += step) {
+      // Standard POSIX cron treats both 0 and 7 as Sunday.
+      allowed.add(index === 4 && value === 7 ? 0 : value)
+    }
   }
   return allowed.size === 0 ? undefined : allowed
 }

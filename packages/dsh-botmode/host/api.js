@@ -8,13 +8,14 @@
  *   POST image     — upload one image attachment
  *   POST command   — one typed mutation or action
  */
-import { newId } from './store.js'
+import { join } from 'node:path'
+import { clampInt, defaultSettingsState, newId, readTextFile, writeTextFile } from './store.js'
 import { syncBotFiles, syncTeamFiles } from './persona.js'
 import { nextCronTime } from './cron.js'
 import { botModelCatalog } from './models.js'
 
 const MAX_BODY_BYTES = 256 * 1024
-const MAX_IMAGE_BYTES = 32 * 1024 * 1024
+const MAX_IMAGE_BYTES = 12 * 1024 * 1024
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
 const APPROVAL_POLICIES = ['ask', 'always', 'never']
 const PREFIX = '/botmode/api/'
@@ -27,12 +28,17 @@ const sendJson = (res, status, payload) => {
 }
 
 const readRawBody = async (req, maxBytes) => {
+  const declaredLength = Number(req.headers?.['content-length'] ?? 0)
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    req.destroy?.()
+    return undefined
+  }
   const chunks = []
   let size = 0
   for await (const chunk of req) {
     size += chunk.byteLength
     if (size > maxBytes) {
-      req.resume()
+      req.destroy?.()
       return undefined
     }
     chunks.push(chunk)
@@ -48,7 +54,17 @@ const readBody = async (req) => {
 const stringOr = (value, fallback = '') => (typeof value === 'string' ? value : fallback)
 
 export class BotApi {
-  constructor({ ctx, store, dispatcher, rooms, routines, approvals, memory, logger }) {
+  #screenSnapshot = {
+    available: false,
+    gatewayUrl: 'http://127.0.0.1:6200',
+    autoStartable: false,
+    starting: false,
+    error: '',
+    byBot: {},
+    host: null,
+  }
+
+  constructor({ ctx, store, dispatcher, rooms, routines, approvals, memory, screen, logger }) {
     this.ctx = ctx
     this.store = store
     this.dispatcher = dispatcher
@@ -56,11 +72,36 @@ export class BotApi {
     this.routines = routines
     this.approvals = approvals ?? { list: () => [], decide: async () => ({}) }
     this.memory = memory ?? null
+    this.screen = screen ?? null
     this.logger = logger
   }
 
+  async #refreshScreenSnapshot() {
+    if (!this.screen) return this.#screenSnapshot
+    const data = await this.screen.listScreens()
+    const byBot = {}
+    for (const item of data.screens || []) {
+      if (item && item.bot_id) byBot[item.bot_id] = item
+    }
+    this.#screenSnapshot = {
+      available: data.available === true,
+      gatewayUrl: data.gatewayUrl || this.screen.gatewayUrl,
+      autoStartable: Boolean(data.autoStartable),
+      starting: Boolean(data.starting),
+      error: typeof data.error === 'string' ? data.error : '',
+      host: data.host || null,
+      byBot,
+    }
+    return this.#screenSnapshot
+  }
+
   async handle(req, res) {
-    const rejection = this.ctx.get('connection')?.requestRejection?.(req)
+    const connection = this.ctx.get('connection')
+    if (!connection || typeof connection.requestRejection !== 'function') {
+      sendJson(res, 503, { ok: false, error: 'connection auth fence unavailable' })
+      return
+    }
+    const rejection = connection.requestRejection(req)
     if (rejection !== undefined) {
       sendJson(res, rejection, { ok: false, error: rejection === 401 ? 'sign-in required' : 'request refused' })
       return
@@ -75,7 +116,109 @@ export class BotApi {
       if (route === 'state' && req.method === 'GET') {
         await this.store.load()
         if (this.memory) await this.memory.ensureReady().catch(() => undefined)
+        await this.#refreshScreenSnapshot().catch(() => undefined)
         sendJson(res, 200, { ok: true, state: this.publicState() })
+        return
+      }
+      if (route === 'screen/status' && req.method === 'GET') {
+        const botId = stringOr(url.searchParams.get('botId'))
+        if (!this.screen) {
+          sendJson(res, 503, { ok: false, error: 'Screen bridge unavailable' })
+          return
+        }
+        if (botId) {
+          const status = await this.screen.getStatus(botId)
+          this.#screenSnapshot.byBot[botId] = status
+          sendJson(res, 200, { ok: true, screen: status })
+          return
+        }
+        const snap = await this.#refreshScreenSnapshot()
+        sendJson(res, 200, { ok: true, ...snap })
+        return
+      }
+      if (route === 'screen/preview' && req.method === 'GET') {
+        const botId = stringOr(url.searchParams.get('botId'))
+        if (!botId || !this.screen) {
+          sendJson(res, 404, { ok: false, error: 'unknown bot or screen unavailable' })
+          return
+        }
+        const cached = url.searchParams.get('cached') !== '0'
+        try {
+          const shot = await this.screen.preview(botId, { cached })
+          res.statusCode = 200
+          res.setHeader('content-type', shot.mimeType)
+          res.setHeader('cache-control', 'no-store')
+          if (shot.frozen) res.setHeader('x-screen-frozen', 'true')
+          res.end(shot.buffer)
+        } catch (error) {
+          sendJson(res, error?.status || 409, { ok: false, error: error instanceof Error ? error.message : String(error) })
+        }
+        return
+      }
+      if (route === 'screen/audit' && req.method === 'GET') {
+        const botId = stringOr(url.searchParams.get('botId'))
+        if (!botId || !this.screen) {
+          sendJson(res, 400, { ok: false, error: 'missing botId' })
+          return
+        }
+        const limit = Number(url.searchParams.get('limit') || 30)
+        const data = await this.screen.audit(botId, limit)
+        sendJson(res, 200, { ok: true, ...data })
+        return
+      }
+      if (route === 'screen/files' && req.method === 'GET') {
+        const botId = stringOr(url.searchParams.get('botId'))
+        if (!botId || !this.screen) {
+          sendJson(res, 400, { ok: false, error: 'missing botId' })
+          return
+        }
+        const data = await this.screen.listFiles(botId)
+        sendJson(res, 200, { ok: true, ...data })
+        return
+      }
+      if (route === 'screen/files' && req.method === 'POST') {
+        const botId = stringOr(url.searchParams.get('botId'))
+        if (!botId || !this.screen) {
+          sendJson(res, 400, { ok: false, error: 'missing botId' })
+          return
+        }
+        const body = await readRawBody(req, 32 * 1024 * 1024)
+        if (body === undefined) {
+          sendJson(res, 413, { ok: false, error: 'file too large' })
+          return
+        }
+        let name = 'upload.bin'
+        try {
+          const rawName = String(req.headers['x-file-name'] || url.searchParams.get('name') || '')
+          if (rawName) name = decodeURIComponent(rawName)
+        } catch (_e) { /* keep default */ }
+        const data = await this.screen.uploadFile(botId, name, body, String(req.headers['content-type'] || 'application/octet-stream'))
+        sendJson(res, 200, { ok: true, ...data })
+        return
+      }
+      if (route === 'screen/file' && req.method === 'GET') {
+        const botId = stringOr(url.searchParams.get('botId'))
+        const name = stringOr(url.searchParams.get('name'))
+        if (!botId || !name || !this.screen) {
+          sendJson(res, 400, { ok: false, error: 'missing botId or name' })
+          return
+        }
+        const file = await this.screen.downloadFile(botId, name)
+        res.statusCode = 200
+        res.setHeader('content-type', file.mimeType)
+        res.setHeader('content-disposition', `attachment; filename="${encodeURIComponent(name)}"`)
+        res.end(file.buffer)
+        return
+      }
+      if (route === 'screen/file' && req.method === 'DELETE') {
+        const botId = stringOr(url.searchParams.get('botId'))
+        const name = stringOr(url.searchParams.get('name'))
+        if (!botId || !name || !this.screen) {
+          sendJson(res, 400, { ok: false, error: 'missing botId or name' })
+          return
+        }
+        const data = await this.screen.deleteFile(botId, name)
+        sendJson(res, 200, { ok: true, ...data })
         return
       }
       if (route === 'models' && req.method === 'GET') {
@@ -121,6 +264,11 @@ export class BotApi {
         return
       }
       if (route === 'command' && req.method === 'POST') {
+        const ct = String(req.headers?.['content-type'] ?? '').split(';')[0].trim().toLowerCase()
+        if (ct !== 'application/json') {
+          sendJson(res, 415, { ok: false, error: 'content-type must be application/json' })
+          return
+        }
         const raw = await readBody(req)
         if (raw === undefined) {
           sendJson(res, 413, { ok: false, error: 'body too large' })
@@ -168,6 +316,8 @@ export class BotApi {
           running: runtime.running,
           stopping: runtime.stopping,
           currentSpeakerId: runtime.currentSpeakerId || '',
+          speakingBotIds: runtime.speakingBotIds || [],
+          actors: runtime.actors || [],
           members: room.memberIds.map((id) => {
             const bot = this.store.bot(id)
             return bot ? { id: bot.id, name: bot.name, role: bot.role, color: bot.color } : { id, name: id, role: '' }
@@ -179,7 +329,25 @@ export class BotApi {
         botName: this.store.bot(routine.botId)?.name ?? '',
       })),
       approvals: this.approvals ? this.approvals.list() : [],
+      questions: this.approvals && typeof this.approvals.listQuestions === 'function'
+        ? this.approvals.listQuestions()
+        : [],
+      screenHelps: this.approvals && typeof this.approvals.listScreenHelps === 'function'
+        ? this.approvals.listScreenHelps()
+        : [],
+      screens: this.#screenSnapshot.byBot,
+      screenGateway: {
+        available: this.#screenSnapshot.available,
+        gatewayUrl: this.#screenSnapshot.gatewayUrl,
+        autoStartable: this.#screenSnapshot.autoStartable,
+        starting: this.#screenSnapshot.starting,
+        error: this.#screenSnapshot.error,
+        host: this.#screenSnapshot.host,
+      },
       memory: this.memory ? this.memory.publicSummary() : null,
+      settings: state.settings ?? defaultSettingsState(),
+      usage: this.#usageSummary(state),
+      artifacts: this.#artifactsSummary(state),
       tools: (() => {
         try {
           const tools = this.ctx.get('tools')
@@ -193,6 +361,78 @@ export class BotApi {
         pid: process.pid,
       },
     }
+  }
+
+  #usageSummary(state) {
+    let totalTokens = 0
+    let totalRoomMessages = 0
+    const byRoom = []
+    for (const room of state.rooms ?? []) {
+      const tokens = Number(room.budget?.tokensUsed) || 0
+      const messages = Number(room.budget?.messages) || (room.transcript?.length ?? 0)
+      totalTokens += tokens
+      totalRoomMessages += messages
+      byRoom.push({
+        roomId: room.id,
+        name: room.name,
+        status: room.status,
+        tokensUsed: tokens,
+        tokenLimit: Number(room.budget?.tokenLimit) || 0,
+        messages: room.transcript?.length ?? 0,
+        epoch: room.epoch ?? 0,
+      })
+    }
+    return {
+      totalTokens,
+      totalRoomMessages,
+      botCount: (state.bots ?? []).length,
+      roomCount: (state.rooms ?? []).length,
+      routineCount: (state.routines ?? []).length,
+      byRoom,
+    }
+  }
+
+  #artifactsSummary(state) {
+    const items = []
+    const artifactRe = /<artifact\b([^>]*)>([\s\S]*?)<\/artifact>/gi
+    for (const room of state.rooms ?? []) {
+      if (room.completion && Array.isArray(room.completion.deliverables)) {
+        for (const path of room.completion.deliverables) {
+          items.push({
+            id: `deliv:${room.id}:${path}`,
+            kind: 'deliverable',
+            title: path,
+            type: 'file',
+            roomId: room.id,
+            roomName: room.name,
+            botId: room.completion.finishedBy || '',
+            botName: room.completion.finishedByName || '',
+            at: room.completion.at || room.updatedAt || '',
+          })
+        }
+      }
+      for (const msg of (room.transcript ?? []).slice(-100)) {
+        if (typeof msg.text !== 'string' || !msg.text.includes('<artifact')) continue
+        for (const match of msg.text.matchAll(artifactRe)) {
+          const attrs = match[1] || ''
+          const title = (/title="([^"]+)"/i.exec(attrs)?.[1] ?? /title='([^']+)'/i.exec(attrs)?.[1] ?? 'Artifact').trim()
+          const type = (/type="([^"]+)"/i.exec(attrs)?.[1] ?? /type='([^']+)'/i.exec(attrs)?.[1] ?? 'code').trim()
+          items.push({
+            id: `art:${msg.id}:${items.length}`,
+            kind: 'artifact',
+            title,
+            type,
+            roomId: room.id,
+            roomName: room.name,
+            botId: msg.from || '',
+            botName: msg.name || '',
+            preview: String(match[2] || '').trim().slice(0, 400),
+            at: msg.at || '',
+          })
+        }
+      }
+    }
+    return items.slice(-60).reverse()
   }
 
   async command(payload) {
@@ -212,12 +452,17 @@ export class BotApi {
         color: payload?.draft?.color,
         purpose: payload?.draft?.purpose,
         notes: payload?.draft?.notes,
+        workDir: payload?.draft?.workDir,
         maxRounds: payload?.draft?.maxRounds,
         maxMessages: payload?.draft?.maxMessages,
+        tokenLimit: payload?.draft?.tokenLimit,
+        idleRoundLimit: payload?.draft?.idleRoundLimit,
       })
       case 'room.delete': return this.rooms.remove(stringOr(payload.roomId))
       case 'room.send': return this.rooms.send(stringOr(payload.roomId), stringOr(payload.text))
-      case 'room.control': return this.rooms.control(stringOr(payload.roomId), stringOr(payload.action))
+      case 'room.control': return this.rooms.control(stringOr(payload.roomId), stringOr(payload.action), {
+        botId: stringOr(payload.botId),
+      })
       case 'routine.save': return this.routines.save(stringOr(payload.routineId), {
         botId: stringOr(payload.botId),
         name: payload?.name,
@@ -229,6 +474,64 @@ export class BotApi {
       case 'routine.toggle': return this.routines.setEnabled(stringOr(payload.routineId), payload?.enabled === true)
       case 'routine.run': return this.routines.runNow(stringOr(payload.routineId))
       case 'approval.decide': return this.approvals.decide(stringOr(payload.approvalId), stringOr(payload.decision))
+      case 'question.decide': return this.approvals.decideQuestion(stringOr(payload.questionId), payload.answers)
+      case 'screen.help.decide': {
+        const helpId = stringOr(payload.helpId)
+        const decision = stringOr(payload.decision, 'release')
+        const note = stringOr(payload.note)
+        const result = await this.approvals.decideScreenHelp(helpId, decision, note)
+        if (result?.botId && this.screen && decision !== 'cancel') {
+          await this.screen.release(result.botId).catch(() => undefined)
+          await this.#refreshScreenSnapshot().catch(() => undefined)
+        }
+        return result
+      }
+      case 'screen.start': {
+        const botId = stringOr(payload.botId)
+        const out = await this.#requireScreen().start(botId, Array.isArray(payload.apps) ? payload.apps : undefined)
+        await this.#refreshScreenSnapshot().catch(() => undefined)
+        return out
+      }
+      case 'screen.stop': {
+        const botId = stringOr(payload.botId)
+        const out = await this.#requireScreen().stop(botId)
+        await this.#refreshScreenSnapshot().catch(() => undefined)
+        return out
+      }
+      case 'screen.freeze': {
+        const botId = stringOr(payload.botId)
+        const out = await this.#requireScreen().freeze(botId)
+        await this.#refreshScreenSnapshot().catch(() => undefined)
+        return out
+      }
+      case 'screen.thaw': {
+        const botId = stringOr(payload.botId)
+        const out = await this.#requireScreen().thaw(botId)
+        await this.#refreshScreenSnapshot().catch(() => undefined)
+        return out
+      }
+      case 'screen.takeover': {
+        const botId = stringOr(payload.botId)
+        const out = await this.#requireScreen().takeover(botId, stringOr(payload.reason, 'human'))
+        await this.#refreshScreenSnapshot().catch(() => undefined)
+        return out
+      }
+      case 'screen.release': {
+        const botId = stringOr(payload.botId)
+        const out = await this.#requireScreen().release(botId)
+        await this.#refreshScreenSnapshot().catch(() => undefined)
+        return out
+      }
+      case 'screen.brake': {
+        const botId = stringOr(payload.botId)
+        const out = await this.#requireScreen().brake(botId)
+        await this.#refreshScreenSnapshot().catch(() => undefined)
+        return out
+      }
+      case 'screen.human_input': {
+        const botId = stringOr(payload.botId)
+        return this.#requireScreen().humanInput(botId, payload.input || payload)
+      }
       case 'memory.select': return this.#requireMemory().select(stringOr(payload.providerId))
       case 'memory.configure': return this.#requireMemory().configure({
         providerId: stringOr(payload.providerId),
@@ -246,6 +549,10 @@ export class BotApi {
       })
       case 'memory.uninstall': return this.#requireMemory().uninstall(stringOr(payload.providerId))
       case 'memory.search': return this.searchBotMemory(payload)
+      case 'settings.save': return this.saveSettings(payload)
+      case 'bot.files.read': return this.readBotFiles(payload)
+      case 'bot.files.save': return this.saveBotFiles(payload)
+      case 'logs.read': return this.readLogs(payload)
       default: throw new Error(`Unknown command "${type}".`)
     }
   }
@@ -253,6 +560,11 @@ export class BotApi {
   #requireMemory() {
     if (!this.memory) throw new Error('Memory Hub is unavailable in this Host.')
     return this.memory
+  }
+
+  #requireScreen() {
+    if (!this.screen) throw new Error('Virtual Screen bridge is unavailable in this Host.')
+    return this.screen
   }
 
   async searchBotMemory(payload) {
@@ -267,6 +579,99 @@ export class BotApi {
       limit: Number(payload.limit) || 8,
       typeFilter: stringOr(payload.typeFilter),
     })
+  }
+
+  async saveSettings(payload) {
+    const patch = payload?.settings && typeof payload.settings === 'object' ? payload.settings : payload
+    const rf = patch?.responseFormat && typeof patch.responseFormat === 'object' ? patch.responseFormat : null
+    const gc = patch?.groupChat && typeof patch.groupChat === 'object' ? patch.groupChat : null
+    let updated
+    await this.store.mutate((state) => {
+      state.settings = state.settings ?? defaultSettingsState()
+      if (rf) {
+        state.settings.responseFormat = {
+          ...state.settings.responseFormat,
+          ...(rf.enabled !== undefined ? { enabled: rf.enabled === true } : {}),
+          ...(rf.extendedMarkdown !== undefined ? { extendedMarkdown: rf.extendedMarkdown === true } : {}),
+          ...(rf.diagramsAndMath !== undefined ? { diagramsAndMath: rf.diagramsAndMath === true } : {}),
+          ...(rf.artifacts !== undefined ? { artifacts: rf.artifacts === true } : {}),
+          ...(rf.structuredCards !== undefined ? { structuredCards: rf.structuredCards === true } : {}),
+          ...(rf.multimodal !== undefined ? { multimodal: rf.multimodal === true } : {}),
+        }
+      }
+      if (gc) {
+        state.settings.groupChat = {
+          ...state.settings.groupChat,
+          ...(gc.defaultTokenLimit !== undefined
+            ? { defaultTokenLimit: clampInt(gc.defaultTokenLimit, 0, 1_000_000_000, 0) }
+            : {}),
+          ...(gc.defaultIdleRoundLimit !== undefined
+            ? { defaultIdleRoundLimit: clampInt(gc.defaultIdleRoundLimit, 1, 100, 5) }
+            : {}),
+          ...(gc.enableSoftLock !== undefined ? { enableSoftLock: gc.enableSoftLock === true } : {}),
+          ...(gc.enableErrorProbe !== undefined ? { enableErrorProbe: gc.enableErrorProbe === true } : {}),
+          ...(gc.autoProgressReview !== undefined ? { autoProgressReview: gc.autoProgressReview === true } : {}),
+          ...(gc.showActivityStrip !== undefined ? { showActivityStrip: gc.showActivityStrip === true } : {}),
+        }
+      }
+      updated = state.settings
+    })
+    return { settings: updated }
+  }
+
+  async readBotFiles(payload) {
+    const botId = stringOr(payload.botId)
+    const bot = this.store.bot(botId)
+    if (!bot) throw new Error('Unknown Bot.')
+    await this.store.ensureBotDir(bot)
+    const [soul, memoryMd] = await Promise.all([
+      readTextFile(join(bot.dir, 'SOUL.md'), ''),
+      readTextFile(join(bot.dir, 'MEMORY.md'), ''),
+    ])
+    return { botId: bot.id, dir: bot.dir, soul, memoryMd }
+  }
+
+  async saveBotFiles(payload) {
+    const botId = stringOr(payload.botId)
+    const bot = this.store.bot(botId)
+    if (!bot) throw new Error('Unknown Bot.')
+    await this.store.ensureBotDir(bot)
+    if (typeof payload.soul === 'string') {
+      await writeTextFile(join(bot.dir, 'SOUL.md'), payload.soul)
+    }
+    if (typeof payload.memoryMd === 'string') {
+      await writeTextFile(join(bot.dir, 'MEMORY.md'), payload.memoryMd)
+    }
+    if (typeof payload.instructions === 'string') {
+      await this.store.mutate((state) => {
+        const stored = state.bots.find(item => item.id === bot.id)
+        if (stored) {
+          stored.instructions = payload.instructions
+          stored.updatedAt = new Date().toISOString()
+        }
+      })
+    }
+    return { ok: true, botId: bot.id }
+  }
+
+  async readLogs(payload) {
+    const limit = clampInt(payload?.limit, 10, 200, 60)
+    const roomId = stringOr(payload?.roomId)
+    const rooms = roomId
+      ? [this.store.room(roomId)].filter(Boolean)
+      : (this.store.state.rooms ?? [])
+    const entries = []
+    for (const room of rooms) {
+      for (const act of (room.activity ?? []).slice(-limit)) {
+        entries.push({
+          roomId: room.id,
+          roomName: room.name,
+          ...act,
+        })
+      }
+    }
+    entries.sort((a, b) => Date.parse(b.at || 0) - Date.parse(a.at || 0))
+    return { entries: entries.slice(0, limit) }
   }
 
   async saveBot(payload) {
@@ -307,8 +712,8 @@ export class BotApi {
         existing.instructions = stringOr(draft.instructions, existing.instructions)
         existing.color = stringOr(draft.color, existing.color)
         existing.sectionId = sectionId
-        existing.hidden = draft.hidden === true
-        existing.pinned = draft.pinned === true
+        if (typeof draft.hidden === 'boolean') existing.hidden = draft.hidden
+        if (typeof draft.pinned === 'boolean') existing.pinned = draft.pinned
         existing.order = Number.isFinite(draft.order) ? draft.order : existing.order
         existing.model = model
         existing.tools = tools
@@ -360,6 +765,12 @@ export class BotApi {
     const bot = this.store.bot(botId)
     if (!bot) throw new Error('Unknown Bot.')
     this.dispatcher.cancel(botId)
+    // Also cancel any live hidden Group Room sessions & pending approvals owned by this Bot.
+    for (const room of this.store.state.rooms) {
+      const sid = room.memberSessions?.[botId]
+      if (sid) this.dispatcher.cancelSession?.(sid)
+    }
+    this.approvals?.cancelForBot?.(botId)
     await this.store.mutate((state) => {
       state.bots = state.bots.filter(item => item.id !== botId)
       for (const routine of state.routines) {
@@ -369,9 +780,17 @@ export class BotApi {
         room.memberIds = room.memberIds.filter(id => id !== botId)
         if (room.memberSessions) delete room.memberSessions[botId]
         if (room.watermarks) delete room.watermarks[botId]
+        for (const task of room.subtasks ?? []) {
+          if (task.ownerBotId === botId && task.status === 'in_progress') {
+            task.status = 'released'
+            task.updatedAt = new Date().toISOString()
+          }
+        }
       }
     })
     await this.store.removeBotDir(bot)
+    await this.memory?.purgeBot?.(botId)
+    await this.screen?.purge?.(botId)
     await this.syncAll()
     return { botId }
   }

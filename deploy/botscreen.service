@@ -1,0 +1,27 @@
+[Unit]
+Description=BotScreen Gateway (multi-bot virtual screens)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/opt/botscreen
+Environment=BOTSCREEN_PORT=6200
+Environment=BOTSCREEN_HOST=127.0.0.1
+Environment=BOTSCREEN_DATA_ROOT=/data/botscreen
+Environment=BOTSCREEN_BOTS=bot_01,bot_02,bot_03,bot_04
+Environment=BOTSCREEN_IDLE_FREEZE=180
+# 网关需要写 /sys/fs/cgroup/botscreen/* 才能 freeze；二选一：
+#   a) 以 root 运行（下面的 User=root 覆盖 %i）
+#   b) 保留普通用户，并给该用户 sudo NOPASSWD 执行 tee/mkdir
+# 这里默认以 root 运行，简单可靠；如需降权请删掉 User 行并配置 sudoers。
+User=root
+ExecStart=/opt/botscreen/.venv/bin/python -m botscreen
+Restart=always
+RestartSec=3
+# 网关自身不能被 botscreen cgroup 冻结，显式排除
+# （systemd 会把服务放进自己的 slice，与 /sys/fs/cgroup/botscreen 无交集）
+
+[Install]
+WantedBy=multi-user.target

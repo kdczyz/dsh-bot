@@ -1,8 +1,8 @@
 # dsh-botmode — DeepSeek Harness 的 Bot 团队模式
 
-给 DeepSeek Harness（dsh）加一个 **Bot 模式**：侧边栏一个切换入口，进入一个独立的 Bot 团队页面。每个 Bot 有自己的目录、人格、记忆、模型绑定、工具白名单和永久会话；Bot 之间可以互相派活；2–6 个 Bot 能进 Group Room 串行开会；Host 侧持久 Routines 能在会话冷却后按 cron 唤醒 Bot。
+给 DeepSeek Harness（dsh）加一个 **Bot 模式**：侧边栏一个切换入口，进入一个独立的 Bot 团队页面。每个 Bot 有自己的目录、人格、记忆、模型绑定、工具白名单和永久会话；Bot 之间可以互相派活；2–6 个 Bot 能进 Group Room 并行协作直到任务完成；Host 侧持久 Routines 能在会话冷却后按 cron 唤醒 Bot。
 
-当前版本：`0.5.0`（Host 编排 + Client 页面双半区均已落地；Hermes 风格 Group Room 多轮状态机 + 可插拔全局 Memory Hub 内置 `memory_tencentdb` + Bot 单独绑定模型、思考档位与视觉能力）。
+当前版本：`0.6.0`（Host 编排 + Client 页面双半区均已落地；Hermes 底座 + 终态驱动全异步 Actor 并发群聊 + 异常探针软暂停 + 共享任务板与路径软锁 + 可插拔全局 Memory Hub 内置 `memory_tencentdb` + Bot 单独绑定模型、思考档位与视觉能力）。
 
 ## 它解决什么
 
@@ -13,10 +13,10 @@ Hermes 的 Bot Mode 本质是「一组有身份的 agent + 一个群聊确定性
 | Bot 身份隔离 | `$DSH_HOME/botmode/bots/<slug>-<id>/` 下的 `bot.json`、`SOUL.md`、`MEMORY.md`、`.dsh/skills/team/SKILL.md`；每个 Bot 独立 `sessionId`、模型、工具策略、审批策略 |
 | 永久 Bot Chat | `botId → canonicalSessionId`，Host 通过 `sessionController` 创建/恢复；`/new`、`/reset` 在 Bot 会话里触发 `onPreCompress` 记忆检查点后做 compaction，不换会话 |
 | 队友消息 | `message_agent` 工具：会话级 FIFO、跳数护栏（默认 4 跳）、同链去重、回信降级、目标歧义拒绝、`expectReply` 回送、超 16k 落盘；群聊隐藏会话严格禁止 |
-| Group Room | 2–6 人；独立隐藏 Group Session 与私聊解耦；`auto`/`everyone`/`lead`；剥离代码块与引号的精准 `@` 解析；每成员水位线增量投喂；`(pass)`/`[NO_REPLY]` 静默与全员 pass 收敛 `settled`；可配置 `maxRounds`/`maxMessages` 熔断 `capped`；Epoch 插话打断与 `stop` 实时取消；JSONL 事件归档 |
+| Group Room | 2–6 人；独立隐藏 Group Session + 可选共享工程目录 `workDir`；全异步 `BotActor` 并发总线 + 快照水位线防漏看；`completed`（`room_finish_task` 显式终态）/ `settled`（全员 `(pass)` 自然收敛）/ `waiting_user`（`@user` 与局部审批/提问挂起）；空转 `idle_spin`、单 Bot 重复报错 `paused_error`、软 Token 预算 `token_budget` 三大探针兜底；`claim_subtask` 任务板与文件写入软锁；前端底部按 `botId` 分轨流式渲染 + `seq` 到达序固化；Soft Steer 软插话与 `stop` 强杀 |
 | 团队记忆库（Memory Hub） | 所有 Bot 共用一套可插拔记忆库插件，按 `team_id` / `agent_id (= bot.id)` / `user_id` 隔离；默认内置 `memory_tencentdb`（对接 v3 Gateway `8420` + 熔断 + 本地 SQLite FTS5 自动降级），另内置 `local_sqlite` 与 `builtin`；支持通过目录、npm、Git、tarball 或本地目录下载/安装/切换/卸载其他记忆库插件 |
 | 持久 Routines | Host 自己解析五段 cron，`setInterval` 包在 `ctx.effect()` 中；支持冷会话唤醒、手动 `Run now`、暂停/恢复 |
-| 审批 | Bot 私聊与隐藏群聊会话的 approval 请求均由 Host 桥接：`once / session / always / deny`，页面顶部出现审批条；未处理 2 分钟自动拒绝 |
+| 审批 | Bot 私聊与隐藏群聊会话的 `approval/request`（`once / session / always / deny`）及 `ask_user_question`（`user-questions/request`）均由 Host 桥接；群聊会话局部挂起不超时误杀，私聊无人值守 2 分钟自动拒绝 |
 | Sections | 分组存于 `state.json`，侧边栏按 Section 分组；Bot 表单可选 Section，可新建 Section |
 | 页面入口 | `sidebar.panellist` 图标 + 侧边栏底部 `Bot 模式` 按钮；`main` 面板 key `botmode` |
 
@@ -26,7 +26,7 @@ Hermes 的 Bot Mode 本质是「一组有身份的 agent + 一个群聊确定性
 
 ```bash
 # 在 dsh 里（或桌面端插件管理器中）把本目录作为 bundle 安装
-dsh plugin --profile desktop install /Users/a1412/Desktop/dsh-bot/packages/dsh-botmode
+dsh plugin --profile desktop install /path/to/dsh-bot/packages/dsh-botmode
 ```
 
 桌面端也可以直接用 Plugin Manager 的 `install_bundle`，target 传包目录绝对路径。安装后：
@@ -57,8 +57,9 @@ packages/dsh-botmode/
     persona.js          SOUL.md / MEMORY.md / TEAM.md / team skill 与记忆库静态块渲染
     dispatch.js         会话级 FIFO、隐藏 Group Session、模型/图片、Memory prefetch/syncTurn、message_agent 链式护栏
     models.js           实时模型目录、DSH 默认模型解析、思考档位与视觉能力
-    room-protocol.js    纯函数群聊协议：非指令文本剥离、精准 @mention、@all/@user、(pass) 归一化、顺位轮转、增量 delta
-    rooms.js            Hermes 风格 Group Room 确定性状态机（水位线、静默收敛、预算 capped、Epoch 打断、stop 取消）
+    room-protocol.js    纯函数群聊协议：非指令文本剥离、精准 @mention、零 Token Actor 路由过滤、报错指纹计算、增量 delta 与任务板注入
+    room-locks.js       共享任务板（claim_subtask）与 DSH 文件修改工具（write/edit/apply_patch/str_replace_editor）路径软锁校验
+    rooms.js            终态驱动全异步 BotActor 并发总线（快照水位线防漏看、completed/settled/waiting_user、三大异常探针、Soft Steer）
     routines.js         持久 cron 调度器（冷会话唤醒）
     cron.js             五段 cron 解析与下一次时间
     approvals.js        Bot 审批桥（覆盖私聊与隐藏群聊会话）
@@ -113,10 +114,10 @@ $DSH_HOME/botmode/
 | `bot.dispatch` | `botId`, `text`, `images?` | 入队一条用户消息；`images` 是 `/botmode/api/image` 返回的附件引用数组 |
 | `bot.stop` | `botId` | 取消当前 turn |
 | `section.save` / `section.delete` | `sectionId?`, `name` | 分组 |
-| `room.save` / `room.delete` | `roomId?`, `draft` | Group Room（含 `mode` / `purpose` / `notes` / `maxRounds` / `maxMessages`） |
-| `room.send` / `room.control` | `roomId`, `text` / `action` | 发消息（支持 Epoch 插话打断）/ `continue` `stop` |
+| `room.save` / `room.delete` | `roomId?`, `draft` | Group Room（含 `mode` / `leadBotId` / `workDir` / `purpose` / `notes` / `tokenLimit` / `idleRoundLimit` / 可选 `maxRounds` `maxMessages`） |
+| `room.send` / `room.control` | `roomId`, `text` / `action` | 发消息（默认 Soft Steer 软插话，`/stop` 强停）/ `continue` `stop` `resume_bot` |
 | `routine.save` / `routine.delete` / `routine.toggle` / `routine.run` | 见页面 | 例程 |
-| `approval.decide` | `approvalId`, `decision` | `once` `session` `always` `deny` |
+| `approval.decide` / `question.decide` | `approvalId` / `questionId`, `decision` / `answers` | 工具审批 `once` `session` `always` `deny` 与交互提问回答 |
 | `memory.select` | `providerId` | 全局热切换所有 Bot 使用的记忆库插件 |
 | `memory.configure` | `providerId?`, `teamId?`, `userId?`, `prefetchEnabled?`, `syncEnabled?`, `syncGroupRooms?`, `config?` | 更新记忆策略或插件配置并热重载 |
 | `memory.test` | `providerId?` | 探测记忆库连通性与运行模式 |
@@ -130,6 +131,8 @@ Host 注册的工具（仅 Bot 主会话或隐藏群聊会话可用）：
 
 - `message_agent({ target, message, expectReply? })`：异步队友消息（含 4 跳防环、同链去重、目标歧义校验；群聊隐藏会话禁用）。
 - `bot_team({ action: roster|me|rooms })`：名册、自己的身份（含精确 `inRoom`/`running`/`queued`）、所在 Room。
+- `claim_subtask({ taskId, title?, paths?, status? })`：群聊共享任务板认领、文件路径软锁声明与完成释放（仅群聊会话可用）。
+- `room_finish_task({ summary, deliverables?, verification?, force? })`：显式验收并结束群聊任务进入 `completed` 终态（仅群聊会话可用；配置 Lead 时仅 Lead 可调用）。
 - `memory_search` / `memory_tencentdb_memory_search`：检索当前 Bot 的 L1 原子记忆。
 - `memory_conversation_search` / `memory_tencentdb_conversation_search`：检索当前 Bot 的 L0 历史对话。
 - `memory_read_scene` / `memory_tencentdb_read_scene`：列出或读取当前 Bot 的 L2 场景块。

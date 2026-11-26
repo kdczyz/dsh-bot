@@ -13,7 +13,7 @@
  *   - `https://github.com/...`       git repository (shallow clone)
  *   - `npm:<package[@version]>`      npm package fetched via `npm pack`
  */
-import { cp, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -21,8 +21,56 @@ import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { normalizeProviderId, validatePluginManifest } from './protocol.js'
 import { getCatalogTemplate } from './catalog.js'
+import { isStrictSubpath } from '../store.js'
 
 const execFileAsync = promisify(execFile)
+const MAX_TARBALL_BYTES = 32 * 1024 * 1024
+const FETCH_TIMEOUT_MS = 15_000
+const SAFE_NPM_SPEC_RE = /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*(?:@[a-z0-9-._~^>=<*]+)?$/i
+
+const extractSafeTarball = async (tgzPath, extractDir) => {
+  const { stdout } = await execFileAsync('tar', ['-tzf', tgzPath], { timeout: 30_000 })
+  for (const rawEntry of stdout.split(/\r?\n/)) {
+    const entry = rawEntry.trim()
+    if (entry === '') continue
+    if (entry.startsWith('/') || entry.startsWith('\\') || /(^|[\\/])\.\.([\\/]|$)/.test(entry)) {
+      throw new Error(`Refused unsafe archive path "${entry}".`)
+    }
+  }
+  await execFileAsync('tar', ['--no-same-owner', '--no-same-permissions', '-xzf', tgzPath, '-C', extractDir], { timeout: 60_000 })
+}
+
+const downloadBoundedBuffer = async (url, maxBytes) => {
+  const response = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+  if (!response.ok) throw new Error(`Download failed with HTTP ${response.status}`)
+  const declared = Number(response.headers.get('content-length') ?? 0)
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    throw new Error(`Archive exceeds maximum allowed size (${Math.round(maxBytes / (1024 * 1024))} MB).`)
+  }
+  if (!response.body || typeof response.body.getReader !== 'function') {
+    const buf = Buffer.from(await response.arrayBuffer())
+    if (buf.byteLength > maxBytes) throw new Error(`Archive exceeds maximum allowed size (${Math.round(maxBytes / (1024 * 1024))} MB).`)
+    return buf
+  }
+  const reader = response.body.getReader()
+  const chunks = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => undefined)
+        throw new Error(`Archive exceeds maximum allowed size (${Math.round(maxBytes / (1024 * 1024))} MB).`)
+      }
+      chunks.push(Buffer.from(value))
+    }
+  } finally {
+    reader.releaseLock?.()
+  }
+  return Buffer.concat(chunks, total)
+}
 
 const exists = async (path) => {
   try { await stat(path); return true } catch (_error) { return false }
@@ -64,11 +112,16 @@ const loadAndValidateDir = async (dir) => {
   if (!checked.ok) throw new Error(checked.error)
   const manifest = checked.manifest
   const entryPath = resolve(dir, manifest.entry)
-  if (!entryPath.startsWith(resolve(dir))) {
+  if (!isStrictSubpath(dir, entryPath)) {
     throw new Error('Plugin entry escapes plugin directory.')
   }
   if (!await exists(entryPath)) {
     throw new Error(`Plugin entry "${manifest.entry}" not found.`)
+  }
+  const realDir = await realpath(dir)
+  const realEntry = await realpath(entryPath)
+  if (!isStrictSubpath(realDir, realEntry)) {
+    throw new Error('Plugin entry symlink escapes plugin directory.')
   }
   // Smoke-import the ESM entry to verify syntax and exported factory.
   const mod = await import(`${pathToFileURL(entryPath).href}?verify=${Date.now()}`)
@@ -109,31 +162,35 @@ export class MemoryPluginInstaller {
         await writeFile(join(pluginSourceDir, tpl.manifest.entry || 'index.js'), tpl.indexJs, 'utf8')
       } else if (source.startsWith('npm:')) {
         const pkg = source.slice('npm:'.length).trim()
-        if (pkg === '' || /[\s;&|`$]/.test(pkg)) throw new Error('Invalid npm package specifier.')
+        if (pkg === '' || pkg.startsWith('-') || !SAFE_NPM_SPEC_RE.test(pkg)) {
+          throw new Error('Invalid npm package specifier.')
+        }
         const packDir = join(stage, 'pack')
         const extractDir = join(stage, 'extract')
         await mkdir(packDir, { recursive: true })
         await mkdir(extractDir, { recursive: true })
-        const { stdout } = await execFileAsync('npm', ['pack', pkg, '--pack-destination', packDir], { timeout: 120_000 })
+        const { stdout } = await execFileAsync('npm', ['pack', '--ignore-scripts', '--pack-destination', packDir, '--', pkg], { timeout: 120_000 })
         const tgzName = stdout.trim().split(/\r?\n/).filter(Boolean).at(-1)
         if (!tgzName) throw new Error('npm pack did not produce a tarball.')
-        await execFileAsync('tar', ['-xzf', join(packDir, tgzName), '-C', extractDir], { timeout: 60_000 })
+        await extractSafeTarball(join(packDir, tgzName), extractDir)
         pluginSourceDir = await findPluginRoot(extractDir)
         if (!pluginSourceDir) throw new Error(`npm package "${pkg}" does not contain a DSH memory plugin (plugin.json missing).`)
       } else if (/^https?:\/\/.+\.(tgz|tar\.gz)(\?.*)?$/i.test(source)) {
-        const response = await fetch(source)
-        if (!response.ok) throw new Error(`Download failed with HTTP ${response.status}`)
+        const tgzBuf = await downloadBoundedBuffer(source, MAX_TARBALL_BYTES)
         const tgzPath = join(stage, 'plugin.tgz')
         const extractDir = join(stage, 'extract')
         await mkdir(extractDir, { recursive: true })
-        await writeFile(tgzPath, Buffer.from(await response.arrayBuffer()))
-        await execFileAsync('tar', ['-xzf', tgzPath, '-C', extractDir], { timeout: 60_000 })
+        await writeFile(tgzPath, tgzBuf)
+        await extractSafeTarball(tgzPath, extractDir)
         pluginSourceDir = await findPluginRoot(extractDir)
         if (!pluginSourceDir) throw new Error('Downloaded archive does not contain plugin.json.')
       } else if (/^(git\+|https?:\/\/|ssh:\/\/|git@)/i.test(source)) {
-        const repoUrl = source.startsWith('git+') ? source.slice(4) : source
+        const repoUrl = source.startsWith('git+') ? source.slice(4).trim() : source
+        if (repoUrl === '' || repoUrl.startsWith('-') || !/^(https?:\/\/|ssh:\/\/|git@)/i.test(repoUrl)) {
+          throw new Error('Invalid git repository URL.')
+        }
         const cloneDir = join(stage, 'repo')
-        await execFileAsync('git', ['clone', '--depth', '1', repoUrl, cloneDir], { timeout: 120_000 })
+        await execFileAsync('git', ['clone', '--depth', '1', '-c', 'core.symlinks=false', '--', repoUrl, cloneDir], { timeout: 120_000 })
         await rm(join(cloneDir, '.git'), { recursive: true, force: true })
         pluginSourceDir = await findPluginRoot(cloneDir)
         if (!pluginSourceDir) throw new Error('Cloned repository does not contain plugin.json.')
@@ -152,7 +209,7 @@ export class MemoryPluginInstaller {
         throw new Error(`Cannot overwrite bundled memory provider "${targetId}".`)
       }
       const targetDir = join(this.pluginsRoot, targetId)
-      if (!targetDir.startsWith(resolve(this.pluginsRoot))) {
+      if (!isStrictSubpath(this.pluginsRoot, targetDir)) {
         throw new Error('Invalid target plugin id.')
       }
       if (await exists(targetDir)) {
@@ -183,7 +240,7 @@ export class MemoryPluginInstaller {
       throw new Error(`Built-in memory provider "${id}" cannot be uninstalled.`)
     }
     const targetDir = join(this.pluginsRoot, id)
-    if (!targetDir.startsWith(resolve(this.pluginsRoot)) || !await exists(targetDir)) {
+    if (!isStrictSubpath(this.pluginsRoot, targetDir) || !await exists(targetDir)) {
       throw new Error(`Installed memory plugin "${id}" was not found.`)
     }
     await rm(targetDir, { recursive: true, force: true })

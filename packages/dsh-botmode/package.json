@@ -1,8 +1,14 @@
 {
   "name": "@local/dsh-botmode",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "test": "node test/host.test.mjs"
+  },
   "description": "Bot mode for DeepSeek Harness: isolated Bot personas, loop-guarded teammate messaging, Hermes-style Group Rooms, persistent Routines and a pluggable Team Memory Hub (built-in memory_tencentdb).",
   "exports": {
     ".": "./index.js",
@@ -13,6 +19,7 @@
   "files": [
     "index.js",
     "client.js",
+    "botscreen/**/*",
     "host/**/*.js",
     "host/**/*.json",
     "cordis.patch.yml",

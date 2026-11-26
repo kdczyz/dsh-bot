@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "botscreen": {
+      "command": "/opt/botscreen/.venv/bin/python",
+      "args": ["-m", "botscreen.mcp_server"],
+      "env": {
+        "BOTSCREEN_GATEWAY": "http://127.0.0.1:6200",
+        "BOTSCREEN_DATA_ROOT": "/data/botscreen"
+      }
+    }
+  }
+}

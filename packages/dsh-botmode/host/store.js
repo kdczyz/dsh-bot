@@ -9,11 +9,30 @@
  * a half-written state file and two concurrent commands cannot interleave.
  */
 import { readFile, writeFile, appendFile, mkdir, rename, rm, readdir, stat } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
-export const STATE_VERSION = 4
-export const ROOM_STATUSES = new Set(['idle', 'running', 'settled', 'capped', 'paused'])
+/** True ONLY when `candidatePath` resolves strictly inside `parentDir` (never equal, never sibling/escape). */
+export const isStrictSubpath = (parentDir, candidatePath) => {
+  if (typeof parentDir !== 'string' || typeof candidatePath !== 'string') return false
+  if (parentDir.trim() === '' || candidatePath.trim() === '') return false
+  const root = resolve(parentDir)
+  const target = resolve(candidatePath)
+  const rel = relative(root, target)
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+export const STATE_VERSION = 5
+export const ROOM_STATUSES = new Set([
+  'idle',
+  'running',
+  'completed',
+  'settled',
+  'waiting_user',
+  'stalled',
+  'capped',
+  'paused',
+])
 
 export const newId = (prefix) => `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 10)}`
 
@@ -29,7 +48,7 @@ export const defaultMemoryState = () => ({
   userId: 'default',
   prefetchEnabled: true,
   syncEnabled: true,
-  syncGroupRooms: true,
+  syncGroupRooms: false,
   providersConfig: {
     memory_tencentdb: {
       gatewayHost: '127.0.0.1',
@@ -48,6 +67,25 @@ export const defaultMemoryState = () => ({
   },
 })
 
+export const defaultSettingsState = () => ({
+  responseFormat: {
+    enabled: true,
+    extendedMarkdown: true, // GFM tables, Callouts (> [!TIP]), Diff blocks, <details>
+    diagramsAndMath: true,  // ```mermaid diagrams & KaTeX-style math blocks
+    artifacts: true,        // <artifact type="..." title="...">...</artifact> preview cards
+    structuredCards: true,  // ```metrics / ```card / ```file structured JSON cards
+    multimodal: true,       // inline images, audio/video & file attachment cards
+  },
+  groupChat: {
+    defaultTokenLimit: 0,
+    defaultIdleRoundLimit: 5,
+    enableSoftLock: true,
+    enableErrorProbe: true,
+    autoProgressReview: true,
+    showActivityStrip: false,
+  },
+})
+
 export const emptyState = () => ({
   version: STATE_VERSION,
   createdAt: new Date().toISOString(),
@@ -56,6 +94,7 @@ export const emptyState = () => ({
   rooms: [],
   routines: [],
   memory: defaultMemoryState(),
+  settings: defaultSettingsState(),
 })
 
 const slug = (value) => {
@@ -98,6 +137,7 @@ export class BotStore {
   #state = emptyState()
   #writeChain = Promise.resolve()
   #loaded = false
+  #loadPromise = null
 
   /** @param root - `${DSH_HOME}/botmode`, the plugin's own state root. */
   constructor(root) {
@@ -122,16 +162,24 @@ export class BotStore {
   /** Read the document once, reconciling a legacy or partial file into current fields. */
   async load() {
     if (this.#loaded) return this.#state
-    await mkdir(this.botsRoot, { recursive: true })
-    await mkdir(this.roomsRoot, { recursive: true })
-    await mkdir(this.memoryPluginsRoot, { recursive: true })
-    await mkdir(this.memoryDataRoot, { recursive: true })
-    const stored = await readJson(this.statePath)
-    if (stored !== undefined && stored !== null) {
-      this.#state = this.#normalize(stored)
+    if (this.#loadPromise) return this.#loadPromise
+    this.#loadPromise = (async () => {
+      await mkdir(this.botsRoot, { recursive: true })
+      await mkdir(this.roomsRoot, { recursive: true })
+      await mkdir(this.memoryPluginsRoot, { recursive: true })
+      await mkdir(this.memoryDataRoot, { recursive: true })
+      const stored = await readJson(this.statePath)
+      if (stored !== undefined && stored !== null) {
+        this.#state = this.#normalize(stored)
+      }
+      this.#loaded = true
+      return this.#state
+    })()
+    try {
+      return await this.#loadPromise
+    } finally {
+      this.#loadPromise = null
     }
-    this.#loaded = true
-    return this.#state
   }
 
   #normalize(stored) {
@@ -154,6 +202,32 @@ export class BotStore {
       rooms: Array.isArray(stored.rooms) ? stored.rooms.map(room => this.#normalizeRoom(room)).filter(Boolean) : [],
       routines: Array.isArray(stored.routines) ? stored.routines.map(routine => this.#normalizeRoutine(routine)).filter(Boolean) : [],
       memory: this.#normalizeMemory(stored.memory),
+      settings: this.#normalizeSettings(stored.settings),
+    }
+  }
+
+  #normalizeSettings(settings) {
+    const defaults = defaultSettingsState()
+    if (!settings || typeof settings !== 'object') return defaults
+    const rf = settings.responseFormat && typeof settings.responseFormat === 'object' ? settings.responseFormat : {}
+    const gc = settings.groupChat && typeof settings.groupChat === 'object' ? settings.groupChat : {}
+    return {
+      responseFormat: {
+        enabled: rf.enabled !== false,
+        extendedMarkdown: rf.extendedMarkdown !== false,
+        diagramsAndMath: rf.diagramsAndMath !== false,
+        artifacts: rf.artifacts !== false,
+        structuredCards: rf.structuredCards !== false,
+        multimodal: rf.multimodal !== false,
+      },
+      groupChat: {
+        defaultTokenLimit: clampInt(gc.defaultTokenLimit, 0, 1_000_000_000, defaults.groupChat.defaultTokenLimit),
+        defaultIdleRoundLimit: clampInt(gc.defaultIdleRoundLimit, 1, 100, defaults.groupChat.defaultIdleRoundLimit),
+        enableSoftLock: gc.enableSoftLock !== false,
+        enableErrorProbe: gc.enableErrorProbe !== false,
+        autoProgressReview: gc.autoProgressReview !== false,
+        showActivityStrip: gc.showActivityStrip === true,
+      },
     }
   }
 
@@ -182,7 +256,7 @@ export class BotStore {
         : defaults.userId,
       prefetchEnabled: memory.prefetchEnabled !== false,
       syncEnabled: memory.syncEnabled !== false,
-      syncGroupRooms: memory.syncGroupRooms !== false,
+      syncGroupRooms: memory.syncGroupRooms === true,
       providersConfig,
     }
   }
@@ -230,13 +304,19 @@ export class BotStore {
       ? room.transcript.filter(item => item && typeof item.text === 'string').slice(-500).map((item) => {
         const seq = Number.isFinite(item.seq) && item.seq > seqCursor ? Math.trunc(item.seq) : (seqCursor + 1)
         seqCursor = seq
+        const rawKind = item.kind
+        const kind = rawKind === 'error' || rawKind === 'system' || rawKind === 'completion'
+          ? rawKind
+          : 'message'
         return {
           seq,
           id: typeof item.id === 'string' ? item.id : newId('msg'),
           from: typeof item.from === 'string' ? item.from : 'user',
           name: typeof item.name === 'string' ? item.name : '',
           text: item.text,
-          kind: item.kind === 'error' ? 'error' : 'message',
+          kind,
+          mentions: Array.isArray(item.mentions) ? item.mentions.filter(m => typeof m === 'string') : [],
+          deliverables: Array.isArray(item.deliverables) ? item.deliverables.filter(d => typeof d === 'string') : undefined,
           epoch: Number.isFinite(item.epoch) ? Math.trunc(item.epoch) : 0,
           round: Number.isFinite(item.round) ? Math.trunc(item.round) : 0,
           at: typeof item.at === 'string' ? item.at : new Date().toISOString(),
@@ -250,23 +330,95 @@ export class BotStore {
     const activity = Array.isArray(room.activity)
       ? room.activity.filter(item => item && typeof item.kind === 'string').slice(-100)
       : []
-    // A `running` status loaded from disk belonged to a prior Host process that
-    // exited; reset it to `idle` so the UI never gets stuck in a zombie state.
+    const subtasks = Array.isArray(room.subtasks)
+      ? room.subtasks
+        .filter(item => item && typeof item.taskId === 'string' && item.taskId.trim() !== '')
+        .slice(-100)
+        .map(item => ({
+          taskId: item.taskId.trim(),
+          title: typeof item.title === 'string' ? item.title.trim() : '',
+          ownerBotId: typeof item.ownerBotId === 'string' ? item.ownerBotId : '',
+          ownerName: typeof item.ownerName === 'string' ? item.ownerName : '',
+          paths: Array.isArray(item.paths) ? item.paths.filter(p => typeof p === 'string' && p.trim() !== '') : [],
+          // Any `in_progress` subtask loaded from disk belonged to an exited Host process;
+          // release stale file locks on cold boot so teammates are never deadlocked.
+          status: item.status === 'completed' || item.status === 'released'
+            ? item.status
+            : (!this.#loaded ? 'released' : 'in_progress'),
+          updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : new Date().toISOString(),
+        }))
+      : []
+    const completion = room.completion && typeof room.completion === 'object' && typeof room.completion.summary === 'string'
+      ? {
+        summary: room.completion.summary,
+        deliverables: Array.isArray(room.completion.deliverables)
+          ? room.completion.deliverables.filter(d => typeof d === 'string')
+          : [],
+        verification: typeof room.completion.verification === 'string' ? room.completion.verification : '',
+        finishedBy: typeof room.completion.finishedBy === 'string' ? room.completion.finishedBy : '',
+        finishedByName: typeof room.completion.finishedByName === 'string' ? room.completion.finishedByName : '',
+        epoch: Number.isFinite(room.completion.epoch) ? Math.trunc(room.completion.epoch) : 0,
+        at: typeof room.completion.at === 'string' ? room.completion.at : new Date().toISOString(),
+      }
+      : null
+    // A `running` status or an in-memory `waiting_user` (approval/question) loaded from
+    // disk belonged to a prior Host process whose pending Promises were discarded on exit;
+    // recover them cleanly so the UI never gets stuck in an unresumable zombie state.
     const rawStatus = ROOM_STATUSES.has(room.status) ? room.status : 'idle'
-    const status = rawStatus === 'running' ? 'idle' : rawStatus
+    const rawPausedReason = typeof room.pausedReason === 'string' ? room.pausedReason : ''
+    let status = rawStatus === 'running' ? 'idle' : rawStatus
+    let pausedReason = rawPausedReason
+    let needsYou = room.needsYou === true
+    if (rawStatus === 'waiting_user' && (rawPausedReason === 'approval' || rawPausedReason === 'question')) {
+      status = 'stalled'
+      pausedReason = 'host_restarted'
+      needsYou = true
+    }
+    const tokenLimit = room.budget && typeof room.budget === 'object'
+      ? clampInt(room.budget.tokenLimit, 0, 1_000_000_000, 0)
+      : 0
+    const tokensUsed = room.budget && typeof room.budget === 'object'
+      ? clampInt(room.budget.tokensUsed, 0, 1_000_000_000, 0)
+      : 0
+    const tokenCheckpoint = room.budget && typeof room.budget === 'object'
+      ? clampInt(room.budget.tokenCheckpoint, 0, 1_000_000_000, tokenLimit)
+      : tokenLimit
+    const progress = room.progress && typeof room.progress === 'object'
+      ? {
+        goal: typeof room.progress.goal === 'string' ? room.progress.goal : '',
+        items: Array.isArray(room.progress.items)
+          ? room.progress.items
+            .filter(item => item && typeof item.id === 'string' && item.id.trim() !== '')
+            .slice(0, 40)
+            .map(item => ({
+              id: item.id.trim(),
+              title: typeof item.title === 'string' ? item.title.trim() : item.id.trim(),
+              owner: typeof item.owner === 'string' ? item.owner.trim() : '',
+              done: item.done === true,
+              note: typeof item.note === 'string' ? item.note.trim() : '',
+            }))
+          : [],
+        updatedBy: typeof room.progress.updatedBy === 'string' ? room.progress.updatedBy : '',
+        updatedAt: typeof room.progress.updatedAt === 'string' ? room.progress.updatedAt : '',
+      }
+      : { goal: '', items: [], updatedBy: '', updatedAt: '' }
     return {
       id: room.id,
       name: room.name,
       color: typeof room.color === 'string' ? room.color : '#d97706',
       purpose: typeof room.purpose === 'string' ? room.purpose : '',
       notes: typeof room.notes === 'string' ? room.notes : '',
+      workDir: typeof room.workDir === 'string' ? room.workDir.trim() : '',
       memberIds: Array.isArray(room.memberIds) ? room.memberIds.filter(id => typeof id === 'string').slice(0, 6) : [],
       mode: room.mode === 'everyone' || room.mode === 'lead' || room.mode === 'auto' ? room.mode : 'auto',
       leadBotId: typeof room.leadBotId === 'string' ? room.leadBotId : '',
       status,
       settledReason: typeof room.settledReason === 'string' ? room.settledReason : '',
-      needsYou: room.needsYou === true,
-      pausedReason: typeof room.pausedReason === 'string' ? room.pausedReason : '',
+      needsYou,
+      pausedReason,
+      completion,
+      subtasks,
+      progress,
       epoch: Number.isFinite(room.epoch) ? Math.max(0, Math.trunc(room.epoch)) : 0,
       nextSeq,
       transcript,
@@ -275,12 +427,27 @@ export class BotStore {
       memberSessions: normalizeStringMap(room.memberSessions),
       budget: room.budget && typeof room.budget === 'object'
         ? {
-          rounds: clampInt(room.budget.rounds, 0, 100, 0),
-          messages: clampInt(room.budget.messages, 0, 200, 0),
-          maxRounds: clampInt(room.budget.maxRounds, 1, 20, 3),
-          maxMessages: clampInt(room.budget.maxMessages, 1, 60, 10),
+          rounds: clampInt(room.budget.rounds, 0, 100_000, 0),
+          messages: clampInt(room.budget.messages, 0, 100_000, 0),
+          maxRounds: clampInt(room.budget.maxRounds, 0, 10_000, 0),
+          maxMessages: clampInt(room.budget.maxMessages, 0, 100_000, 0),
+          tokensUsed,
+          tokenLimit,
+          tokenCheckpoint,
+          idleRounds: clampInt(room.budget.idleRounds, 0, 1000, 0),
+          idleRoundLimit: clampInt(room.budget.idleRoundLimit, 1, 100, 5),
         }
-        : { rounds: 0, messages: 0, maxRounds: 3, maxMessages: 10 },
+        : {
+          rounds: 0,
+          messages: 0,
+          maxRounds: 0,
+          maxMessages: 0,
+          tokensUsed: 0,
+          tokenLimit: 0,
+          tokenCheckpoint: 0,
+          idleRounds: 0,
+          idleRoundLimit: 5,
+        },
       createdAt: typeof room.createdAt === 'string' ? room.createdAt : new Date().toISOString(),
       updatedAt: typeof room.updatedAt === 'string' ? room.updatedAt : undefined,
     }
@@ -383,8 +550,8 @@ export class BotStore {
   }
 
   async removeBotDir(bot) {
-    if (typeof bot.dir !== 'string' || bot.dir === '' || !bot.dir.startsWith(this.botsRoot)) return
-    await rm(bot.dir, { recursive: true, force: true })
+    if (typeof bot.dir !== 'string' || bot.dir === '' || !isStrictSubpath(this.botsRoot, bot.dir)) return
+    await rm(resolve(bot.dir), { recursive: true, force: true })
   }
 
   async listOrphanDirs() {

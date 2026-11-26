@@ -1,0 +1,12 @@
+[Unit]
+Description=BotScreen cgroup v2 subtree + controllers
+After=sysinit.target
+Before=botscreen.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'mkdir -p /sys/fs/cgroup/botscreen; C="$(cat /sys/fs/cgroup/cgroup.controllers)"; E=""; for x in memory pids cpu io; do case " $C " in *" $x "*) E="$E+$x ";; esac; done; [ -n "$E" ] && echo "$E" > /sys/fs/cgroup/botscreen/cgroup.subtree_control; true'
+
+[Install]
+WantedBy=multi-user.target

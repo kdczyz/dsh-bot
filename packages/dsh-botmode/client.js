@@ -197,22 +197,110 @@ window.__ModuleLoader__.load({
         'routine.create': 'Create routine',
         'group.running': 'Routing…',
         'group.speaking': '{name} speaking…',
+        'group.speakingMulti': '{n} Bots working in parallel…',
+        'group.completed': 'Completed',
         'group.settled': 'Settled',
+        'group.stalled': 'Soft-paused',
+        'group.waitingUser': 'Waiting on you',
         'group.capped': 'Capped',
         'group.needsYou': 'needs you',
         'group.budget': '{r}/{mr} rounds · {m}/{mm} msgs',
+        'group.metricsUnlimited': 'Epoch {e} · {m} msgs · {tk}k tok',
         'group.continue': 'Continue',
         'group.stop': 'Stop',
-        'group.interjectPlaceholder': 'Interject to supersede the current round…',
-        'group.pausedBudget': 'The dispatch budget is spent (capped). Continue with a fresh budget, or stop.',
-        'group.pausedMention': 'A Bot asked for a human decision.',
-        'group.actPassed': '{name} passed this round',
+        'group.workDir': 'Shared project directory (optional)',
+        'group.workDirPlaceholder': 'e.g. /path/to/repo (empty uses each Bot\'s isolated folder)',
+        'group.tokenLimit': 'Soft token checkpoint (0 = off)',
+        'group.idleRoundLimit': 'Idle spin limit (pure-text rounds)',
+        'group.maxRoundsHint': 'Max rounds (0 = until finished)',
+        'group.maxMessagesHint': 'Max messages (0 = until finished)',
+        'group.interjectPlaceholder': 'Soft steer: idle Bots respond immediately, busy Bots pick this up right after their current step (/stop to abort)…',
+        'group.pausedBudget': 'The optional round/message cap was reached. Continue with a fresh window, or stop.',
+        'group.pausedTokenBudget': 'Soft token budget checkpoint reached (all sessions & watermarks preserved). Click Continue to extend budget.',
+        'group.pausedIdleSpin': 'Detected consecutive pure-text rounds with zero tool calls, file edits, or task claims (idle spin). Continue or stop?',
+        'group.pausedBotError': 'One or more Bots paused locally after repeated identical errors. Review the log or click Continue to retry.',
+        'group.pausedTurnError': 'Bots failed to execute this round due to a model/provider error. Check model settings or click Continue to retry.',
+        'group.pausedApproval': 'A Bot is waiting on tool approval above; other parallel Bots remain unblocked.',
+        'group.pausedQuestion': 'A Bot asked an interactive question above; answer it to resume that branch.',
+        'group.pausedMention': 'A Bot asked for a human decision (@user). Reply below or click Continue.',
+        'group.liveZone': 'Live parallel tracks ({n})',
+        'group.actorRunning': 'Working',
+        'group.actorApproval': 'Waiting approval',
+        'group.actorQuestion': 'Waiting answer',
+        'group.actorPausedError': 'Fault paused',
+        'group.resumeBot': 'Resume Bot',
+        'group.taskBoard': 'Shared task board & file soft-locks',
+        'group.completedBanner': 'Task completed by @{name}',
+        'group.deliverables': 'Deliverables',
+        'group.actPassed': '{name} passed (silent)',
+        'group.actCompleted': '{name} finished the task',
         'group.actSettled': 'Discussion settled naturally ({reason})',
-        'group.actCapped': 'Reached budget cap ({reason})',
-        'group.actCancelled': 'Previous round cancelled ({reason})',
-        'group.actContinued': 'Budget extended by user',
+        'group.actStalled': 'Soft-paused by probe ({reason})',
+        'group.actCapped': 'Reached cap ({reason})',
+        'group.actCancelled': 'Stopped ({reason})',
+        'group.actSoftSteer': 'Soft-steered into new epoch',
+        'group.actContinued': 'Resumed by user',
         'group.actEscalation': '{name} asked for human input',
+        'group.actBotError': '{name} paused after 3 identical errors',
+        'group.actSubtaskClaim': '{name} claimed {taskId}',
+        'group.actSubtaskDone': '{name} completed {taskId}',
+        'group.mentionAll': 'Everyone',
+        'group.mentionAllSub': 'Notify all Bots in this room',
+        'group.mentionPickTitle': 'Mention a Bot',
+        'group.mentionBtnTitle': 'Insert @ mention',
+        'group.mentionHint': '↑↓ select · Enter insert · Esc close',
+        'question.customPlaceholder': 'Optional custom note or write-in answer…',
+        'question.submit': 'Submit answer',
+        'question.dismiss': 'Dismiss',
         'pane.memory': 'Memory Hub',
+        'pane.settings': 'Settings',
+        'settings.title': 'Bot Settings',
+        'settings.back': 'Overview',
+        'settings.groupWork': 'Work',
+        'settings.groupAgent': 'Agent',
+        'settings.groupAdvanced': 'Advanced',
+        'settings.model': 'Model',
+        'settings.skills': 'Skills',
+        'settings.tools': 'Toolset',
+        'settings.workspace': 'Workspace',
+        'settings.routines': 'Routines',
+        'settings.artifacts': 'Artifacts',
+        'settings.rooms': 'Group Chat',
+        'settings.soul': 'Soul',
+        'settings.memory': 'Memory',
+        'settings.format': 'Response Format',
+        'settings.usage': 'Usage',
+        'settings.approval': 'Approval Policy',
+        'settings.integrations': 'Plugins & Tools',
+        'settings.logs': 'Logs',
+        'settings.save': 'Save changes',
+        'settings.saved': 'Saved.',
+        'settings.noBot': 'Create a Bot first to edit Bot-level settings.',
+        'settings.allTools': 'All tools',
+        'settings.formatDesc': 'Modularly control the modern rich-media output protocol injected into Bots and rendered in chat.',
+        'settings.fmtEnable': 'Inject Response Format Protocol into Bot prompts',
+        'settings.fmtExtMd': 'Extended Markdown (GFM tables, Callouts, Diff, collapsible <details>)',
+        'settings.fmtDiagrams': 'Diagrams & Math (Mermaid visual flowcards & LaTeX math)',
+        'settings.fmtArtifacts': 'Structured Artifacts (<artifact> preview & HTML sandbox cards)',
+        'settings.fmtCards': 'Structured UI Cards (```metrics, ```card, ```file JSON blocks)',
+        'settings.fmtMultimodal': 'Multimodal Outputs (inline images, audio & file attachment cards)',
+        'settings.fmtPreview': 'Live format preview',
+        'settings.gcTokenLimit': 'Default soft Token checkpoint (0 = off)',
+        'settings.gcIdleLimit': 'Default idle spin limit (pure-text rounds)',
+        'settings.gcSoftLock': 'Enable silent file-write soft-lock guard in Group Rooms',
+        'settings.gcErrorProbe': 'Enable per-Bot repeated error pause probe (3x identical error)',
+        'settings.gcAutoReview': 'Auto progress review & completion skill (Lead checks progress and calls room_finish_task)',
+        'settings.gcActivityStrip': 'Show compact activity chips below Group Chat',
+        'settings.soulHint': 'Edit this Bot\'s identity, standing instructions and SOUL.md file directly.',
+        'settings.memoryMdTitle': 'Long-term notes (MEMORY.md)',
+        'settings.artifactsEmpty': 'No deliverables or <artifact> outputs recorded yet.',
+        'settings.logsEmpty': 'No activity logs yet.',
+        'settings.logsRefresh': 'Refresh logs',
+        'rich.preview': 'Preview',
+        'rich.source': 'Source',
+        'rich.download': 'Download',
+        'rich.diagram': 'Diagram',
+        'rich.copyPath': 'Copy path',
         'memory.title': 'Team Memory Hub',
         'memory.subtitle': 'One pluggable memory provider shared across all Bots, isolated per Bot by agent_id. Switch built-in providers or download new ones.',
         'memory.test': 'Test health',
@@ -250,6 +338,40 @@ window.__ModuleLoader__.load({
         'memory.searchPlaceholder': 'Query memories for the selected Bot…',
         'memory.searchBtn': 'Search',
         'memory.searchEmpty': 'No matching memories.',
+        'screen.title': 'Screen',
+        'screen.stopped': 'Screen is off',
+        'screen.offline': 'Gateway offline (click Start to auto-launch)',
+        'screen.starting': 'Starting screen gateway…',
+        'screen.hostOutdated': 'Restart dsh web to load updated Host plugin',
+        'screen.refreshHost': 'Re-check',
+        'screen.active': 'Running',
+        'screen.frozen': 'Frozen · CPU 0%',
+        'screen.needHuman': 'Needs human help',
+        'screen.takeoverState': 'Human in control',
+        'screen.start': 'Start →',
+        'screen.thaw': 'Wake →',
+        'screen.freeze': 'Freeze',
+        'screen.takeover': 'Take over',
+        'screen.release': 'Hand back',
+        'screen.brake': 'Brake',
+        'screen.browser': 'Browser',
+        'screen.terminal': 'Terminal',
+        'screen.files': 'Screen files',
+        'screen.filesEmpty': 'No files in screen downloads.',
+        'screen.upload': 'Upload',
+        'screen.panelToggle': 'Screen & Routines',
+        'screen.helpTitle': 'Human takeover needed',
+        'screen.helpOpen': 'Take over screen',
+        'screen.helpRelease': 'Done & hand back',
+        'screen.helpCancel': 'Cancel',
+        'screen.helpNotePlaceholder': 'Optional note for the Bot (e.g. Logged in, continue)…',
+        'screen.modalHint': 'Click or scroll directly on the canvas to interact, or open full VNC.',
+        'screen.typePlaceholder': 'Type text / password to send to screen…',
+        'screen.typeSend': 'Send',
+        'screen.openVnc': 'Open VNC window',
+        'screen.routinesEmptyTitle': 'No scheduled tasks',
+        'screen.routinesEmptyDesc': 'Schedule a prompt by cron expression. This Bot will run it in its workspace & screen and report here.',
+        'screen.routinesNew': 'New scheduled task',
       },
       zh: {
         'meta.title': 'Bot 模式',
@@ -431,24 +553,112 @@ window.__ModuleLoader__.load({
         'routine.promptPlaceholder': '例程触发时这个 Bot 要做什么？',
         'routine.hint': 'Host 自己计算 cron，重启后也会唤醒 Bot。例如：0 9 * * 1-5。',
         'routine.create': '创建例程',
-        'group.running': '调度中…',
-        'group.speaking': '{name} 发言中…',
-        'group.settled': '已收敛',
+        'group.running': '并行调度中…',
+        'group.speaking': '{name} 执行中…',
+        'group.speakingMulti': '{n} 个 Bot 并行协作中…',
+        'group.completed': '任务已完成',
+        'group.settled': '已静默收敛',
+        'group.stalled': '异常软暂停',
+        'group.waitingUser': '等待你确认',
         'group.capped': '已达上限',
         'group.needsYou': '需要你',
         'group.budget': '{r}/{mr} 轮 · {m}/{mm} 条',
-        'group.continue': '继续',
+        'group.metricsUnlimited': '纪元 {e} · {m} 条发言 · {tk}k Token',
+        'group.continue': '继续执行',
         'group.stop': '停止',
-        'group.interjectPlaceholder': '随时插话：新消息将打断旧轮次并开启新纪元…',
-        'group.pausedBudget': '已达到本轮上限（capped）。可点击继续追加预算，或停止。',
-        'group.pausedMention': '有 Bot 请求人类决定。',
-        'group.actPassed': '{name} 本轮已跳过 (pass)',
-        'group.actSettled': '讨论已自然收敛（{reason}）',
-        'group.actCapped': '已触发预算熔断（{reason}）',
-        'group.actCancelled': '旧轮次已取消（{reason}）',
-        'group.actContinued': '用户已继续扩展预算',
-        'group.actEscalation': '{name} 请求人类介入',
+        'group.workDir': '共享工程目录（可选，用于多 Bot 协同改代码）',
+        'group.workDirPlaceholder': '例如：/home/ubuntu/project（留空则使用各 Bot 独立目录）',
+        'group.tokenLimit': '软 Token 安全阀检查点（0 为关闭）',
+        'group.idleRoundLimit': '连续纯文本空转阈值（轮）',
+        'group.maxRoundsHint': '轮次上限（0 = 直到任务完成）',
+        'group.maxMessagesHint': '消息上限（0 = 直到任务完成）',
+        'group.interjectPlaceholder': '软插话补充要求：空闲 Bot 立即并行响应，忙碌 Bot 跑完当前工具步后自动吸纳（发 /stop 全局强杀）…',
+        'group.pausedBudget': '已达到可选轮次/消息上限（capped）。点击「继续执行」追加窗口，或停止。',
+        'group.pausedTokenBudget': '已触发软预算检查点（全部会话与水位线完好保留）。点击「继续执行」自动追加预算无损续跑。',
+        'group.pausedIdleSpin': '连续空转探针触发：连续多轮全员仅纯文本回复，零工具调用、零文件变更、零任务认领。是否继续？',
+        'group.pausedBotError': '重复报错探针触发：有成员连续 3 次返回相同错误已局部暂停。请查看排障提示或点击「继续执行」恢复。',
+        'group.pausedTurnError': '本轮模型/提供方调用全部出错，未产生有效回复（不会伪装为已收敛）。请检查模型配置或点击「继续执行」重试。',
+        'group.pausedApproval': '有成员正在等待上方工具审批（局部挂起，不阻塞其他并行成员）。',
+        'group.pausedQuestion': '有成员正在等待你回答上方的提问（ask_user_question）。',
+        'group.pausedMention': '有 Bot 显式 @user 请求人类决策，请直接回复或点击「继续执行」。',
+        'group.liveZone': '正在并行执行 / 输入区（{n} 轨）',
+        'group.actorRunning': '执行中',
+        'group.actorApproval': '等待审批',
+        'group.actorQuestion': '等待回答',
+        'group.actorPausedError': '重复报错已暂停',
+        'group.resumeBot': '恢复该成员',
+        'group.taskBoard': '共享任务板与文件写入租约',
+        'group.completedBanner': '任务已由 @{name} 验收完成',
+        'group.deliverables': '交付物',
+        'group.actPassed': '{name} 已确认无补充 (pass)',
+        'group.actCompleted': '{name} 已调用 room_finish_task 完成任务',
+        'group.actSettled': '全员静默自然收敛（{reason}）',
+        'group.actStalled': '异常探针软暂停（{reason}）',
+        'group.actCapped': '达到可选上限（{reason}）',
+        'group.actCancelled': '已停止（{reason}）',
+        'group.actSoftSteer': '人类软插话开启新纪元',
+        'group.actContinued': '用户已恢复继续运行',
+        'group.actEscalation': '{name} @user 请求人类决策',
+        'group.actBotError': '{name} 连续 3 次相同报错已局部暂停',
+        'group.actSubtaskClaim': '{name} 认领了子任务 {taskId}',
+        'group.actSubtaskDone': '{name} 完成了子任务 {taskId}',
+        'group.mentionAll': '所有人',
+        'group.mentionAllSub': '通知群内全部 Bot 协作响应',
+        'group.mentionPickTitle': '选择要 @ 的 Bot',
+        'group.mentionBtnTitle': '选择并 @ 成员',
+        'group.mentionHint': '↑↓ 切换 · Enter 填充 · Esc 关闭',
+        'question.customPlaceholder': '补充说明或自定义回答（可选）…',
+        'question.submit': '提交回答',
+        'question.dismiss': '取消提问',
         'pane.memory': '记忆库',
+        'pane.settings': '设置',
+        'settings.title': 'Bot 设置',
+        'settings.back': '返回概览',
+        'settings.groupWork': '工作',
+        'settings.groupAgent': '智能体',
+        'settings.groupAdvanced': '高级',
+        'settings.model': '模型',
+        'settings.skills': '技能',
+        'settings.tools': '工具集',
+        'settings.workspace': '项目与工作区',
+        'settings.routines': '例程',
+        'settings.artifacts': '产物',
+        'settings.rooms': '群聊策略',
+        'settings.soul': 'Soul',
+        'settings.memory': '记忆',
+        'settings.format': '回复格式',
+        'settings.usage': '用量',
+        'settings.approval': '审批与权限',
+        'settings.integrations': '插件与集成',
+        'settings.logs': '日志',
+        'settings.save': '保存配置',
+        'settings.saved': '已保存。',
+        'settings.noBot': '请先新建至少一个 Bot，即可编辑 Bot 级配置。',
+        'settings.allTools': '全部工具',
+        'settings.formatDesc': '按模块配置注入到 Bot 的现代富媒体回复格式协议与前端渲染能力。',
+        'settings.fmtEnable': '向 Bot 系统提示词注入回复格式规范',
+        'settings.fmtExtMd': '基础扩展 Markdown（GFM 表格、Callouts 提示框、Diff 对比、可折叠 <details>）',
+        'settings.fmtDiagrams': '图表与公式（Mermaid 流程图卡片与数学公式排版）',
+        'settings.fmtArtifacts': '结构化语义标签（<artifact> 独立预览卡与 HTML 沙盒预览）',
+        'settings.fmtCards': '结构化 UI 卡片（```metrics 指标卡、```card 信息卡、```file 产物卡）',
+        'settings.fmtMultimodal': '多模态原生输出（内联图片、音频播放器与文件下载卡）',
+        'settings.fmtPreview': '富媒体渲染效果预览',
+        'settings.gcTokenLimit': '新群默认软 Token 安全阀（0 为不限）',
+        'settings.gcIdleLimit': '新群默认连续纯文本空转阈值（轮）',
+        'settings.gcSoftLock': '启用群聊底层文件写入路径软锁（静默防撞车）',
+        'settings.gcErrorProbe': '启用单 Bot 连续 3 次重复报错局部暂停探针',
+        'settings.gcAutoReview': '启用全自动进度复核与收口 Skill（协作收尾时自动检查进度并调用 room_finish_task 结束）',
+        'settings.gcActivityStrip': '在群聊底部显示状态活动标签条',
+        'settings.soulHint': '直接配置该 Bot 的基础身份、常驻指令及磁盘 SOUL.md 人格档案。',
+        'settings.memoryMdTitle': '长期记忆笔记（MEMORY.md）',
+        'settings.artifactsEmpty': '还没有记录到群聊交付物或 <artifact> 产物。',
+        'settings.logsEmpty': '暂无运行日志。',
+        'settings.logsRefresh': '刷新日志',
+        'rich.preview': '预览',
+        'rich.source': '源码',
+        'rich.download': '下载',
+        'rich.diagram': '图表',
+        'rich.copyPath': '复制路径',
         'memory.title': '团队记忆库（Memory Hub）',
         'memory.subtitle': '所有 Bot 共用一套可插拔记忆库插件，按 agent_id 为每个 Bot 隔离记忆。默认内置 Memory_tencentdb，支持下载与随时切换其他记忆库。',
         'memory.test': '检测连接',
@@ -486,6 +696,40 @@ window.__ModuleLoader__.load({
         'memory.searchPlaceholder': '输入关键词，测试该 Bot 独立空间的记忆检索…',
         'memory.searchBtn': '检索',
         'memory.searchEmpty': '未检索到匹配记忆。',
+        'screen.title': '屏幕',
+        'screen.stopped': '屏幕已关闭',
+        'screen.offline': '虚拟屏服务未启动（点启动将自动拉起）',
+        'screen.starting': '正在启动虚拟屏服务…',
+        'screen.hostOutdated': 'Host 插件未重载（请重启当前 dsh web）',
+        'screen.refreshHost': '刷新检测',
+        'screen.active': '运行中',
+        'screen.frozen': '已冻结 · CPU 0%',
+        'screen.needHuman': '等待人工接管',
+        'screen.takeoverState': '人工接管中',
+        'screen.start': '启动 →',
+        'screen.thaw': '唤醒 →',
+        'screen.freeze': '冻结',
+        'screen.takeover': '接管',
+        'screen.release': '交还',
+        'screen.brake': '制动',
+        'screen.browser': '浏览器',
+        'screen.terminal': '终端',
+        'screen.files': '屏内文件中转',
+        'screen.filesEmpty': '虚拟屏 downloads 目录暂无文件。',
+        'screen.upload': '上传文件',
+        'screen.panelToggle': '屏幕与任务栏',
+        'screen.helpTitle': '遇到阻塞，请求人工接管',
+        'screen.helpOpen': '接管屏幕处理',
+        'screen.helpRelease': '处理完成，交还 Bot',
+        'screen.helpCancel': '取消',
+        'screen.helpNotePlaceholder': '可选备注（如：已完成验证码/登录，请继续）…',
+        'screen.modalHint': '可直接在画面上点击、双击、滚轮或输入文本；本地也可点右侧打开完整 VNC 窗口。',
+        'screen.typePlaceholder': '输入要发送到屏幕的文本或密码…',
+        'screen.typeSend': '发送',
+        'screen.openVnc': '新窗口 VNC',
+        'screen.routinesEmptyTitle': '暂无排程任务',
+        'screen.routinesEmptyDesc': '按 cron 表达式排程一个提示词。Bot 会自动在工作区与虚拟屏中运行并汇报结果。',
+        'screen.routinesNew': '新建定时任务',
       },
     }
 
@@ -973,9 +1217,166 @@ window.__ModuleLoader__.load({
         background: var(--dsw-alias-label-error); color: #fff; }
       .bm-status-pill { font-size: 10.5px; line-height: 16px; padding: 1px 8px; border-radius: 999px;
         border: 0.5px solid var(--dsw-alias-border-l3); color: var(--dsw-alias-label-secondary); white-space: nowrap; }
+      .bm-status-pill[data-kind='completed'] { color: #16a34a; border-color: color-mix(in srgb, #16a34a 50%, transparent); background: color-mix(in srgb, #16a34a 10%, transparent); font-weight: 600; }
       .bm-status-pill[data-kind='settled'] { color: #2f9e6e; border-color: color-mix(in srgb, #2f9e6e 45%, transparent); }
-      .bm-status-pill[data-kind='capped'] { color: #d97706; border-color: color-mix(in srgb, #d97706 45%, transparent); }
+      .bm-status-pill[data-kind='stalled'], .bm-status-pill[data-kind='capped'] { color: #d97706; border-color: color-mix(in srgb, #d97706 45%, transparent); }
+      .bm-status-pill[data-kind='waiting_user'] { color: #ea580c; border-color: color-mix(in srgb, #ea580c 45%, transparent); }
       .bm-status-pill[data-kind='running'] { color: var(--dsw-alias-brand-primary); border-color: var(--dsw-alias-border-selected); }
+      .bm-taskboard { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 8px 16px;
+        border-bottom: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); }
+      .bm-taskboard-title { font-size: 10.5px; line-height: 14px; font-weight: 600; color: var(--dsw-alias-label-tertiary);
+        letter-spacing: 0.03em; text-transform: uppercase; }
+      .bm-taskboard-list { display: flex; flex-wrap: wrap; gap: 6px; }
+      .bm-task-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; line-height: 16px;
+        padding: 2px 8px; border-radius: 6px; border: 0.5px solid var(--dsw-alias-border-l3); background: var(--dsw-alias-card-fill); }
+      .bm-task-chip[data-status='in_progress'] { border-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 45%, transparent); }
+      .bm-task-chip[data-status='completed'] { opacity: 0.72; border-color: color-mix(in srgb, #2f9e6e 40%, transparent); }
+      .bm-task-paths { font-family: var(--dsw-font-mono, ui-monospace, monospace); font-size: 10px; color: var(--dsw-alias-label-tertiary); }
+      .bm-msg-completion { align-self: stretch; max-width: 880px; border-radius: 10px; padding: 12px 14px;
+        border: 1px solid color-mix(in srgb, #16a34a 45%, transparent);
+        background: color-mix(in srgb, #16a34a 8%, var(--dsw-alias-card-fill)); display: flex; flex-direction: column; gap: 6px; }
+      .bm-msg-completion-head { font-size: 12px; font-weight: 600; color: #16a34a; display: flex; align-items: center; gap: 6px; }
+      .bm-msg-deliverables { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+      .bm-msg-system { align-self: stretch; max-width: 880px; border-radius: 8px; padding: 8px 12px; font-size: 12px; line-height: 18px;
+        border: 0.5px solid color-mix(in srgb, #d97706 45%, transparent);
+        background: color-mix(in srgb, #d97706 8%, var(--dsw-alias-bg-layer-1)); color: var(--dsw-alias-label-secondary); }
+      .bm-ephemeral-zone { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px 16px;
+        border-top: 0.5px solid var(--dsw-alias-border-l2); background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 75%, transparent);
+        max-height: 260px; overflow: auto; }
+      .bm-ephemeral-title { font-size: 10.5px; line-height: 14px; font-weight: 600; letter-spacing: 0.03em;
+        text-transform: uppercase; color: var(--dsw-alias-label-tertiary); display: flex; align-items: center; gap: 6px; }
+      .bm-ephemeral-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; }
+      .bm-ephemeral-card { border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 9px; padding: 9px 11px;
+        background: var(--dsw-alias-card-fill); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+      .bm-ephemeral-card[data-state='waiting_approval'], .bm-ephemeral-card[data-state='waiting_question'] {
+        border-color: color-mix(in srgb, #d97706 55%, transparent); }
+      .bm-ephemeral-card[data-state='paused_error'] { border-color: color-mix(in srgb, var(--dsw-alias-label-error) 55%, transparent); }
+      .bm-ephemeral-head { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+      .bm-ephemeral-badge { margin-left: auto; font-size: 10px; line-height: 15px; padding: 1px 6px; border-radius: 999px;
+        background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-secondary); white-space: nowrap; }
+      .bm-qcard { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: var(--dsw-radius-md);
+        border: 0.5px solid var(--dsw-alias-border-selected); background: var(--dsw-alias-bg-layer-1); }
+      .bm-qitem { display: flex; flex-direction: column; gap: 5px; }
+      .bm-qtitle { font-size: 12.5px; font-weight: 600; color: var(--dsw-alias-label-primary); }
+      /* Rich Media Output Styles (Tables, Callouts, Details, Diff, Mermaid, Math, Artifacts, Cards) */
+      .bm-table-wrap { overflow-x: auto; margin: 8px 0; border-radius: 8px; border: 0.5px solid var(--dsw-alias-border-l2); }
+      .bm-table { width: 100%; border-collapse: collapse; font-size: 12.5px; line-height: 18px; }
+      .bm-table th, .bm-table td { padding: 7px 10px; border-bottom: 0.5px solid var(--dsw-alias-border-l2); text-align: left; }
+      .bm-table th { background: var(--dsw-alias-bg-layer-1); font-weight: 600; color: var(--dsw-alias-label-primary); }
+      .bm-table tr:last-child td { border-bottom: 0; }
+      .bm-table tr:hover td { background: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 55%, transparent); }
+      .bm-callout { margin: 8px 0; padding: 9px 12px; border-radius: 8px; border-left: 3px solid var(--dsw-alias-brand-primary);
+        background: color-mix(in srgb, var(--dsw-alias-brand-primary) 7%, var(--dsw-alias-bg-layer-1)); display: flex; flex-direction: column; gap: 4px; }
+      .bm-callout[data-tone='tip'] { border-left-color: #16a34a; background: color-mix(in srgb, #16a34a 8%, var(--dsw-alias-bg-layer-1)); }
+      .bm-callout[data-tone='important'] { border-left-color: #7c3aed; background: color-mix(in srgb, #7c3aed 8%, var(--dsw-alias-bg-layer-1)); }
+      .bm-callout[data-tone='warning'] { border-left-color: #d97706; background: color-mix(in srgb, #d97706 9%, var(--dsw-alias-bg-layer-1)); }
+      .bm-callout[data-tone='caution'] { border-left-color: #dc2626; background: color-mix(in srgb, #dc2626 9%, var(--dsw-alias-bg-layer-1)); }
+      .bm-callout-head { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dsw-alias-label-primary); }
+      .bm-details { margin: 8px 0; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-layer-1); overflow: hidden; }
+      .bm-details > summary { padding: 7px 11px; cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--dsw-alias-label-secondary); user-select: none; }
+      .bm-details > summary:hover { color: var(--dsw-alias-label-primary); }
+      .bm-details-body { padding: 8px 12px 10px; border-top: 0.5px solid var(--dsw-alias-border-l2); }
+      .bm-diff-line { display: block; padding: 0 6px; margin: 0 -6px; }
+      .bm-diff-line[data-diff='add'] { background: color-mix(in srgb, #16a34a 18%, transparent); color: #15803d; }
+      .bm-diff-line[data-diff='del'] { background: color-mix(in srgb, #dc2626 18%, transparent); color: #b91c1c; }
+      .bm-diff-line[data-diff='hunk'] { background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent); color: var(--dsw-alias-brand-primary); }
+      .bm-math-block { margin: 8px 0; padding: 10px 14px; border-radius: 8px; background: var(--dsw-alias-bg-layer-1);
+        border: 0.5px solid var(--dsw-alias-border-l2); font-family: Georgia, Cambria, 'Times New Roman', serif;
+        font-size: 14px; text-align: center; overflow-x: auto; color: var(--dsw-alias-label-primary); }
+      .bm-math-inline { font-family: Georgia, Cambria, 'Times New Roman', serif; font-style: italic;
+        padding: 0 4px; border-radius: 4px; background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 80%, transparent); }
+      .bm-artifact { margin: 10px 0; border: 0.5px solid var(--dsw-alias-border-selected); border-radius: 10px;
+        overflow: hidden; background: var(--dsw-alias-card-fill); }
+      .bm-artifact-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+        background: var(--dsw-alias-bg-layer-1); border-bottom: 0.5px solid var(--dsw-alias-border-l2); }
+      .bm-artifact-type { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 5px;
+        background: color-mix(in srgb, var(--dsw-alias-brand-primary) 16%, transparent); color: var(--dsw-alias-brand-primary); }
+      .bm-artifact-title { font-size: 12.5px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .bm-artifact-body { padding: 10px 12px; max-height: 420px; overflow: auto; }
+      .bm-artifact-iframe { width: 100%; height: 280px; border: 0; border-radius: 6px; background: #fff; }
+      .bm-mermaid-viz { padding: 12px; overflow-x: auto; display: flex; flex-direction: column; gap: 8px; }
+      .bm-mermaid-edge { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+      .bm-mermaid-node { padding: 4px 10px; border-radius: 7px; border: 0.5px solid var(--dsw-alias-border-selected);
+        background: color-mix(in srgb, var(--dsw-alias-brand-primary) 8%, var(--dsw-alias-card-fill)); font-weight: 500; }
+      .bm-mermaid-arrow { font-size: 11px; color: var(--dsw-alias-label-tertiary); display: inline-flex; align-items: center; gap: 4px; }
+      .bm-metrics-card, .bm-struct-card, .bm-file-card { margin: 8px 0; padding: 11px 13px; border-radius: 10px;
+        border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); display: flex; flex-direction: column; gap: 8px; }
+      .bm-metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+      .bm-metric-tile { padding: 8px 10px; border-radius: 8px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-card-fill); }
+      .bm-metric-label { font-size: 11px; color: var(--dsw-alias-label-tertiary); }
+      .bm-metric-val { font-size: 18px; font-weight: 700; line-height: 24px; color: var(--dsw-alias-label-primary); margin-top: 2px; }
+      .bm-metric-delta { font-size: 11px; color: var(--dsw-alias-label-secondary); }
+      .bm-metric-tile[data-tone='ok'] .bm-metric-delta { color: #16a34a; }
+      .bm-metric-tile[data-tone='warn'] .bm-metric-delta { color: #d97706; }
+      .bm-metric-tile[data-tone='err'] .bm-metric-delta { color: var(--dsw-alias-label-error); }
+      .bm-file-row { display: flex; align-items: center; gap: 10px; }
+      .bm-file-icon { width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
+        background: color-mix(in srgb, var(--dsw-alias-brand-primary) 14%, transparent); color: var(--dsw-alias-brand-primary); font-weight: 700; font-size: 11px; flex: none; }
+      .bm-inline-img { max-width: 100%; max-height: 320px; border-radius: 8px; border: 0.5px solid var(--dsw-alias-border-l2); margin: 4px 0; display: block; }
+      .bm-msg-streaming { border-color: color-mix(in srgb, var(--dsw-alias-brand-primary) 45%, var(--dsw-alias-border-l2)); }
+      /* Colored @mention pill cards & upward @ Bot picker */
+      .bm-mention-pill { --bm-mc: var(--dsw-alias-brand-primary); display: inline-flex; align-items: center; gap: 4px;
+        padding: 0 7px; margin: 0 2px; border-radius: 6px; font-size: 0.92em; line-height: 1.55; font-weight: 600;
+        vertical-align: baseline; white-space: nowrap;
+        color: var(--bm-mc);
+        border: 1px solid color-mix(in srgb, var(--bm-mc) 48%, transparent);
+        background: color-mix(in srgb, var(--bm-mc) 13%, var(--dsw-alias-card-fill));
+        box-shadow: 0 1px 2px color-mix(in srgb, var(--bm-mc) 12%, transparent); }
+      .bm-mention-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--bm-mc); flex: none; }
+      .bm-mention-rm { appearance: none; border: 0; background: transparent; color: inherit; opacity: 0.7;
+        font: inherit; font-size: 13px; line-height: 1; padding: 0 0 0 2px; cursor: pointer; }
+      .bm-mention-rm:hover { opacity: 1; }
+      .bm-compose-wrap { position: relative; flex: none; border-top: 0.5px solid var(--dsw-alias-border-l2); }
+      .bm-compose-wrap .bm-compose { border-top: 0; }
+      .bm-compose-mentions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px 0; }
+      .bm-mention-btn { flex: none; height: 34px; min-width: 34px; padding: 0 8px; font-weight: 700; font-size: 14px; }
+      .bm-mention-pop { position: absolute; bottom: calc(100% + 6px); left: 12px; width: min(340px, calc(100% - 24px));
+        max-height: 260px; overflow: auto; z-index: 45; border-radius: 11px; padding: 5px;
+        border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-card-fill);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22); display: flex; flex-direction: column; gap: 2px; }
+      .bm-mention-pop-head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        padding: 4px 8px 5px; font-size: 10.5px; color: var(--dsw-alias-label-tertiary);
+        border-bottom: 0.5px solid var(--dsw-alias-border-l2); margin-bottom: 2px; }
+      .bm-mention-opt { appearance: none; border: 0; background: transparent; font: inherit; width: 100%;
+        display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; cursor: pointer;
+        text-align: left; color: var(--dsw-alias-label-primary); }
+      .bm-mention-opt:hover, .bm-mention-opt[data-active='true'] { background: var(--dsw-alias-button-ghost-active-fill); }
+      .bm-mention-opt-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+      .bm-mention-opt-name { font-size: 12.5px; font-weight: 600; line-height: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .bm-mention-opt-role { font-size: 11px; line-height: 15px; color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .bm-mention-opt-tag { font-size: 10px; line-height: 14px; padding: 1px 6px; border-radius: 5px; flex: none; font-weight: 600;
+        color: var(--bm-mc, var(--dsw-alias-brand-primary));
+        border: 1px solid color-mix(in srgb, var(--bm-mc, var(--dsw-alias-brand-primary)) 40%, transparent);
+        background: color-mix(in srgb, var(--bm-mc, var(--dsw-alias-brand-primary)) 11%, transparent); }
+      /* Modular Settings Center (inspired by grouped mobile/desktop card navigation) */
+      .bm-settings { display: flex; height: 100%; min-height: 0; overflow: hidden; }
+      .bm-set-nav { width: 310px; flex: none; overflow: auto; padding: 18px 16px 32px;
+        border-right: 0.5px solid var(--dsw-alias-border-l2); display: flex; flex-direction: column; gap: 14px; }
+      .bm-set-hero { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 4px 4px; }
+      .bm-set-hero-top { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+      .bm-set-botpills { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+      .bm-set-group-label { font-size: 11px; font-weight: 600; color: var(--dsw-alias-label-tertiary);
+        padding: 4px 6px 0; letter-spacing: 0.03em; }
+      .bm-set-card { border-radius: 14px; border: 0.5px solid var(--dsw-alias-border-l2);
+        background: var(--dsw-alias-card-fill); overflow: hidden; display: flex; flex-direction: column; }
+      .bm-set-row { appearance: none; border: 0; background: transparent; font: inherit; width: 100%; box-sizing: border-box;
+        display: flex; align-items: center; gap: 11px; padding: 11px 14px; color: var(--dsw-alias-label-primary);
+        cursor: pointer; text-align: left; border-bottom: 0.5px solid var(--dsw-alias-border-l1, var(--dsw-alias-border-l2)); }
+      .bm-set-row:last-child { border-bottom: 0; }
+      .bm-set-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
+      .bm-set-row[data-active='true'] { background: var(--dsw-alias-button-ghost-active-fill); }
+      .bm-set-icon { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center;
+        color: var(--dsw-alias-label-secondary); flex: none; }
+      .bm-set-row-label { font-size: 13px; font-weight: 500; flex: 1; min-width: 0; }
+      .bm-set-row-val { font-size: 12px; color: var(--dsw-alias-label-tertiary); max-width: 130px;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .bm-set-chev { font-size: 14px; color: var(--dsw-alias-label-tertiary); opacity: 0.7; }
+      .bm-set-body { flex: 1; min-width: 0; overflow: auto; padding: 24px 28px 48px; }
+      .bm-set-panel { max-width: 780px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+      .bm-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px;
+        border-radius: 9px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); cursor: pointer; }
+      .bm-toggle-row span { font-size: 12.5px; line-height: 18px; color: var(--dsw-alias-label-primary); }
+      .bm-pane-foot { border-top: 0.5px solid var(--dsw-alias-border-l2); padding-top: 8px; display: flex; gap: 6px; align-items: center; }
       .bm-room-activity { flex: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 16px;
         border-top: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); }
       .bm-act-chip { font-size: 11px; line-height: 16px; padding: 1px 8px; border-radius: 999px;
@@ -1005,6 +1406,108 @@ window.__ModuleLoader__.load({
         padding: 5px 8px; border-radius: var(--dsw-radius-md); cursor: pointer; width: 100%; text-align: left; }
       .bm-foot-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
       .bm-foot-toggle[data-active='true'] { color: var(--dsw-alias-brand-primary); }
+
+      /* ---- 3-column workspace + Right Rail (Screen Card + Scheduled Tasks) ---- */
+      .bm-workspace { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+      .bm-right-rail { width: 296px; flex: none; border-left: 0.5px solid var(--dsw-alias-border-l2);
+        background: var(--dsw-alias-bg-layer-0, var(--dsw-alias-card-fill)); display: flex; flex-direction: column; overflow-y: auto; }
+      @media (max-width: 1020px) { .bm-right-rail { width: 256px; } }
+      @media (max-width: 820px) { .bm-right-rail { display: none; } }
+      .bm-rail-tabs { display: flex; align-items: center; gap: 14px; padding: 0 14px; height: 40px; flex: none;
+        border-bottom: 0.5px solid var(--dsw-alias-border-l2); }
+      .bm-rail-tab { appearance: none; border: 0; background: transparent; font: inherit; font-size: 12.5px; font-weight: 500;
+        color: var(--dsw-alias-label-tertiary); padding: 10px 2px; cursor: pointer; position: relative; }
+      .bm-rail-tab[data-active='true'] { color: var(--dsw-alias-label-primary); font-weight: 600; }
+      .bm-rail-tab[data-active='true']::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+        border-radius: 2px; background: var(--dsw-alias-brand-primary, #1677ff); }
+      .bm-rail-body { padding: 12px; display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0; }
+      .bm-screen-card { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden;
+        background: #07090c; border: 1px solid var(--dsw-alias-border-l2); display: flex; align-items: center; justify-content: center; }
+      .bm-screen-card[data-state='AGENT_ACTIVE'] { border-color: color-mix(in srgb, #2f9e6e 48%, transparent); }
+      .bm-screen-card[data-state='FROZEN'] { border-color: color-mix(in srgb, #3b82f6 42%, transparent); }
+      .bm-screen-card[data-state='NEED_HUMAN'], .bm-screen-card[data-state='HUMAN_TAKEOVER'] {
+        border-color: #f59e0b; box-shadow: 0 0 0 2px color-mix(in srgb, #f59e0b 24%, transparent); }
+      .bm-screen-img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: pointer; }
+      .bm-screen-img[data-frozen='true'] { opacity: 0.48; filter: grayscale(25%); }
+      .bm-screen-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center;
+        color: rgba(255,255,255,0.32); padding-bottom: 24px; }
+      .bm-screen-overlay-badge { position: absolute; top: 8px; right: 8px; font-size: 10px; line-height: 14px;
+        padding: 2px 7px; border-radius: 999px; background: rgba(15, 23, 42, 0.78); color: #e2e8f0;
+        border: 0.5px solid rgba(255,255,255,0.16); backdrop-filter: blur(4px); }
+      .bm-screen-footer { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 8px;
+        padding: 20px 10px 9px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.86) 45%); color: #f8fafc; }
+      .bm-screen-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: #64748b; }
+      .bm-screen-dot[data-state='AGENT_ACTIVE'] { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+      .bm-screen-dot[data-state='FROZEN'] { background: #60a5fa; }
+      .bm-screen-dot[data-state='NEED_HUMAN'], .bm-screen-dot[data-state='HUMAN_TAKEOVER'] {
+        background: #f59e0b; box-shadow: 0 0 6px #f59e0b; animation: bm-pulse 1.2s ease-in-out infinite; }
+      .bm-screen-ftext { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+      .bm-screen-ftitle { font-size: 12px; line-height: 15px; font-weight: 600; color: #f8fafc; }
+      .bm-screen-fsub { font-size: 10.5px; line-height: 14px; color: rgba(226, 232, 240, 0.72);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .bm-screen-cta { appearance: none; border: 0.5px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.12);
+        color: #fff; font: inherit; font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 6px;
+        cursor: pointer; white-space: nowrap; backdrop-filter: blur(4px); }
+      .bm-screen-cta:hover:not(:disabled) { background: rgba(255,255,255,0.22); }
+      .bm-screen-cta:disabled { opacity: 0.45; cursor: not-allowed; }
+      .bm-screen-cta[data-tone='warn'] { background: #d97706; border-color: #f59e0b; }
+      .bm-screen-toolbar { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 7px; }
+      .bm-screen-toolbar .bm-btn.xs { font-size: 10.5px; padding: 2px 7px; line-height: 16px; }
+      .bm-screen-meta { font-size: 10.5px; color: var(--dsw-alias-label-tertiary); margin-left: auto;
+        font-family: var(--dsw-font-mono, monospace); }
+
+      .bm-rail-bothead { display: flex; align-items: center; gap: 8px; padding: 8px 0;
+        border-bottom: 0.5px solid var(--dsw-alias-border-l2); }
+      .bm-rail-botmeta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+      .bm-rail-botname { font-size: 12.5px; font-weight: 600; color: var(--dsw-alias-label-primary);
+        display: flex; align-items: center; gap: 5px; }
+      .bm-rail-botrole { font-size: 11px; color: var(--dsw-alias-label-tertiary); font-weight: 400;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .bm-rail-sub { font-size: 10.5px; color: var(--dsw-alias-label-tertiary); }
+      .bm-rail-plus { appearance: none; border: 0; background: transparent; color: var(--dsw-alias-label-secondary);
+        font-size: 18px; line-height: 20px; width: 26px; height: 26px; border-radius: 6px; cursor: pointer;
+        display: inline-flex; align-items: center; justify-content: center; }
+      .bm-rail-plus:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+      .bm-rail-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        text-align: center; padding: 24px 12px; gap: 8px; }
+      .bm-rail-empty-title { font-size: 13px; font-weight: 600; color: var(--dsw-alias-label-primary); margin-top: 4px; }
+      .bm-rail-empty-desc { font-size: 11.5px; line-height: 17px; color: var(--dsw-alias-label-tertiary); max-width: 220px; }
+
+      /* ---- Human Takeover Card & Modal ---- */
+      .bm-help-card { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 10px;
+        border: 1px solid color-mix(in srgb, #f59e0b 65%, transparent);
+        background: color-mix(in srgb, #f59e0b 8%, var(--dsw-alias-card-fill)); }
+      .bm-help-thumb { width: 124px; aspect-ratio: 16 / 9; border-radius: 6px; object-fit: cover; flex: none;
+        background: #090c10; border: 0.5px solid var(--dsw-alias-border-l2); cursor: pointer; }
+      .bm-help-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+      .bm-help-head { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: 12px; }
+      .bm-help-badge { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 999px;
+        background: color-mix(in srgb, #f59e0b 20%, transparent); color: #b45309; text-transform: uppercase; }
+      .bm-help-reason { font-size: 12.5px; line-height: 18px; color: var(--dsw-alias-label-primary); }
+      .bm-help-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .bm-help-note { flex: 1; min-width: 180px; font: inherit; font-size: 11.5px; padding: 4px 8px; border-radius: 6px;
+        border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); }
+
+      .bm-modal-backdrop { position: fixed; inset: 0; z-index: 9999; background: rgba(6, 10, 16, 0.72);
+        display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
+      .bm-modal { width: min(1020px, 95vw); max-height: 92vh; background: var(--dsw-alias-card-fill);
+        border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 12px; overflow: hidden;
+        display: flex; flex-direction: column; box-shadow: 0 24px 64px rgba(0,0,0,0.45); }
+      .bm-modal-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+        border-bottom: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); }
+      .bm-modal-stage { position: relative; background: #05070a; display: flex; align-items: center; justify-content: center;
+        overflow: hidden; max-height: 62vh; }
+      .bm-modal-canvas { max-width: 100%; max-height: 62vh; aspect-ratio: 16 / 9; object-fit: contain; display: block;
+        cursor: crosshair; user-select: none; }
+      .bm-modal-bar { display: flex; align-items: center; gap: 6px; padding: 8px 14px; flex-wrap: wrap;
+        border-top: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); }
+      .bm-modal-foot { display: flex; align-items: center; gap: 8px; padding: 10px 14px; flex-wrap: wrap;
+        border-top: 0.5px solid var(--dsw-alias-border-l2); }
+      .bm-bot-screen-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; margin-left: 2px; }
+      .bm-bot-screen-dot[data-state='AGENT_ACTIVE'] { background: #22c55e; }
+      .bm-bot-screen-dot[data-state='FROZEN'] { background: #60a5fa; }
+      .bm-bot-screen-dot[data-state='NEED_HUMAN'], .bm-bot-screen-dot[data-state='HUMAN_TAKEOVER'] {
+        background: #f59e0b; animation: bm-pulse 1.1s ease-in-out infinite; }
     `
 
     return {
@@ -1109,9 +1612,18 @@ window.__ModuleLoader__.load({
         ctx.effect(() => {
           void refreshHost()
           const timer = window.setInterval(() => {
-            if (document.visibilityState !== 'hidden') void refreshHost()
+            if (document.visibilityState === 'hidden') return
+            const panel = ctx.layout.panelInfo.getSnapshot()
+            if (panel && panel.activeId === PANEL_ID) void refreshHost()
           }, 3000)
-          return () => window.clearInterval(timer)
+          const unsubPanel = ctx.layout.panelInfo.subscribe(() => {
+            const panel = ctx.layout.panelInfo.getSnapshot()
+            if (panel && panel.activeId === PANEL_ID) void refreshHost()
+          })
+          return () => {
+            window.clearInterval(timer)
+            unsubPanel?.()
+          }
         }, 'botmode: host state polling')
         // Both spaces share one Host session list and one Workspace registry, and
         // neither has a filter API. This plugin therefore narrows the snapshots the
@@ -2036,87 +2548,493 @@ window.__ModuleLoader__.load({
           return turns
         }
 
-        function safeHref(value) {
-          return /^https?:\/\//i.test(value) ? value : undefined
+        function safeLinkHref(value) {
+          const trimmed = String(value || '').trim()
+          return /^(https?:\/\/|\/(?!\/))/i.test(trimmed) ? trimmed : undefined
         }
 
-        function inlineMarkdown(text, keyPrefix) {
+        function safeImageSrc(value) {
+          const trimmed = String(value || '').trim()
+          return /^(https?:\/\/|\/(?!\/)|data:image\/(png|jpeg|webp|gif);base64,)/i.test(trimmed) ? trimmed : undefined
+        }
+
+        const HTML_ARTIFACT_CSP = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\'; style-src \'unsafe-inline\'; img-src data: blob:; font-src data:;">'
+        function wrapHtmlArtifactCsp(html) {
+          const raw = String(html || '')
+          if (/<head[\s>]/i.test(raw)) return raw.replace(/<head([\s>])/i, `<head$1${HTML_ARTIFACT_CSP}`)
+          return `<!doctype html><html><head>${HTML_ARTIFACT_CSP}</head><body>${raw}</body></html>`
+        }
+
+        function currentFormatSettings() {
+          const st = hostStore.getSnapshot().state
+          const rf = st && st.settings && st.settings.responseFormat
+          return {
+            enabled: !rf || rf.enabled !== false,
+            extendedMarkdown: !rf || rf.extendedMarkdown !== false,
+            diagramsAndMath: !rf || rf.diagramsAndMath !== false,
+            artifacts: !rf || rf.artifacts !== false,
+            structuredCards: !rf || rf.structuredCards !== false,
+            multimodal: !rf || rf.multimodal !== false,
+          }
+        }
+
+        const MENTION_BEFORE_DISALLOW_RE = /[A-Za-z0-9._+-]/
+        const MENTION_IDENT_RE = /[\p{L}\p{N}_]/u
+        const MENTION_ASCII_IDENT_RE = /[A-Za-z0-9_]/
+        const MENTION_ENDS_CJK_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]$/u
+
+        function escapeRegExp(value) {
+          return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        }
+
+        function buildMentionTokens(mentionMembers) {
+          const tokens = []
+          const list = Array.isArray(mentionMembers) ? mentionMembers : []
+          for (const bot of list) {
+            if (!bot || typeof bot.id !== 'string') continue
+            const color = bot.color || COLORS[0]
+            const name = typeof bot.name === 'string' ? bot.name.trim() : ''
+            if (name !== '') {
+              tokens.push({ id: bot.id, token: name, label: name, color, kind: 'bot' })
+            }
+            if (bot.id && bot.id !== name) {
+              tokens.push({ id: bot.id, token: bot.id, label: name || bot.id, color, kind: 'bot' })
+            }
+          }
+          for (const word of ['所有人', '全员', 'everyone', 'all']) {
+            tokens.push({ id: '__all__', token: word, label: word, color: '#4d6bfe', kind: 'all' })
+          }
+          for (const word of ['user', 'human', '你']) {
+            tokens.push({ id: '__user__', token: word, label: word, color: '#ea580c', kind: 'user' })
+          }
+          tokens.sort((a, b) => b.token.length - a.token.length)
+          return tokens
+        }
+
+        function findMentionSpans(rawText, mentionMembers) {
+          const text = String(rawText || '')
+          if (!text || (!text.includes('@') && !text.includes('＠'))) return []
+          if (!Array.isArray(mentionMembers) || mentionMembers.length === 0) return []
+          const tokens = buildMentionTokens(mentionMembers)
+          const consumed = new Uint8Array(text.length)
+          const spans = []
+          for (const entry of tokens) {
+            const regex = new RegExp(`[@＠][ \\t]?${escapeRegExp(entry.token)}`, 'giu')
+            for (const match of text.matchAll(regex)) {
+              const start = match.index ?? 0
+              const end = start + match[0].length
+              let overlap = false
+              for (let i = start; i < end; i += 1) {
+                if (consumed[i] === 1) { overlap = true; break }
+              }
+              if (overlap) continue
+              const prev = start > 0 ? text[start - 1] : ''
+              const next = end < text.length ? text[end] : ''
+              if (prev !== '' && MENTION_BEFORE_DISALLOW_RE.test(prev)) continue
+              const allowCjkAfter = entry.kind !== 'user' && MENTION_ENDS_CJK_RE.test(entry.token)
+              if (next !== '' && (allowCjkAfter ? MENTION_ASCII_IDENT_RE.test(next) : MENTION_IDENT_RE.test(next))) continue
+              for (let i = start; i < end; i += 1) consumed[i] = 1
+              spans.push({
+                start,
+                end,
+                raw: match[0],
+                id: entry.id,
+                label: entry.label,
+                color: entry.color,
+                kind: entry.kind,
+              })
+            }
+          }
+          spans.sort((a, b) => a.start - b.start)
+          return spans
+        }
+
+        function renderTextWithMentions(rawText, keyPrefix, mentionMembers) {
+          const text = String(rawText || '')
+          const spans = findMentionSpans(text, mentionMembers)
+          if (spans.length === 0) return [text]
+          const out = []
+          let cursor = 0
+          spans.forEach((span, idx) => {
+            if (span.start > cursor) out.push(text.slice(cursor, span.start))
+            out.push(h('span', {
+              key: `${keyPrefix}-m${idx}`,
+              className: 'bm-mention-pill',
+              style: { '--bm-mc': span.color },
+            },
+            h('span', { className: 'bm-mention-dot', 'aria-hidden': 'true' }),
+            `@${span.label}`))
+            cursor = span.end
+          })
+          if (cursor < text.length) out.push(text.slice(cursor))
+          return out
+        }
+
+        function inlineMarkdown(text, keyPrefix, fmt = currentFormatSettings(), mentionMembers = null) {
           const nodes = []
-          const pattern = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g
+          const pattern = /(!\[[^\]]*\]\([^)]+\)|\*\*[^*]+\*\*|`[^`]+`|\$[^$\n]+\$|\[[^\]]+\]\([^)]+\))/g
           let cursor = 0
           let index = 0
-          for (const match of text.matchAll(pattern)) {
-            if (match.index > cursor) nodes.push(text.slice(cursor, match.index))
+          const pushPlain = (slice, subKey) => {
+            if (!slice) return
+            if (mentionMembers && mentionMembers.length > 0) {
+              nodes.push(...renderTextWithMentions(slice, subKey, mentionMembers))
+            } else {
+              nodes.push(slice)
+            }
+          }
+          for (const match of String(text || '').matchAll(pattern)) {
+            if (match.index > cursor) pushPlain(text.slice(cursor, match.index), `${keyPrefix}-p${index}`)
             const token = match[0]
             const key = `${keyPrefix}-i${index++}`
-            if (token.startsWith('**')) {
-              nodes.push(h('strong', { key }, token.slice(2, -2)))
+            if (token.startsWith('![')) {
+              const img = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(token)
+              const src = img ? safeImageSrc(img[2]) : undefined
+              if (src && fmt.multimodal) {
+                nodes.push(h('img', { key, src, alt: img[1] || 'image', className: 'bm-inline-img', loading: 'lazy' }))
+              } else {
+                nodes.push(token)
+              }
+            } else if (token.startsWith('**')) {
+              const inner = token.slice(2, -2)
+              nodes.push(h('strong', { key },
+                mentionMembers && mentionMembers.length > 0
+                  ? renderTextWithMentions(inner, `${key}-b`, mentionMembers)
+                  : inner))
             } else if (token.startsWith('`')) {
               nodes.push(h('code', { key, className: 'bm-inline-code' }, token.slice(1, -1)))
+            } else if (token.startsWith('$') && token.endsWith('$') && fmt.diagramsAndMath) {
+              nodes.push(h('span', { key, className: 'bm-math-inline' }, token.slice(1, -1)))
             } else {
               const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token)
-              const href = link === null ? undefined : safeHref(link[2])
-              nodes.push(href
-                ? h('a', { key, href, target: '_blank', rel: 'noreferrer noopener' }, link[1])
-                : token)
+              const href = link === null ? undefined : safeLinkHref(link[2])
+              if (href && fmt.multimodal && /\.(mp3|wav|ogg|m4a)(\?.*)?$/i.test(href)) {
+                nodes.push(h('audio', { key, controls: true, src: href, style: { display: 'block', margin: '4px 0', maxWidth: '100%' } }))
+              } else {
+                nodes.push(href
+                  ? h('a', { key, href, target: '_blank', rel: 'noreferrer noopener' }, link[1])
+                  : token)
+              }
             }
             cursor = match.index + token.length
           }
-          if (cursor < text.length) nodes.push(text.slice(cursor))
+          if (cursor < text.length) pushPlain(text.slice(cursor), `${keyPrefix}-tail`)
           return nodes
+        }
+
+        function ArtifactCard(props) {
+          const t = useT()
+          // Never auto-execute untrusted HTML scripts on render; require explicit Preview click + strict no-network CSP.
+          const [mode, setMode] = useState(props.type === 'markdown' ? 'preview' : 'source')
+          const [copied, setCopied] = useState(false)
+          const copy = async () => {
+            try {
+              await navigator.clipboard.writeText(props.content)
+              setCopied(true)
+              window.setTimeout(() => setCopied(false), 1600)
+            } catch (_error) { /* clipboard unavailable */ }
+          }
+          const download = () => {
+            try {
+              const ext = props.type === 'html' ? 'html' : props.type === 'json' ? 'json' : props.type === 'markdown' ? 'md' : 'txt'
+              const blob = new Blob([props.content], { type: 'text/plain;charset=utf-8' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `${String(props.title || 'artifact').replace(/[^\w\u4e00-\u9fa5.-]+/g, '_')}.${ext}`
+              a.click()
+              window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+            } catch (_error) { /* download unavailable */ }
+          }
+          return h('div', { className: 'bm-artifact' },
+            h('div', { className: 'bm-artifact-head' },
+              h('span', { className: 'bm-artifact-type' }, props.type || 'artifact'),
+              h('span', { className: 'bm-artifact-title' }, props.title || 'Artifact'),
+              (props.type === 'html' || props.type === 'markdown')
+                ? h('button', {
+                  type: 'button', className: 'bm-code-copy',
+                  onClick: () => setMode(m => (m === 'preview' ? 'source' : 'preview')),
+                }, t(mode === 'preview' ? 'rich.source' : 'rich.preview'))
+                : null,
+              h('button', { type: 'button', className: 'bm-code-copy', onClick: copy }, t(copied ? 'chat.copied' : 'chat.copy')),
+              h('button', { type: 'button', className: 'bm-code-copy', onClick: download }, t('rich.download'))),
+            h('div', { className: 'bm-artifact-body' },
+              mode === 'preview' && props.type === 'html'
+                ? h('iframe', { className: 'bm-artifact-iframe', sandbox: 'allow-scripts', srcDoc: wrapHtmlArtifactCsp(props.content), title: props.title })
+                : mode === 'preview' && props.type === 'markdown'
+                  ? h(MarkdownText, { text: props.content })
+                  : h('pre', { style: { margin: 0, overflow: 'auto' } }, h('code', null, props.content))))
+        }
+
+        function DiffBlock(props) {
+          const [copied, setCopied] = useState(false)
+          const copy = async () => {
+            try {
+              await navigator.clipboard.writeText(props.code)
+              setCopied(true)
+              window.setTimeout(() => setCopied(false), 1600)
+            } catch (_error) { /* clipboard unavailable */ }
+          }
+          const lines = String(props.code || '').split('\n')
+          return h('div', { className: 'bm-code' },
+            h('div', { className: 'bm-code-head' },
+              h('span', { className: 'bm-code-lang' }, 'diff'),
+              h('button', { type: 'button', className: 'bm-code-copy', onClick: copy }, props.t(copied ? 'chat.copied' : 'chat.copy'))),
+            h('pre', null, h('code', null, lines.map((line, i) => {
+              const kind = line.startsWith('+') && !line.startsWith('+++')
+                ? 'add'
+                : line.startsWith('-') && !line.startsWith('---')
+                  ? 'del'
+                  : line.startsWith('@@')
+                    ? 'hunk'
+                    : 'ctx'
+              return h('span', { key: `d${i}`, className: 'bm-diff-line', 'data-diff': kind }, line || ' ')
+            }))))
+        }
+
+        function parseMermaidEdges(code) {
+          const edges = []
+          for (const rawLine of String(code || '').split('\n')) {
+            const line = rawLine.trim()
+            if (!line || /^(graph|flowchart|sequenceDiagram|stateDiagram|classDiagram|erDiagram|subgraph|end|%%)/i.test(line)) continue
+            const seq = /^([^\s:>-]+)\s*(--?>>?|->>|-->>)\s*([^\s:]+)\s*:\s*(.+)$/.exec(line)
+            if (seq) {
+              edges.push({ from: seq[1], to: seq[3], label: seq[4].trim() })
+              continue
+            }
+            const flow = /^([A-Za-z0-9_]+)(?:\[([^\]]+)\]|\(([^)]+)\)|\{([^}]+)\})?\s*(?:--?>|==>|-\.->)(?:\|([^|]+)\|)?\s*([A-Za-z0-9_]+)(?:\[([^\]]+)\]|\(([^)]+)\)|\{([^}]+)\})?/.exec(line)
+            if (flow) {
+              edges.push({
+                from: (flow[2] || flow[3] || flow[4] || flow[1]).replace(/^["']|["']$/g, ''),
+                label: (flow[5] || '').trim(),
+                to: (flow[7] || flow[8] || flow[9] || flow[6]).replace(/^["']|["']$/g, ''),
+              })
+            }
+          }
+          return edges
+        }
+
+        function MermaidCard(props) {
+          const [view, setView] = useState('diagram')
+          const [copied, setCopied] = useState(false)
+          const edges = useMemo(() => parseMermaidEdges(props.code), [props.code])
+          const copy = async () => {
+            try {
+              await navigator.clipboard.writeText(props.code)
+              setCopied(true)
+              window.setTimeout(() => setCopied(false), 1600)
+            } catch (_error) { /* clipboard unavailable */ }
+          }
+          return h('div', { className: 'bm-code' },
+            h('div', { className: 'bm-code-head' },
+              h('span', { className: 'bm-code-lang' }, 'mermaid'),
+              h('div', { style: { display: 'flex', gap: '8px' } },
+                edges.length > 0
+                  ? h('button', {
+                    type: 'button', className: 'bm-code-copy',
+                    onClick: () => setView(v => (v === 'diagram' ? 'source' : 'diagram')),
+                  }, props.t(view === 'diagram' ? 'rich.source' : 'rich.diagram'))
+                  : null,
+                h('button', { type: 'button', className: 'bm-code-copy', onClick: copy }, props.t(copied ? 'chat.copied' : 'chat.copy')))),
+            view === 'diagram' && edges.length > 0
+              ? h('div', { className: 'bm-mermaid-viz' }, edges.map((edge, i) => h('div', { key: `me${i}`, className: 'bm-mermaid-edge' },
+                h('span', { className: 'bm-mermaid-node' }, edge.from),
+                h('span', { className: 'bm-mermaid-arrow' }, edge.label ? `── ${edge.label} →` : '──→'),
+                h('span', { className: 'bm-mermaid-node' }, edge.to))))
+              : h('pre', null, h('code', null, props.code)))
+        }
+
+        function MetricsCard(props) {
+          const data = props.data || {}
+          const items = Array.isArray(data) ? data : (Array.isArray(data.items) ? data.items : [])
+          return h('div', { className: 'bm-metrics-card' },
+            data.title ? h('strong', { style: { fontSize: '12.5px' } }, String(data.title)) : null,
+            h('div', { className: 'bm-metrics-grid' }, items.map((item, idx) => h('div', {
+              key: `mt${idx}`,
+              className: 'bm-metric-tile',
+              'data-tone': item.tone || 'neutral',
+            },
+              h('div', { className: 'bm-metric-label' }, String(item.label || '')),
+              h('div', { className: 'bm-metric-val' }, String(item.value ?? '')),
+              item.delta ? h('div', { className: 'bm-metric-delta' }, String(item.delta)) : null))))
+        }
+
+        function FileCard(props) {
+          const t = useT()
+          const data = props.data || {}
+          const [copied, setCopied] = useState(false)
+          const name = String(data.name || data.path || 'file')
+          const ext = (name.includes('.') ? name.split('.').pop() : 'FILE').slice(0, 4).toUpperCase()
+          const copyPath = async () => {
+            try {
+              await navigator.clipboard.writeText(String(data.path || data.url || name))
+              setCopied(true)
+              window.setTimeout(() => setCopied(false), 1600)
+            } catch (_error) { /* clipboard unavailable */ }
+          }
+          return h('div', { className: 'bm-file-card' },
+            h('div', { className: 'bm-file-row' },
+              h('span', { className: 'bm-file-icon' }, ext),
+              h('div', { style: { flex: 1, minWidth: 0 } },
+                h('div', { style: { fontWeight: 600, fontSize: '12.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, name),
+                h('div', { className: 'bm-muted' }, [data.size, data.mime, data.path].filter(Boolean).join(' · '))),
+              h('button', { type: 'button', className: 'bm-btn small', onClick: copyPath }, t(copied ? 'chat.copied' : 'rich.copyPath'))),
+            data.description ? h('div', { className: 'bm-muted' }, String(data.description)) : null)
+        }
+
+        function StructCard(props) {
+          const data = props.data || {}
+          const fields = Array.isArray(data.fields) ? data.fields : []
+          return h('div', { className: 'bm-struct-card' },
+            h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+              h('strong', { style: { fontSize: '13px', flex: 1 } }, String(data.title || 'Card')),
+              data.badge ? h('span', { className: 'bm-status-pill' }, String(data.badge)) : null),
+            data.subtitle ? h('div', { className: 'bm-muted' }, String(data.subtitle)) : null,
+            fields.length > 0
+              ? h('div', { className: 'bm-table-wrap', style: { margin: 0 } },
+                h('table', { className: 'bm-table' },
+                  h('tbody', null, fields.map((f, idx) => h('tr', { key: `sf${idx}` },
+                    h('th', { style: { width: '34%' } }, String(f.label || '')),
+                    h('td', null, String(f.value ?? '')))))))
+              : null,
+            data.note ? h('div', { className: 'bm-muted' }, String(data.note)) : null)
+        }
+
+        function parseMarkdownTable(lines) {
+          if (lines.length < 2) return null
+          const rowRe = /^\s*\|(.+)\|\s*$/
+          const sepRe = /^\s*\|(?:\s*:?-{2,}:?\s*\|)+\s*$/
+          if (!rowRe.test(lines[0]) || !sepRe.test(lines[1])) return null
+          const splitRow = (line) => line.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim())
+          const headers = splitRow(lines[0])
+          const rows = lines.slice(2).filter(l => l.trim().includes('|')).map(splitRow)
+          return { headers, rows }
         }
 
         function MarkdownText(props) {
           const t = useT()
+          const fmt = props.formatOptions || currentFormatSettings()
+          const mentionMembers = props.mentionMembers || null
           const nodes = []
           const source = String(props.text || '')
-          const fence = /```([^\n`]*)\n([\s\S]*?)```/g
-          let cursor = 0
           let index = 0
-          const pushProse = (prose) => {
-            const paragraphs = prose.split(/\n{2,}/)
-            for (const paragraph of paragraphs) {
-              if (paragraph.trim() === '') continue
-              const lines = paragraph.split('\n')
-              if (/^#{1,4}\s/.test(lines[0])) {
-                const level = Math.min(4, (lines[0].match(/^#+/) || ['#'])[0].length)
-                nodes.push(h(`h${level + 2}`, { key: `md-h${index++}`, className: 'bm-md-heading' },
-                  inlineMarkdown(lines[0].replace(/^#{1,4}\s/, ''), `h${index}`)))
-                continue
+
+          const renderFencedOrPlain = (segment) => {
+            const fence = /```([^\n`]*)\n([\s\S]*?)```|\$\$([\s\S]+?)\$\$/g
+            let cursor = 0
+            const pushProse = (prose) => {
+              const paragraphs = prose.split(/\n{2,}/)
+              for (const paragraph of paragraphs) {
+                if (paragraph.trim() === '') continue
+                const lines = paragraph.split('\n')
+                if (fmt.extendedMarkdown) {
+                  const tbl = parseMarkdownTable(lines)
+                  if (tbl) {
+                    nodes.push(h('div', { key: `md-tbl${index++}`, className: 'bm-table-wrap' },
+                      h('table', { className: 'bm-table' },
+                        h('thead', null, h('tr', null, tbl.headers.map((col, ci) => h('th', { key: `th${ci}` }, inlineMarkdown(col, `th${index}-${ci}`, fmt, mentionMembers))))),
+                        h('tbody', null, tbl.rows.map((row, ri) => h('tr', { key: `tr${ri}` },
+                          tbl.headers.map((_, ci) => h('td', { key: `td${ci}` }, inlineMarkdown(row[ci] || '', `td${index}-${ri}-${ci}`, fmt, mentionMembers)))))))))
+                    continue
+                  }
+                }
+                if (/^#{1,4}\s/.test(lines[0])) {
+                  const level = Math.min(4, (lines[0].match(/^#+/) || ['#'])[0].length)
+                  nodes.push(h(`h${level + 2}`, { key: `md-h${index++}`, className: 'bm-md-heading' },
+                    inlineMarkdown(lines[0].replace(/^#{1,4}\s/, ''), `h${index}`, fmt, mentionMembers)))
+                  if (lines.length > 1) pushProse(lines.slice(1).join('\n'))
+                  continue
+                }
+                if (lines.every(line => /^\s*[-*]\s+/.test(line))) {
+                  nodes.push(h('ul', { key: `md-ul${index++}`, className: 'bm-md-list' },
+                    lines.map((line, lineIndex) => h('li', { key: `li${lineIndex}` },
+                      inlineMarkdown(line.replace(/^\s*[-*]\s+/, ''), `li${index}-${lineIndex}`, fmt, mentionMembers)))))
+                  continue
+                }
+                if (lines.every(line => /^\s*\d+[.)]\s+/.test(line))) {
+                  nodes.push(h('ol', { key: `md-ol${index++}`, className: 'bm-md-list' },
+                    lines.map((line, lineIndex) => h('li', { key: `li${lineIndex}` },
+                      inlineMarkdown(line.replace(/^\s*\d+[.)]\s+/, ''), `li${index}-${lineIndex}`, fmt, mentionMembers)))))
+                  continue
+                }
+                if (lines.every(line => /^>\s?/.test(line))) {
+                  const stripped = lines.map(line => line.replace(/^>\s?/, ''))
+                  const calloutMatch = fmt.extendedMarkdown ? /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/i.exec(stripped[0] || '') : null
+                  if (calloutMatch) {
+                    const tone = calloutMatch[1].toLowerCase()
+                    const rest = [calloutMatch[2], ...stripped.slice(1)].filter(Boolean).join('\n')
+                    nodes.push(h('div', { key: `md-co${index++}`, className: 'bm-callout', 'data-tone': tone },
+                      h('div', { className: 'bm-callout-head' }, calloutMatch[1].toUpperCase()),
+                      rest ? h('div', null, inlineMarkdown(rest, `co${index}`, fmt, mentionMembers)) : null))
+                    continue
+                  }
+                  nodes.push(h('blockquote', { key: `md-bq${index++}`, className: 'bm-md-quote' },
+                    inlineMarkdown(stripped.join('\n'), `bq${index}`, fmt, mentionMembers)))
+                  continue
+                }
+                const children = []
+                lines.forEach((line, lineIndex) => {
+                  if (lineIndex > 0) children.push(h('br', { key: `br${lineIndex}` }))
+                  children.push(...inlineMarkdown(line, `p${index}-${lineIndex}`, fmt, mentionMembers))
+                })
+                nodes.push(h('p', { key: `md-p${index++}`, className: 'bm-md-p' }, children))
               }
-              if (lines.every(line => /^\s*[-*]\s+/.test(line))) {
-                nodes.push(h('ul', { key: `md-ul${index++}`, className: 'bm-md-list' },
-                  lines.map((line, lineIndex) => h('li', { key: `li${lineIndex}` },
-                    inlineMarkdown(line.replace(/^\s*[-*]\s+/, ''), `li${index}-${lineIndex}`)))))
-                continue
-              }
-              if (lines.every(line => /^\s*\d+[.)]\s+/.test(line))) {
-                nodes.push(h('ol', { key: `md-ol${index++}`, className: 'bm-md-list' },
-                  lines.map((line, lineIndex) => h('li', { key: `li${lineIndex}` },
-                    inlineMarkdown(line.replace(/^\s*\d+[.)]\s+/, ''), `li${index}-${lineIndex}`)))))
-                continue
-              }
-              if (lines.every(line => /^>\s?/.test(line))) {
-                nodes.push(h('blockquote', { key: `md-bq${index++}`, className: 'bm-md-quote' },
-                  inlineMarkdown(lines.map(line => line.replace(/^>\s?/, '')).join('\n'), `bq${index}`)))
-                continue
-              }
-              const children = []
-              lines.forEach((line, lineIndex) => {
-                if (lineIndex > 0) children.push(h('br', { key: `br${lineIndex}` }))
-                children.push(...inlineMarkdown(line, `p${index}-${lineIndex}`))
-              })
-              nodes.push(h('p', { key: `md-p${index++}`, className: 'bm-md-p' }, children))
             }
+            for (const match of segment.matchAll(fence)) {
+              if (match.index > cursor) pushProse(segment.slice(cursor, match.index))
+              if (match[3] !== undefined) {
+                if (fmt.diagramsAndMath) {
+                  nodes.push(h('div', { key: `md-math${index++}`, className: 'bm-math-block' }, match[3].trim()))
+                } else {
+                  pushProse(match[0])
+                }
+              } else {
+                const language = (match[1] || '').trim().toLowerCase()
+                const code = match[2] || ''
+                if (language === 'diff' && fmt.extendedMarkdown) {
+                  nodes.push(h(DiffBlock, { key: `md-diff${index++}`, code, t }))
+                } else if (language === 'mermaid' && fmt.diagramsAndMath) {
+                  nodes.push(h(MermaidCard, { key: `md-merm${index++}`, code, t }))
+                } else if ((language === 'metrics' || language === 'card' || language === 'file') && fmt.structuredCards) {
+                  let parsed = null
+                  try { parsed = JSON.parse(code) } catch (_err) { parsed = null }
+                  if (parsed && typeof parsed === 'object') {
+                    if (language === 'metrics') nodes.push(h(MetricsCard, { key: `md-met${index++}`, data: parsed }))
+                    else if (language === 'file') nodes.push(h(FileCard, { key: `md-file${index++}`, data: parsed }))
+                    else nodes.push(h(StructCard, { key: `md-card${index++}`, data: parsed }))
+                  } else {
+                    nodes.push(h(CodeBlock, { key: `md-code${index++}`, language, code, t }))
+                  }
+                } else {
+                  nodes.push(h(CodeBlock, { key: `md-code${index++}`, language, code, t }))
+                }
+              }
+              cursor = match.index + match[0].length
+            }
+            if (cursor < segment.length) pushProse(segment.slice(cursor))
           }
-          for (const match of source.matchAll(fence)) {
-            if (match.index > cursor) pushProse(source.slice(cursor, match.index))
-            const language = (match[1] || '').trim()
-            const code = match[2] || ''
-            nodes.push(h(CodeBlock, { key: `md-code${index++}`, language, code, t }))
-            cursor = match.index + match[0].length
+
+          // Top-level structured XML tags: <artifact ...>...</artifact> & <details><summary>...</summary>...</details>
+          const xmlPattern = /<artifact\b([^>]*)>([\s\S]*?)<\/artifact>|<details\b[^>]*>\s*<summary>([\s\S]*?)<\/summary>([\s\S]*?)<\/details>/gi
+          let topCursor = 0
+          for (const match of source.matchAll(xmlPattern)) {
+            if (match.index > topCursor) renderFencedOrPlain(source.slice(topCursor, match.index))
+            if (match[1] !== undefined && match[2] !== undefined && fmt.artifacts) {
+              const attrs = match[1] || ''
+              const title = (/title="([^"]+)"/i.exec(attrs)?.[1] ?? /title='([^']+)'/i.exec(attrs)?.[1] ?? 'Artifact').trim()
+              const type = (/type="([^"]+)"/i.exec(attrs)?.[1] ?? /type='([^']+)'/i.exec(attrs)?.[1] ?? 'code').trim().toLowerCase()
+              nodes.push(h(ArtifactCard, { key: `md-art${index++}`, type, title, content: match[2].trim() }))
+            } else if (match[3] !== undefined && match[4] !== undefined && fmt.extendedMarkdown) {
+              nodes.push(h('details', { key: `md-det${index++}`, className: 'bm-details' },
+                h('summary', null, match[3].trim()),
+                h('div', { className: 'bm-details-body' }, h(MarkdownText, { text: match[4].trim(), formatOptions: fmt, mentionMembers }))))
+            } else {
+              renderFencedOrPlain(match[0])
+            }
+            topCursor = match.index + match[0].length
           }
-          if (cursor < source.length) pushProse(source.slice(cursor))
+          if (topCursor < source.length) renderFencedOrPlain(source.slice(topCursor))
+
           return h('div', { className: 'bm-md' }, nodes)
         }
 
@@ -2375,7 +3293,15 @@ window.__ModuleLoader__.load({
                 : t('model.default'))),
             h('div', { className: 'bm-chat-tabs' },
               h('button', { type: 'button', 'data-active': tab === 'chat', onClick: () => setTab('chat') }, t('chat.tab')),
-              h('button', { type: 'button', 'data-active': tab === 'detail', onClick: () => setTab('detail') }, t('chat.detail'))))
+              h('button', { type: 'button', 'data-active': tab === 'detail', onClick: () => setTab('detail') }, t('chat.detail'))),
+            props.onToggleRail
+              ? h('button', {
+                type: 'button',
+                className: 'bm-btn small',
+                title: t('screen.panelToggle'),
+                onClick: props.onToggleRail,
+              }, props.railOpen ? '◫' : '◨')
+              : null)
           if (tab === 'detail') {
             return h('div', { className: 'bm-chat' }, head, h('div', { className: 'bm-detail-col' }, props.detail))
           }
@@ -2440,16 +3366,34 @@ window.__ModuleLoader__.load({
                   : h('button', { type: 'submit', className: 'bm-btn primary', disabled: busy || (text.trim() === '' && images.length === 0) }, busy ? t('form.busy') : t('chat.send')))))
         }
 
+        const IDLE_SESSION_SNAP = Object.freeze({ running: false, openState: 'idle', hasMore: false })
+        const EMPTY_EVENT_SNAP = Object.freeze({ entries: Object.freeze([]), hasMore: false, revision: 0 })
+
+        function isClientPassToken(raw) {
+          let v = String(raw || '').trim()
+          if (v === '') return true
+          v = v.replace(/^[`*_~\s]+|[`*_~\s]+$/g, '').replace(/[.。!！?？;；,，\s]+$/g, '').trim()
+          const wrapped = /^(\(|（|\[|【|<)(.*)(\)|）|\]|】|>)$/.exec(v)
+          if (wrapped) v = wrapped[2].trim()
+          const token = v.replace(/[\s_-]+/g, '').toLowerCase()
+          return token === '' || token === 'pass' || token === 'noreply' || token === 'silent' || token === 'skip'
+        }
+
         function GroupForm(props) {
           const t = useT()
-          const [name, setName] = useState(props.group ? props.group.name : '')
-          const [members, setMembers] = useState(props.group ? [...props.group.members] : [])
-          const [mode, setMode] = useState(props.group && props.group.mode ? props.group.mode : 'auto')
-          const [leadBotId, setLeadBotId] = useState(props.group && props.group.leadBotId ? props.group.leadBotId : '')
-          const [purpose, setPurpose] = useState(props.group && props.group.purpose ? props.group.purpose : '')
-          const [notes, setNotes] = useState(props.group && props.group.notes ? props.group.notes : '')
-          const [maxRounds, setMaxRounds] = useState(props.group && props.group.budget ? (props.group.budget.maxRounds || 3) : 3)
-          const [maxMessages, setMaxMessages] = useState(props.group && props.group.budget ? (props.group.budget.maxMessages || 10) : 10)
+          const g = props.group
+          const b = (g && g.budget) || {}
+          const [name, setName] = useState(g ? g.name : '')
+          const [members, setMembers] = useState(g ? [...g.members] : [])
+          const [mode, setMode] = useState(g && g.mode ? g.mode : 'auto')
+          const [leadBotId, setLeadBotId] = useState(g && g.leadBotId ? g.leadBotId : '')
+          const [workDir, setWorkDir] = useState(g && g.workDir ? g.workDir : '')
+          const [purpose, setPurpose] = useState(g && g.purpose ? g.purpose : '')
+          const [notes, setNotes] = useState(g && g.notes ? g.notes : '')
+          const [tokenLimit, setTokenLimit] = useState(b.tokenLimit !== undefined ? b.tokenLimit : 0)
+          const [idleRoundLimit, setIdleRoundLimit] = useState(b.idleRoundLimit || 5)
+          const [maxRounds, setMaxRounds] = useState(b.maxRounds !== undefined ? b.maxRounds : 0)
+          const [maxMessages, setMaxMessages] = useState(b.maxMessages !== undefined ? b.maxMessages : 0)
           const [error, setError] = useState('')
           const toggle = (id) => setMembers(current => (current.includes(id) ? current.filter(item => item !== id) : [...current, id]))
           const submit = (event) => {
@@ -2457,19 +3401,26 @@ window.__ModuleLoader__.load({
             const value = name.trim()
             if (value === '') { setError(t('group.needName')); return }
             if (members.length < 2) { setError(t('group.needMembers')); return }
+            const parsedMaxRounds = Math.max(0, Math.min(10000, Math.trunc(Number(maxRounds) || 0)))
+            const parsedMaxMessages = Math.max(0, Math.min(100000, Math.trunc(Number(maxMessages) || 0)))
+            const parsedTokenLimit = Math.max(0, Math.min(1000000000, Math.trunc(Number(tokenLimit) || 0)))
+            const parsedIdleLimit = Math.max(1, Math.min(100, Math.trunc(Number(idleRoundLimit) || 5)))
             props.onSave({
               name: value,
               members,
               mode,
               leadBotId: members.includes(leadBotId) ? leadBotId : '',
+              workDir: workDir.trim(),
               purpose: purpose.trim(),
               notes: notes.trim(),
-              maxRounds: Math.max(1, Math.min(20, Number(maxRounds) || 3)),
-              maxMessages: Math.max(1, Math.min(60, Number(maxMessages) || 10)),
+              tokenLimit: parsedTokenLimit,
+              idleRoundLimit: parsedIdleLimit,
+              maxRounds: parsedMaxRounds,
+              maxMessages: parsedMaxMessages,
             })
           }
           return h('form', { className: 'bm-form', onSubmit: submit },
-            h('h2', null, t(props.group ? 'group.editTitle' : 'group.createTitle')),
+            h('h2', null, t(g ? 'group.editTitle' : 'group.createTitle')),
             h('p', { className: 'bm-form-hint' }, t('group.hint')),
             h('label', { className: 'bm-label' }, t('group.name'),
               h('input', {
@@ -2492,15 +3443,31 @@ window.__ModuleLoader__.load({
                 },
                   h('option', { value: '' }, t('group.leadAuto')),
                   props.bots.filter(bot => members.includes(bot.id)).map(bot => h('option', { key: bot.id, value: bot.id }, bot.name))))),
+            h('label', { className: 'bm-label' }, t('group.workDir'),
+              h('input', {
+                className: 'bm-input', value: workDir, placeholder: t('group.workDirPlaceholder'),
+                onChange: event => setWorkDir(event.target.value),
+              })),
             h('div', { className: 'bm-row' },
-              h('label', { className: 'bm-label' }, t('group.maxRounds'),
+              h('label', { className: 'bm-label' }, t('group.tokenLimit'),
                 h('input', {
-                  type: 'number', min: 1, max: 20, className: 'bm-input', value: maxRounds,
+                  type: 'number', min: 0, step: 50000, className: 'bm-input', value: tokenLimit,
+                  onChange: event => setTokenLimit(event.target.value),
+                })),
+              h('label', { className: 'bm-label' }, t('group.idleRoundLimit'),
+                h('input', {
+                  type: 'number', min: 1, max: 100, className: 'bm-input', value: idleRoundLimit,
+                  onChange: event => setIdleRoundLimit(event.target.value),
+                }))),
+            h('div', { className: 'bm-row' },
+              h('label', { className: 'bm-label' }, t('group.maxRoundsHint'),
+                h('input', {
+                  type: 'number', min: 0, max: 10000, className: 'bm-input', value: maxRounds,
                   onChange: event => setMaxRounds(event.target.value),
                 })),
-              h('label', { className: 'bm-label' }, t('group.maxMessages'),
+              h('label', { className: 'bm-label' }, t('group.maxMessagesHint'),
                 h('input', {
-                  type: 'number', min: 1, max: 60, className: 'bm-input', value: maxMessages,
+                  type: 'number', min: 0, max: 100000, className: 'bm-input', value: maxMessages,
                   onChange: event => setMaxMessages(event.target.value),
                 }))),
             h('label', { className: 'bm-label' }, t('group.purpose'),
@@ -2521,21 +3488,193 @@ window.__ModuleLoader__.load({
                 bot.name)))),
             error ? h('div', { className: 'bm-error' }, error) : null,
             h('div', { className: 'bm-form-actions' },
-              props.group ? h('button', { type: 'button', className: 'bm-btn danger', onClick: props.onDelete }, t('group.delete')) : null,
+              g ? h('button', { type: 'button', className: 'bm-btn danger', onClick: props.onDelete }, t('group.delete')) : null,
               h('button', { type: 'button', className: 'bm-btn', onClick: props.onCancel }, t('form.cancel')),
               h('button', { type: 'submit', className: 'bm-btn primary', disabled: members.length < 2 || name.trim() === '' },
-                t(props.group ? 'form.save' : 'group.create'))))
+                t(g ? 'form.save' : 'group.create'))))
         }
 
         function formatActivityLabel(t, item) {
           if (!item || !item.kind) return ''
           if (item.kind === 'passed') return t('group.actPassed', { name: item.botName || 'Bot' })
+          if (item.kind === 'completed') return t('group.actCompleted', { name: item.botName || 'Bot' })
           if (item.kind === 'settled') return t('group.actSettled', { reason: item.reason || 'done' })
+          if (item.kind === 'stalled') return t('group.actStalled', { reason: item.reason || 'probe' })
           if (item.kind === 'capped') return t('group.actCapped', { reason: item.reason || 'budget' })
           if (item.kind === 'cancelled') return t('group.actCancelled', { reason: item.reason || 'stop' })
+          if (item.kind === 'soft_steer') return t('group.actSoftSteer')
           if (item.kind === 'continued') return t('group.actContinued')
           if (item.kind === 'escalation') return t('group.actEscalation', { name: item.botName || 'Bot' })
+          if (item.kind === 'bot_paused_error') return t('group.actBotError', { name: item.botName || 'Bot' })
+          if (item.kind === 'subtask_claimed') return t('group.actSubtaskClaim', { name: item.botName || 'Bot', taskId: item.taskId || '' })
+          if (item.kind === 'subtask_completed') return t('group.actSubtaskDone', { name: item.botName || 'Bot', taskId: item.taskId || '' })
           return ''
+        }
+
+        function QuestionCard(props) {
+          const t = useT()
+          const entry = props.entry
+          const [draft, setDraft] = useState({})
+          const [busy, setBusy] = useState(false)
+          const toggleOption = (q, label) => {
+            setDraft((prev) => {
+              const cur = prev[q.id] || { selected: [], custom: '' }
+              const nextSelected = q.multiSelect
+                ? (cur.selected.includes(label) ? cur.selected.filter(item => item !== label) : [...cur.selected, label])
+                : [label]
+              return { ...prev, [q.id]: { ...cur, selected: nextSelected } }
+            })
+          }
+          const setCustom = (qid, value) => {
+            setDraft((prev) => {
+              const cur = prev[qid] || { selected: [], custom: '' }
+              return { ...prev, [qid]: { ...cur, custom: value } }
+            })
+          }
+          const submit = async () => {
+            setBusy(true)
+            try {
+              const answers = (entry.questions || []).map((q) => {
+                const cur = draft[q.id] || { selected: [], custom: '' }
+                return {
+                  id: q.id,
+                  selected: cur.selected,
+                  ...(cur.custom.trim() !== '' ? { custom: cur.custom.trim() } : {}),
+                }
+              })
+              await hostCommand('question.decide', { questionId: entry.id, answers })
+            } catch (_error) { /* settled */ } finally {
+              setBusy(false)
+            }
+          }
+          const dismiss = async () => {
+            setBusy(true)
+            try {
+              await hostCommand('question.decide', { questionId: entry.id, answers: 'cancel' })
+            } catch (_error) { /* settled */ } finally {
+              setBusy(false)
+            }
+          }
+          return h('div', { className: 'bm-qcard' },
+            h('div', { className: 'bm-approval-text' },
+              h('span', { className: 'bm-approval-name' }, `@${entry.botName}`),
+              h('span', { className: 'bm-approval-tool' }, 'ask_user_question')),
+            (entry.questions || []).map(q => h('div', { key: q.id, className: 'bm-qitem' },
+              h('div', { className: 'bm-qtitle' }, q.question),
+              q.detail ? h('div', { className: 'bm-muted' }, q.detail) : null,
+              (q.options || []).length > 0
+                ? h('div', { className: 'bm-picks' }, q.options.map(opt => h('button', {
+                  key: opt.label,
+                  type: 'button',
+                  className: 'bm-pick',
+                  'data-on': Boolean(draft[q.id] && draft[q.id].selected.includes(opt.label)),
+                  title: opt.description || opt.label,
+                  onClick: () => toggleOption(q, opt.label),
+                }, opt.label)))
+                : null,
+              h('input', {
+                className: 'bm-input',
+                placeholder: t('question.customPlaceholder'),
+                value: (draft[q.id] && draft[q.id].custom) || '',
+                onChange: e => setCustom(q.id, e.target.value),
+              }))),
+            h('div', { className: 'bm-approval-actions' },
+              h('button', { type: 'button', className: 'bm-btn small primary', disabled: busy, onClick: submit }, t('question.submit')),
+              h('button', { type: 'button', className: 'bm-btn small danger', disabled: busy, onClick: dismiss }, t('question.dismiss'))))
+        }
+
+        /**
+         * Inline real-time main reply bubble rendered directly inside GroupChat's `.bm-log`.
+         *
+         * Subscribes to `room.memberSessions[botId]` and renders ONLY the Bot's main reply text
+         * stream (never showing tool calls, reasoning blocks, or `(pass)` silence tokens), so
+         * multiple Bots stream cleanly inline inside the group conversation without a separate
+         * bottom panel.
+         */
+        function RoomInlineStreamMessage(props) {
+          const bot = props.bot
+          const actor = props.actor
+          const sessionId = props.sessionId || (actor && actor.sessionId) || ''
+          const reference = useMemo(() => {
+            if (!sessionId) return null
+            try {
+              return sessions.retain(sessionId, { source: 'botmode.room.stream' })
+            } catch (_failure) {
+              return null
+            }
+          }, [sessionId])
+          useEffect(() => () => { if (reference) reference.release() }, [reference])
+          const binding = reference ? reference.binding : null
+          const session = binding ? binding.session : null
+          const snapshot = useSyncExternalStore(
+            listener => (session ? session.subscribe(listener) : () => {}),
+            () => (session ? session.getSnapshot() : IDLE_SESSION_SNAP),
+          )
+          const events = useSyncExternalStore(
+            listener => (binding ? binding.eventSource.subscribe(listener) : () => {}),
+            () => (binding ? binding.eventSource.getSnapshot() : EMPTY_EVENT_SNAP),
+          )
+
+          const wasRunningRef = useRef(false)
+          useEffect(() => {
+            const isNowRunning = Boolean(snapshot.running)
+            if (wasRunningRef.current && !isNowRunning) {
+              void refreshHost()
+            }
+            wasRunningRef.current = isNowRunning
+          }, [snapshot.running])
+
+          const actorState = (actor && actor.state) || (snapshot.running ? 'running' : 'idle')
+          const isStreamingNow = Boolean(snapshot.running) || actorState === 'running'
+
+          const liveText = useMemo(() => {
+            if (!isStreamingNow) return ''
+            const turns = buildTranscript(events.entries || [])
+            let lastUserIdx = -1
+            for (let i = turns.length - 1; i >= 0; i -= 1) {
+              if (turns[i].kind === 'user') { lastUserIdx = i; break }
+            }
+            const activeSlice = lastUserIdx >= 0 ? turns.slice(lastUserIdx + 1) : turns.slice(-2)
+            const parts = []
+            for (const item of activeSlice) {
+              if (item.kind !== 'assistant') continue
+              for (const block of item.blocks || []) {
+                if (block.kind !== 'text') continue
+                const val = String(block.text || '').trim()
+                if (val === '' || isClientPassToken(val)) continue
+                parts.push(val)
+              }
+            }
+            return parts.length > 0 ? parts[parts.length - 1] : ''
+          }, [isStreamingNow, events])
+
+          useEffect(() => {
+            if (liveText && props.onStreamTick) props.onStreamTick()
+          }, [liveText])
+
+          if (!isStreamingNow || liveText === '') return null
+          if (props.lastCommittedText && liveText === props.lastCommittedText.trim()) return null
+
+          return h('div', { className: 'bm-msg bm-msg-bot bm-msg-streaming' },
+            h('div', { className: 'bm-msg-name', style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+              h('span', { className: 'bm-avatar bm-avatar-xs', style: { background: bot.color || COLORS[0] } }, initialOf(bot.name)),
+              h('span', null, bot.name),
+              h('span', { className: 'bm-spin', style: { marginLeft: 'auto' } })),
+            h('div', { className: 'bm-assistant-text' },
+              h(MarkdownText, { text: liveText, mentionMembers: props.mentionMembers }),
+              h('span', { className: 'bm-cursor' })))
+        }
+
+        function detectMentionTrigger(value, cursorPos) {
+          const text = String(value || '')
+          const pos = typeof cursorPos === 'number' && cursorPos >= 0 ? cursorPos : text.length
+          const before = text.slice(0, pos)
+          const match = /(?:^|[\s，。！？、,;；:：(\[（【])([@＠]([^\s@＠]*))$/.exec(before)
+          if (!match) return null
+          const fullToken = match[1] // `@...`
+          const query = match[2] || ''
+          const start = pos - fullToken.length
+          return { start, end: pos, query }
         }
 
         function GroupChat(props) {
@@ -2543,15 +3682,28 @@ window.__ModuleLoader__.load({
           const [text, setText] = useState('')
           const [busy, setBusy] = useState(false)
           const [error, setError] = useState('')
+          const [mentionQuery, setMentionQuery] = useState(null)
+          const [mentionIdx, setMentionIdx] = useState(0)
           const logRef = useRef(null)
+          const inputRef = useRef(null)
+          const stickRef = useRef(true)
           const group = props.group
+          const settings = props.settings || {}
+          const showActivityStrip = Boolean(settings.groupChat && settings.groupChat.showActivityStrip)
           const members = props.bots.filter(bot => (group.members || []).includes(bot.id))
+          const memberMap = useMemo(() => new Map(props.bots.map(b => [b.id, b])), [props.bots])
           const messages = group.messages || []
+          const actors = group.actors || []
+          const actorByBotId = useMemo(() => new Map(actors.map(a => [a.botId, a])), [actors])
+          const speakingIds = group.speakingBotIds || []
           const running = group.status === 'running' || group.running === true
-          const capped = group.status === 'capped'
+          const completed = group.status === 'completed'
           const settled = group.status === 'settled'
-          const paused = group.status === 'paused' || capped || group.needsYou === true
-          const budget = group.budget || { rounds: 0, messages: 0, maxRounds: 3, maxMessages: 10 }
+          const stalled = group.status === 'stalled'
+          const capped = group.status === 'capped'
+          const waitingUser = group.status === 'waiting_user' || group.status === 'paused'
+          const paused = waitingUser || stalled || capped || group.needsYou === true
+          const budget = group.budget || { rounds: 0, messages: 0, maxRounds: 0, maxMessages: 0, tokensUsed: 0 }
           const currentSpeaker = group.currentSpeakerId
             ? members.find(bot => bot.id === group.currentSpeakerId)
             : undefined
@@ -2560,15 +3712,169 @@ window.__ModuleLoader__.load({
             label: formatActivityLabel(t, item),
           })).filter(item => item.label !== '')
 
+          const mentionCandidates = useMemo(() => {
+            if (!mentionQuery) return []
+            const q = mentionQuery.query.trim().toLowerCase()
+            const allOption = {
+              id: '__all__',
+              name: t('group.mentionAll'),
+              role: t('group.mentionAllSub'),
+              color: '#4d6bfe',
+              isAll: true,
+              searchKey: 'all everyone 所有人 全员',
+            }
+            const botOptions = members.map(bot => ({
+              id: bot.id,
+              name: bot.name,
+              role: bot.role || '',
+              color: bot.color || COLORS[0],
+              isAll: false,
+              searchKey: `${bot.name} ${bot.role || ''} ${bot.id}`.toLowerCase(),
+            }))
+            const pool = [...botOptions, allOption]
+            if (!q) return pool
+            return pool.filter(opt => opt.searchKey.includes(q))
+          }, [mentionQuery, members, t])
+
           useEffect(() => {
+            setMentionQuery(null)
+            setMentionIdx(0)
+          }, [group.id])
+
+          useEffect(() => {
+            setMentionIdx(prev => (mentionCandidates.length === 0 ? 0 : Math.min(prev, mentionCandidates.length - 1)))
+          }, [mentionCandidates.length])
+
+          // Live colored mention cards extracted from the composer draft
+          const draftMentions = useMemo(() => {
+            const spans = findMentionSpans(text, members)
+            const seen = new Set()
+            const chips = []
+            for (const span of spans) {
+              const key = `${span.kind}:${span.id}`
+              if (seen.has(key)) continue
+              seen.add(key)
+              chips.push(span)
+            }
+            return chips
+          }, [text, members])
+
+          const syncMentionFromTarget = (el, nextVal) => {
+            const val = typeof nextVal === 'string' ? nextVal : (el ? el.value : text)
+            const pos = el && typeof el.selectionStart === 'number' ? el.selectionStart : val.length
+            const detected = detectMentionTrigger(val, pos)
+            setMentionQuery(detected)
+            if (detected) setMentionIdx(0)
+          }
+
+          const insertMention = (candidate) => {
+            if (!candidate) return
+            const el = inputRef.current
+            const insertion = `@${candidate.name} `
+            let nextText = text
+            let nextCursor = text.length
+            if (mentionQuery) {
+              nextText = `${text.slice(0, mentionQuery.start)}${insertion}${text.slice(mentionQuery.end)}`
+              nextCursor = mentionQuery.start + insertion.length
+            } else {
+              const pos = el && typeof el.selectionStart === 'number' ? el.selectionStart : text.length
+              const before = text.slice(0, pos)
+              const needSpace = before.length > 0 && !/[\s(（【]$/.test(before)
+              const prefix = needSpace ? ' ' : ''
+              nextText = `${before}${prefix}${insertion}${text.slice(pos)}`
+              nextCursor = pos + prefix.length + insertion.length
+            }
+            setText(nextText)
+            setMentionQuery(null)
+            setMentionIdx(0)
+            window.requestAnimationFrame(() => {
+              const node = inputRef.current
+              if (!node) return
+              node.focus()
+              try { node.setSelectionRange(nextCursor, nextCursor) } catch (_err) { /* ignore */ }
+            })
+          }
+
+          const removeDraftMention = (span) => {
+            const spans = findMentionSpans(text, members).filter(s => s.kind === span.kind && s.id === span.id)
+            if (spans.length === 0) return
+            // Remove all occurrences of that mention cleanly from right to left
+            let next = text
+            for (let i = spans.length - 1; i >= 0; i -= 1) {
+              const s = spans[i]
+              const afterChar = next[s.end] === ' ' ? 1 : 0
+              next = next.slice(0, s.start) + next.slice(s.end + afterChar)
+            }
+            setText(next)
+            setMentionQuery(null)
+            window.requestAnimationFrame(() => { if (inputRef.current) inputRef.current.focus() })
+          }
+
+          const toggleMentionButton = () => {
+            if (mentionQuery) {
+              setMentionQuery(null)
+              return
+            }
+            const el = inputRef.current
+            const pos = el && typeof el.selectionStart === 'number' ? el.selectionStart : text.length
+            const existing = detectMentionTrigger(text, pos)
+            if (existing) {
+              setMentionQuery(existing)
+              setMentionIdx(0)
+              if (el) el.focus()
+              return
+            }
+            const before = text.slice(0, pos)
+            const needSpace = before.length > 0 && !/[\s，。！？、,;；:：(\[（【]$/.test(before)
+            const prefix = needSpace ? ' @' : '@'
+            const nextText = `${before}${prefix}${text.slice(pos)}`
+            const nextPos = pos + prefix.length
+            setText(nextText)
+            setMentionQuery({ start: nextPos - 1, end: nextPos, query: '' })
+            setMentionIdx(0)
+            window.requestAnimationFrame(() => {
+              const node = inputRef.current
+              if (!node) return
+              node.focus()
+              try { node.setSelectionRange(nextPos, nextPos) } catch (_err) { /* ignore */ }
+            })
+          }
+
+          const lastCommittedByBot = useMemo(() => {
+            const map = new Map()
+            const currentEpoch = group.epoch || 0
+            for (const msg of messages) {
+              if (msg.from && msg.from !== 'user' && (msg.epoch || 0) === currentEpoch && typeof msg.text === 'string') {
+                map.set(msg.from, msg.text)
+              }
+            }
+            return map
+          }, [messages, group.epoch])
+
+          const scrollToBottomIfStuck = () => {
             const node = logRef.current
-            if (node) node.scrollTop = node.scrollHeight
-          }, [messages.length, group.status])
+            if (node && stickRef.current) node.scrollTop = node.scrollHeight
+          }
+
+          // Fast polling while group actors are actively executing in parallel
+          useEffect(() => {
+            if (!running && speakingIds.length === 0) return undefined
+            const fast = window.setInterval(() => {
+              if (document.visibilityState !== 'hidden') void refreshHost()
+            }, 1000)
+            return () => window.clearInterval(fast)
+          }, [running, speakingIds.length])
+
+          useEffect(() => {
+            scrollToBottomIfStuck()
+          }, [messages.length, group.status, speakingIds.length])
+
           const send = async (event) => {
             event.preventDefault()
             const value = text.trim()
             if (value === '' || busy) return
             if (members.length < 2) { setError(t('group.noMembers')); return }
+            setMentionQuery(null)
             setBusy(true)
             setError('')
             try {
@@ -2580,70 +3886,256 @@ window.__ModuleLoader__.load({
               setBusy(false)
             }
           }
-          const control = async (action) => {
+          const control = async (action, extra = {}) => {
             setBusy(true)
             setError('')
-            try { await hostCommand('room.control', { roomId: group.id, action }) } catch (failure) {
+            try { await hostCommand('room.control', { roomId: group.id, action, ...extra }) } catch (failure) {
               setError(failure && failure.message ? failure.message : String(failure))
             } finally { setBusy(false) }
           }
-          const reason = (capped || group.pausedReason === 'budget')
-            ? t('group.pausedBudget')
-            : t('group.pausedMention')
+
+          let pauseMessage = t('group.pausedMention')
+          if (group.pausedReason === 'token_budget') pauseMessage = t('group.pausedTokenBudget')
+          else if (group.pausedReason === 'idle_spin') pauseMessage = t('group.pausedIdleSpin')
+          else if (group.pausedReason === 'bot_error') pauseMessage = t('group.pausedBotError')
+          else if (group.pausedReason === 'turn_error') pauseMessage = t('group.pausedTurnError')
+          else if (group.pausedReason === 'approval') pauseMessage = t('group.pausedApproval')
+          else if (group.pausedReason === 'question') pauseMessage = t('group.pausedQuestion')
+          else if (capped || group.pausedReason === 'budget') pauseMessage = t('group.pausedBudget')
+
+          const hasHardBudget = (budget.maxRounds || 0) > 0 || (budget.maxMessages || 0) > 0
+          const metricsSubtitle = hasHardBudget
+            ? `${t('group.membersCount', { n: members.length })} · ${t('group.budget', {
+              r: budget.rounds || 0,
+              mr: budget.maxRounds || '∞',
+              m: budget.messages || 0,
+              mm: budget.maxMessages || '∞',
+            })}`
+            : `${t('group.membersCount', { n: members.length })} · ${t('group.metricsUnlimited', {
+              e: group.epoch || 0,
+              m: budget.messages || 0,
+              tk: Math.round((budget.tokensUsed || 0) / 100) / 10,
+            })}`
+
           return h('div', { className: 'bm-chat' },
             h('header', { className: 'bm-chat-head' },
               h('span', { className: 'bm-avatar bm-avatar-sm', style: { background: group.color || COLORS[3] } }, initialOf(group.name)),
               h('div', { className: 'bm-chat-title' },
                 h('span', { className: 'bm-name' }, group.name),
                 h('span', { className: 'bm-role' },
-                  `${t('group.membersCount', { n: members.length })} · ${t('group.budget', {
-                    r: budget.rounds || 0,
-                    mr: budget.maxRounds || 3,
-                    m: budget.messages || 0,
-                    mm: budget.maxMessages || 10,
-                  })}`)),
+                  group.workDir ? `${metricsSubtitle} · ${group.workDir}` : metricsSubtitle)),
               running
                 ? h('span', { className: 'bm-status-pill', 'data-kind': 'running' },
-                  currentSpeaker ? t('group.speaking', { name: currentSpeaker.name }) : t('group.running'))
-                : settled
-                  ? h('span', { className: 'bm-status-pill', 'data-kind': 'settled' }, t('group.settled'))
-                  : capped
-                    ? h('span', { className: 'bm-status-pill', 'data-kind': 'capped' }, t('group.capped'))
-                    : null,
+                  speakingIds.length > 1
+                    ? t('group.speakingMulti', { n: speakingIds.length })
+                    : currentSpeaker
+                      ? t('group.speaking', { name: currentSpeaker.name })
+                      : t('group.running'))
+                : completed
+                  ? h('span', { className: 'bm-status-pill', 'data-kind': 'completed' }, t('group.completed'))
+                  : settled
+                    ? h('span', { className: 'bm-status-pill', 'data-kind': 'settled' }, t('group.settled'))
+                    : stalled
+                      ? h('span', { className: 'bm-status-pill', 'data-kind': 'stalled' }, t('group.stalled'))
+                      : waitingUser
+                        ? h('span', { className: 'bm-status-pill', 'data-kind': 'waiting_user' }, t('group.waitingUser'))
+                        : capped
+                          ? h('span', { className: 'bm-status-pill', 'data-kind': 'capped' }, t('group.capped'))
+                          : null,
               running
                 ? h('button', { type: 'button', className: 'bm-btn small', disabled: busy, onClick: () => control('stop') }, t('group.stop'))
                 : null,
-              paused && !capped ? h('span', { className: 'bm-needs-you' }, t('group.needsYou')) : null,
+              paused && !capped && !running ? h('span', { className: 'bm-needs-you' }, t('group.needsYou')) : null,
               h('div', { className: 'bm-chat-tabs' },
                 h('button', { type: 'button', 'data-active': true }, t('chat.tab')),
                 h('button', { type: 'button', onClick: props.onEdit }, t('chat.detail')))),
             paused && !running ? h('div', { className: 'bm-room-alert' },
-              h('span', null, reason),
-              h('button', { className: 'bm-btn small primary', disabled: busy, onClick: () => control('continue') }, t('group.continue')),
-              h('button', { className: 'bm-btn small', disabled: busy, onClick: () => control('stop') }, t('group.stop'))) : null,
-            h('div', { className: 'bm-log', ref: logRef },
-              messages.length === 0 ? h('div', { className: 'bm-chat-empty' }, t('group.empty')) : null,
-              messages.map(message => h('div', {
-                key: message.id,
-                className: `bm-msg ${message.from === 'user' ? 'bm-msg-user' : 'bm-msg-bot'}`,
+              h('span', null, pauseMessage),
+              group.pausedReason === 'approval' || group.pausedReason === 'question'
+                ? null
+                : h('button', { type: 'button', className: 'bm-btn small primary', disabled: busy, onClick: () => control('continue') }, t('group.continue')),
+              h('button', { type: 'button', className: 'bm-btn small', disabled: busy, onClick: () => control('stop') }, t('group.stop'))) : null,
+            (() => {
+              const pausedActors = (group.actors || []).filter(a => a && a.state === 'paused_error')
+              if (pausedActors.length === 0) return null
+              return h('div', { className: 'bm-room-alert' },
+                pausedActors.map(actor => h('div', { key: `pe-${actor.botId}`, style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', width: '100%' } },
+                  h('span', null, `${actor.botName || actor.botId}: ${actor.pausedError || t('group.actorPausedError')}`),
+                  h('button', {
+                    type: 'button',
+                    className: 'bm-btn small primary',
+                    disabled: busy,
+                    onClick: () => control('resume_bot', { botId: actor.botId }),
+                  }, t('group.resumeBot')))))
+            })(),
+            (() => {
+              const subtasks = Array.isArray(group.subtasks) ? group.subtasks.filter(s => s.status === 'in_progress' || s.status === 'completed') : []
+              const progressItems = Array.isArray(group.progress && group.progress.items) ? group.progress.items : []
+              if (subtasks.length === 0 && progressItems.length === 0) return null
+              const doneCount = progressItems.filter(i => i.done).length
+              return h('div', { className: 'bm-taskboard' },
+                h('div', { className: 'bm-taskboard-title' },
+                  h('span', null, t('group.taskBoard')),
+                  progressItems.length > 0
+                    ? h('span', { className: 'bm-muted', style: { marginLeft: 'auto' } }, `${doneCount}/${progressItems.length}`)
+                    : null),
+                h('div', { className: 'bm-taskboard-list' },
+                  subtasks.map(task => h('span', { key: `st-${task.taskId}`, className: 'bm-task-chip', 'data-status': task.status },
+                    h('strong', null, task.status === 'completed' ? '✓ ' : '🔒 '),
+                    h('span', null, task.title || task.taskId),
+                    task.ownerName ? h('span', { className: 'bm-muted' }, ` @${task.ownerName}`) : null,
+                    Array.isArray(task.paths) && task.paths.length > 0
+                      ? h('span', { className: 'bm-task-paths' }, ` (${task.paths.length})`)
+                      : null)),
+                  progressItems.map(item => h('span', { key: `pg-${item.id}`, className: 'bm-task-chip', 'data-status': item.done ? 'completed' : 'in_progress' },
+                    h('strong', null, item.done ? '☑ ' : '☐ '),
+                    h('span', null, item.title),
+                    item.owner ? h('span', { className: 'bm-muted' }, ` @${item.owner}`) : null))))
+            })(),
+            h('div', {
+              className: 'bm-log',
+              ref: logRef,
+              onScroll: (event) => {
+                const node = event.currentTarget
+                stickRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 56
               },
-                message.from === 'user' ? null : h('div', { className: 'bm-msg-name' }, message.name),
-                h('div', null, message.text)))),
-            recentActivity.length > 0
+            },
+              messages.length === 0 && !running ? h('div', { className: 'bm-chat-empty' }, t('group.empty')) : null,
+              messages.map((message) => {
+                if (message.kind === 'completion') {
+                  return h('div', { key: message.id, className: 'bm-msg-completion' },
+                    h('div', { className: 'bm-msg-completion-head' },
+                      '✓ ',
+                      t('group.completedBanner', { name: message.name || 'Bot' }),
+                      message.seq ? h('span', { className: 'bm-muted', style: { marginLeft: 'auto' } }, `#${message.seq}`) : null),
+                    h(MarkdownText, { text: message.text, mentionMembers: members }),
+                    Array.isArray(message.deliverables) && message.deliverables.length > 0
+                      ? h('div', { className: 'bm-msg-deliverables' },
+                        message.deliverables.map((d, idx) => h('code', { key: `deliv-${idx}`, className: 'bm-inline-code' }, d)))
+                      : null)
+                }
+                if (message.kind === 'system') {
+                  return h('div', { key: message.id, className: 'bm-msg-system' }, renderTextWithMentions(message.text, message.id, members))
+                }
+                if (message.kind === 'error') {
+                  return h('div', { key: message.id, className: 'bm-turn-error' }, `${message.name}: ${message.text}`)
+                }
+                if (message.from === 'user') {
+                  return h('div', { key: message.id, className: 'bm-msg bm-msg-user' }, renderTextWithMentions(message.text, message.id, members))
+                }
+                const authorBot = memberMap.get(message.from)
+                return h('div', { key: message.id, className: 'bm-msg bm-msg-bot' },
+                  h('div', { className: 'bm-msg-name', style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+                    authorBot
+                      ? h('span', { className: 'bm-avatar bm-avatar-xs', style: { background: authorBot.color || COLORS[0] } }, initialOf(authorBot.name))
+                      : null,
+                    h('span', null, message.name),
+                    message.seq ? h('span', { className: 'bm-muted', style: { marginLeft: 'auto', fontWeight: 400 } }, `#${message.seq}`) : null),
+                  h(MarkdownText, { text: message.text, mentionMembers: members }))
+              }),
+              // Real-time main reply streams rendered directly inline in `.bm-log` (zero tool calls, zero separate bottom cards)
+              members.map(bot => h(RoomInlineStreamMessage, {
+                key: `live-${bot.id}`,
+                bot,
+                actor: actorByBotId.get(bot.id),
+                sessionId: group.memberSessions && group.memberSessions[bot.id],
+                lastCommittedText: lastCommittedByBot.get(bot.id) || '',
+                mentionMembers: members,
+                onStreamTick: scrollToBottomIfStuck,
+              }))),
+            showActivityStrip && recentActivity.length > 0
               ? h('div', { className: 'bm-room-activity' },
                 recentActivity.map(item => h('span', { key: item.id, className: 'bm-act-chip' }, item.label)))
               : null,
             error ? h('div', { className: 'bm-error bm-chat-error' }, error) : null,
-            h('form', { className: 'bm-compose', onSubmit: send },
-              h('textarea', {
-                value: text, rows: 1,
-                placeholder: running ? t('group.interjectPlaceholder') : t('group.placeholder'),
-                onChange: event => setText(event.target.value),
-                onKeyDown: (event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(event) }
-                },
-              }),
-              h('button', { type: 'submit', className: 'bm-btn primary', disabled: text.trim() === '' || busy }, t('group.send'))))
+            h('div', { className: 'bm-compose-wrap' },
+              mentionQuery && mentionCandidates.length > 0
+                ? h('div', { className: 'bm-mention-pop', role: 'listbox', 'aria-label': t('group.mentionPickTitle') },
+                  h('div', { className: 'bm-mention-pop-head' },
+                    h('span', null, t('group.mentionPickTitle')),
+                    h('span', null, t('group.mentionHint'))),
+                  mentionCandidates.map((cand, idx) => h('button', {
+                    key: `mo-${cand.id}`,
+                    type: 'button',
+                    role: 'option',
+                    'aria-selected': idx === mentionIdx,
+                    className: 'bm-mention-opt',
+                    'data-active': idx === mentionIdx,
+                    onMouseEnter: () => setMentionIdx(idx),
+                    onMouseDown: (e) => { e.preventDefault(); insertMention(cand) },
+                  },
+                  h('span', { className: 'bm-avatar bm-avatar-xs', style: { background: cand.color } }, cand.isAll ? '@' : initialOf(cand.name)),
+                  h('span', { className: 'bm-mention-opt-body' },
+                    h('span', { className: 'bm-mention-opt-name' }, cand.name),
+                    cand.role ? h('span', { className: 'bm-mention-opt-role' }, cand.role) : null),
+                  h('span', { className: 'bm-mention-opt-tag', style: { '--bm-mc': cand.color } }, `@${cand.name}`))))
+                : null,
+              draftMentions.length > 0
+                ? h('div', { className: 'bm-compose-mentions' },
+                  draftMentions.map((span, idx) => h('span', {
+                    key: `dm-${span.kind}-${span.id}-${idx}`,
+                    className: 'bm-mention-pill',
+                    style: { '--bm-mc': span.color },
+                  },
+                  h('span', { className: 'bm-mention-dot', 'aria-hidden': 'true' }),
+                  `@${span.label}`,
+                  h('button', {
+                    type: 'button',
+                    className: 'bm-mention-rm',
+                    'aria-label': `remove @${span.label}`,
+                    onMouseDown: (e) => { e.preventDefault(); removeDraftMention(span) },
+                  }, '×'))))
+                : null,
+              h('form', { className: 'bm-compose', onSubmit: send },
+                h('button', {
+                  type: 'button',
+                  className: 'bm-btn bm-mention-btn',
+                  title: t('group.mentionBtnTitle'),
+                  onMouseDown: (e) => { e.preventDefault(); toggleMentionButton() },
+                }, '@'),
+                h('textarea', {
+                  ref: inputRef,
+                  value: text, rows: 1,
+                  placeholder: running ? t('group.interjectPlaceholder') : t('group.placeholder'),
+                  onChange: (event) => {
+                    const nextVal = event.target.value
+                    setText(nextVal)
+                    syncMentionFromTarget(event.target, nextVal)
+                  },
+                  onClick: (event) => syncMentionFromTarget(event.target),
+                  onKeyUp: (event) => {
+                    if (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'Enter' || event.key === 'Tab' || event.key === 'Escape') return
+                    syncMentionFromTarget(event.target)
+                  },
+                  onBlur: () => { setMentionQuery(null) },
+                  onKeyDown: (event) => {
+                    if (event.nativeEvent && event.nativeEvent.isComposing) return
+                    if (mentionQuery && mentionCandidates.length > 0) {
+                      if (event.key === 'ArrowDown') {
+                        event.preventDefault()
+                        setMentionIdx(i => (i + 1) % mentionCandidates.length)
+                        return
+                      }
+                      if (event.key === 'ArrowUp') {
+                        event.preventDefault()
+                        setMentionIdx(i => (i - 1 + mentionCandidates.length) % mentionCandidates.length)
+                        return
+                      }
+                      if ((event.key === 'Enter' && !event.shiftKey) || event.key === 'Tab') {
+                        event.preventDefault()
+                        insertMention(mentionCandidates[mentionIdx] || mentionCandidates[0])
+                        return
+                      }
+                      if (event.key === 'Escape') {
+                        event.preventDefault()
+                        setMentionQuery(null)
+                        return
+                      }
+                    }
+                    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(event) }
+                  },
+                }),
+                h('button', { type: 'submit', className: 'bm-btn primary', disabled: text.trim() === '' || busy }, t('group.send')))))
         }
 
         function MemoryHubPanel(props) {
@@ -2910,6 +4402,1112 @@ window.__ModuleLoader__.load({
               : null)
         }
 
+        function SettingsIcon(props) {
+          const kind = props.kind || 'gear'
+          const common = { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true }
+          if (kind === 'model') {
+            return h('svg', common, h('rect', { x: 6, y: 6, width: 12, height: 12, rx: 2 }), h('path', { d: 'M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4' }))
+          }
+          if (kind === 'skills') {
+            return h('svg', common, h('path', { d: 'M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z' }), h('path', { d: 'M12 12l8-4.5M12 12v9M12 12L4 7.5' }))
+          }
+          if (kind === 'tools') {
+            return h('svg', common, h('path', { d: 'M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.2 2.2-2.2-2.2 1.4-3z' }))
+          }
+          if (kind === 'workspace') {
+            return h('svg', common, h('path', { d: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z' }))
+          }
+          if (kind === 'routines') {
+            return h('svg', common, h('circle', { cx: 12, cy: 12, r: 9 }), h('path', { d: 'M12 7v5l3 2' }))
+          }
+          if (kind === 'artifacts') {
+            return h('svg', common, h('rect', { x: 3, y: 4, width: 18, height: 4, rx: 1 }), h('path', { d: 'M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M10 12h4' }))
+          }
+          if (kind === 'rooms') {
+            return h('svg', common, h('rect', { x: 3, y: 4, width: 18, height: 16, rx: 2 }), h('path', { d: 'M9 4v16M15 4v16' }))
+          }
+          if (kind === 'soul') {
+            return h('svg', common, h('path', { d: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z' }))
+          }
+          if (kind === 'memory') {
+            return h('svg', common, h('path', { d: 'M9 4a5 5 0 0 0-4 8 4 4 0 0 0 2 7h3V4H9zM15 4a5 5 0 0 1 4 8 4 4 0 0 1-2 7h-3V4h1z' }))
+          }
+          if (kind === 'format') {
+            return h('svg', common, h('path', { d: 'M4 6h16M4 12h10M4 18h14' }))
+          }
+          if (kind === 'usage') {
+            return h('svg', common, h('rect', { x: 3, y: 3, width: 18, height: 18, rx: 2 }), h('path', { d: 'M8 16v-5M12 16V8M16 16v-3' }))
+          }
+          if (kind === 'approval') {
+            return h('svg', common, h('path', { d: 'M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z' }), h('path', { d: 'M9.5 12l2 2 3.5-4' }))
+          }
+          if (kind === 'integrations') {
+            return h('svg', common, h('path', { d: 'M12 2v5M7 7h10v4a5 5 0 0 1-10 0V7zM12 16v6' }))
+          }
+          if (kind === 'logs') {
+            return h('svg', common, h('path', { d: 'M6 3h9l4 4v14H6z' }), h('path', { d: 'M9 11h6M9 15h6' }))
+          }
+          return h('svg', common,
+            h('circle', { cx: 12, cy: 12, r: 3 }),
+            h('path', { d: 'M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3h.1a1.6 1.6 0 0 0 .9-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8v.1a1.6 1.6 0 0 0 1.5.9H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z' }))
+        }
+
+        const FORMAT_PREVIEW_SAMPLE = [
+          '> [!TIP] 现代 Agent 富媒体回复规范已生效，支持表格、提示框、Diff、折叠面板、图表与结构化卡片。',
+          '',
+          '| 模块 | 状态 | 说明 |',
+          '| --- | --- | --- |',
+          '| 扩展 Markdown | 已启用 | 表格 / Callouts / Diff / 折叠面板 |',
+          '| 结构化卡片 | 已启用 | Metrics / Card / File / Artifact |',
+          '',
+          '```metrics',
+          '{"title":"实时指标示例","items":[{"label":"吞吐","value":"128 req/s","delta":"+12%","tone":"ok"},{"label":"P95 延迟","value":"42ms","delta":"-8ms","tone":"ok"},{"label":"错误率","value":"0.02%","delta":"稳定","tone":"neutral"}]}',
+          '```',
+          '',
+          '```diff',
+          '- maxRounds = 16',
+          '+ terminalState = "room_finish_task"',
+          '```',
+          '',
+          '```mermaid',
+          'flowchart LR',
+          '  A[用户指令] --> B[多 Bot 并行处理]',
+          '  B --> C[room_finish_task 验收完成]',
+          '```',
+          '',
+          '<details><summary>展开查看折叠详情</summary>冗长的诊断日志或背景信息可收纳在折叠面板里，不干扰主回复阅读。</details>',
+          '',
+          '<artifact type="html" title="独立 HTML 预览卡"><div style="font-family:sans-serif;padding:12px;color:#0f172a"><strong>Artifact 预览</strong><p style="margin:4px 0 0;color:#475569">复杂代码、报告或 HTML 片段自动分流到独立卡片中。</p></div></artifact>',
+        ].join('\n')
+
+        function SettingsView(props) {
+          const t = useT()
+          const bots = props.bots || []
+          const rooms = props.rooms || []
+          const routines = props.routines || []
+          const sections = props.sections || []
+          const allTools = props.tools || []
+          const artifacts = props.artifacts || []
+          const usage = props.usage || { totalTokens: 0, totalRoomMessages: 0, byRoom: [] }
+          const runtimeInfo = props.runtime || {}
+          const appSettings = props.settings || {
+            responseFormat: { enabled: true, extendedMarkdown: true, diagramsAndMath: true, artifacts: true, structuredCards: true, multimodal: true },
+            groupChat: { defaultTokenLimit: 0, defaultIdleRoundLimit: 5, enableSoftLock: true, enableErrorProbe: true, autoProgressReview: true, showActivityStrip: false },
+          }
+
+          const [botId, setBotId] = useState(props.initialBotId || (bots[0] && bots[0].id) || '')
+          const [moduleKey, setModuleKey] = useState(props.initialModule || 'soul')
+          const [advOpen, setAdvOpen] = useState(true)
+          const [busy, setBusy] = useState(false)
+          const [notice, setNotice] = useState('')
+          const [error, setError] = useState('')
+
+          const bot = bots.find(item => item.id === botId) || bots[0] || null
+
+          // Bot-level editable state
+          const [botName, setBotName] = useState(bot ? bot.name : '')
+          const [botRole, setBotRole] = useState(bot ? (bot.role || '') : '')
+          const [botInstructions, setBotInstructions] = useState(bot ? (bot.instructions || '') : '')
+          const [botColor, setBotColor] = useState(bot ? (bot.color || COLORS[0]) : COLORS[0])
+          const [botSectionId, setBotSectionId] = useState(bot ? (bot.sectionId || 'general') : 'general')
+          const [botApproval, setBotApproval] = useState(bot ? (bot.approvalPolicy || 'ask') : 'ask')
+          const [botToolsAllow, setBotToolsAllow] = useState(bot && bot.tools ? (bot.tools.allow || []).join(', ') : '')
+          const [botToolsDeny, setBotToolsDeny] = useState(bot && bot.tools ? (bot.tools.deny || []).join(', ') : '')
+          const [botModel, setBotModel] = useState(bot && bot.model ? { ...bot.model } : { ...EMPTY_MODEL })
+          const [soulMd, setSoulMd] = useState('')
+          const [memoryMd, setMemoryMd] = useState('')
+          const [logs, setLogs] = useState([])
+
+          // Modular Global Settings state
+          const [rf, setRf] = useState(appSettings.responseFormat)
+          const [gc, setGc] = useState(appSettings.groupChat)
+
+          useEffect(() => {
+            if (!bot) return
+            setBotName(bot.name || '')
+            setBotRole(bot.role || '')
+            setBotInstructions(bot.instructions || '')
+            setBotColor(bot.color || COLORS[0])
+            setBotSectionId(bot.sectionId || 'general')
+            setBotApproval(bot.approvalPolicy || 'ask')
+            setBotToolsAllow((bot.tools && bot.tools.allow ? bot.tools.allow : []).join(', '))
+            setBotToolsDeny((bot.tools && bot.tools.deny ? bot.tools.deny : []).join(', '))
+            setBotModel(bot.model ? { ...bot.model } : { ...EMPTY_MODEL })
+            void props.onCommand('bot.files.read', { botId: bot.id })
+              .then((res) => {
+                if (res) {
+                  setSoulMd(res.soul || '')
+                  setMemoryMd(res.memoryMd || '')
+                }
+              })
+              .catch(() => {})
+          }, [bot && bot.id])
+
+          useEffect(() => {
+            setRf(appSettings.responseFormat)
+            setGc(appSettings.groupChat)
+          }, [appSettings])
+
+          const loadLogs = async () => {
+            try {
+              const res = await props.onCommand('logs.read', { limit: 80 })
+              setLogs((res && res.entries) || [])
+            } catch (_err) { /* ignore */ }
+          }
+
+          useEffect(() => {
+            if (moduleKey === 'logs') void loadLogs()
+          }, [moduleKey])
+
+          const runSave = async (fn) => {
+            setBusy(true)
+            setError('')
+            setNotice('')
+            try {
+              await fn()
+              setNotice(t('settings.saved'))
+              window.setTimeout(() => setNotice(''), 2000)
+            } catch (failure) {
+              setError(failure && failure.message ? failure.message : String(failure))
+            } finally {
+              setBusy(false)
+            }
+          }
+
+          const saveBotPatch = async (extraDraft = {}, filesPatch = null) => {
+            if (!bot) return
+            const splitList = (raw) => String(raw || '').split(/[,\n]/).map(s => s.trim()).filter(Boolean)
+            await props.onCommand('bot.save', {
+              botId: bot.id,
+              draft: {
+                name: botName.trim() || bot.name,
+                role: botRole.trim(),
+                instructions: botInstructions,
+                color: botColor,
+                sectionId: botSectionId,
+                approvalPolicy: botApproval,
+                model: botModel,
+                tools: { allow: splitList(botToolsAllow), deny: splitList(botToolsDeny) },
+                ...extraDraft,
+              },
+            })
+            if (filesPatch) {
+              await props.onCommand('bot.files.save', { botId: bot.id, ...filesPatch })
+            }
+          }
+
+          const catalog = props.models && props.models.catalog
+          const activeModelLabel = bot
+            ? (modelLabelOf(catalog, effectiveModelOf(catalog, bot.model))
+              || (bot.model && bot.model.model)
+              || t('model.default'))
+            : '—'
+          const botRoutines = bot ? routines.filter(r => r.botId === bot.id) : []
+          const toolCountLabel = bot && bot.tools && bot.tools.allow && bot.tools.allow.length > 0
+            ? String(bot.tools.allow.length)
+            : (allTools.length > 0 ? String(allTools.length) : t('settings.allTools'))
+          const memLabel = props.memory ? props.memory.provider : 'memory_tencentdb'
+
+          const navRow = (key, icon, label, valueText) => h('button', {
+            key,
+            type: 'button',
+            className: 'bm-set-row',
+            'data-active': moduleKey === key,
+            onClick: () => { setModuleKey(key); setError(''); setNotice('') },
+          },
+            h('span', { className: 'bm-set-icon' }, h(SettingsIcon, { kind: icon })),
+            h('span', { className: 'bm-set-row-label' }, label),
+            valueText !== undefined && valueText !== '' ? h('span', { className: 'bm-set-row-val' }, valueText) : null,
+            h('span', { className: 'bm-set-chev' }, '›'))
+
+          const providers = (catalog && catalog.groups) || []
+          const selectedProvider = providers.find(g => g.id === botModel.provider)
+          const selectedModelEntry = modelEntryOf(catalog, botModel)
+
+          const renderModuleBody = () => {
+            if (moduleKey === 'memory') {
+              return h('div', { className: 'bm-set-panel' },
+                h(MemoryHubPanel, { memory: props.memory, bots, onCommand: props.onCommand }),
+                bot
+                  ? h('section', { className: 'bm-form' },
+                    h('h2', null, `${bot.name} · ${t('settings.memoryMdTitle')}`),
+                    h('textarea', {
+                      className: 'bm-area', rows: 8, value: memoryMd,
+                      onChange: e => setMemoryMd(e.target.value),
+                    }),
+                    h('div', { className: 'bm-form-actions' },
+                      h('button', {
+                        type: 'button', className: 'bm-btn primary', disabled: busy,
+                        onClick: () => runSave(() => props.onCommand('bot.files.save', { botId: bot.id, memoryMd })),
+                      }, t('settings.save'))))
+                  : null)
+            }
+
+            if (moduleKey === 'format') {
+              const toggleRf = (key) => {
+                const next = { ...rf, [key]: !rf[key] }
+                setRf(next)
+                void runSave(() => props.onCommand('settings.save', { responseFormat: next }))
+              }
+              return h('div', { className: 'bm-set-panel' },
+                h('section', { className: 'bm-form' },
+                  h('h2', null, t('settings.format')),
+                  h('p', { className: 'bm-form-hint' }, t('settings.formatDesc')),
+                  h('label', { className: 'bm-toggle-row' },
+                    h('span', null, t('settings.fmtEnable')),
+                    h('input', { type: 'checkbox', checked: rf.enabled !== false, onChange: () => toggleRf('enabled') })),
+                  h('label', { className: 'bm-toggle-row' },
+                    h('span', null, t('settings.fmtExtMd')),
+                    h('input', { type: 'checkbox', checked: rf.extendedMarkdown !== false, onChange: () => toggleRf('extendedMarkdown') })),
+                  h('label', { className: 'bm-toggle-row' },
+                    h('span', null, t('settings.fmtDiagrams')),
+                    h('input', { type: 'checkbox', checked: rf.diagramsAndMath !== false, onChange: () => toggleRf('diagramsAndMath') })),
+                  h('label', { className: 'bm-toggle-row' },
+                    h('span', null, t('settings.fmtArtifacts')),
+                    h('input', { type: 'checkbox', checked: rf.artifacts !== false, onChange: () => toggleRf('artifacts') })),
+                  h('label', { className: 'bm-toggle-row' },
+                    h('span', null, t('settings.fmtCards')),
+                    h('input', { type: 'checkbox', checked: rf.structuredCards !== false, onChange: () => toggleRf('structuredCards') })),
+                  h('label', { className: 'bm-toggle-row' },
+                    h('span', null, t('settings.fmtMultimodal')),
+                    h('input', { type: 'checkbox', checked: rf.multimodal !== false, onChange: () => toggleRf('multimodal') }))),
+                h('section', { className: 'bm-form' },
+                  h('h2', null, t('settings.fmtPreview')),
+                  h(MarkdownText, { text: FORMAT_PREVIEW_SAMPLE, formatOptions: rf })))
+            }
+
+            if (moduleKey === 'rooms') {
+              return h('div', { className: 'bm-set-panel' },
+                h('section', { className: 'bm-form' },
+                  h('h2', null, t('settings.rooms')),
+                  h('div', { className: 'bm-row' },
+                    h('label', { className: 'bm-label' }, t('settings.gcTokenLimit'),
+                      h('input', {
+                        type: 'number', min: 0, step: 50000, className: 'bm-input',
+                        value: gc.defaultTokenLimit ?? 0,
+                        onChange: e => setGc({ ...gc, defaultTokenLimit: Number(e.target.value) || 0 }),
+                      })),
+                    h('label', { className: 'bm-label' }, t('settings.gcIdleLimit'),
+                      h('input', {
+                        type: 'number', min: 1, max: 100, className: 'bm-input',
+                        value: gc.defaultIdleRoundLimit ?? 5,
+                        onChange: e => setGc({ ...gc, defaultIdleRoundLimit: Number(e.target.value) || 5 }),
+                      }))),
+                  h('label', { className: 'bm-toggle-row' },
+                    h('span', null, t('settings.gcSoftLock')),
+                    h('input', { type: 'checkbox', checked: gc.enableSoftLock !== false, onChange: e => setGc({ ...gc, enableSoftLock: e.target.checked }) })),
+                  h('label', { className: 'bm-toggle-row' },
+                    h('span', null, t('settings.gcErrorProbe')),
+                    h('input', { type: 'checkbox', checked: gc.enableErrorProbe !== false, onChange: e => setGc({ ...gc, enableErrorProbe: e.target.checked }) })),
+                  h('label', { className: 'bm-toggle-row' },
+                    h('span', null, t('settings.gcAutoReview')),
+                    h('input', { type: 'checkbox', checked: gc.autoProgressReview !== false, onChange: e => setGc({ ...gc, autoProgressReview: e.target.checked }) })),
+                  h('label', { className: 'bm-toggle-row' },
+                    h('span', null, t('settings.gcActivityStrip')),
+                    h('input', { type: 'checkbox', checked: gc.showActivityStrip === true, onChange: e => setGc({ ...gc, showActivityStrip: e.target.checked }) })),
+                  h('div', { className: 'bm-form-actions' },
+                    h('button', {
+                      type: 'button', className: 'bm-btn primary', disabled: busy,
+                      onClick: () => runSave(() => props.onCommand('settings.save', { groupChat: gc })),
+                    }, t('settings.save')))),
+                rooms.length > 0
+                  ? h('section', { className: 'bm-form' },
+                    h('h2', null, `${t('pane.groups')} (${rooms.length})`),
+                    rooms.map(r => h('div', { key: r.id, className: 'bm-routine' },
+                      h('div', { className: 'bm-routine-text' },
+                        h('span', { className: 'bm-routine-name' }, r.name),
+                        h('span', { className: 'bm-routine-meta' }, `${r.mode} · ${r.status}${r.workDir ? ` · ${r.workDir}` : ''}`)),
+                      h('button', { type: 'button', className: 'bm-btn small', onClick: () => props.onEditGroup(r) }, t('card.edit')))))
+                  : null)
+            }
+
+            if (moduleKey === 'artifacts') {
+              return h('div', { className: 'bm-set-panel' },
+                h('section', { className: 'bm-form' },
+                  h('h2', null, `${t('settings.artifacts')} (${artifacts.length})`),
+                  artifacts.length === 0
+                    ? h('p', { className: 'bm-muted' }, t('settings.artifactsEmpty'))
+                    : artifacts.map(item => h('div', { key: item.id, className: 'bm-routine' },
+                      h('div', { className: 'bm-routine-text' },
+                        h('span', { className: 'bm-routine-name' }, `${item.title} [${item.type}]`),
+                        h('span', { className: 'bm-routine-meta' }, `${item.roomName || ''}${item.botName ? ` · @${item.botName}` : ''}`),
+                        item.preview ? h('span', { className: 'bm-routine-prompt' }, item.preview) : null)))))
+            }
+
+            if (moduleKey === 'usage') {
+              return h('div', { className: 'bm-set-panel' },
+                h(MetricsCard, {
+                  data: {
+                    title: t('settings.usage'),
+                    items: [
+                      { label: 'Total Tokens', value: `${Math.round((usage.totalTokens || 0) / 100) / 10}k`, tone: 'ok' },
+                      { label: t('pane.bots'), value: String(usage.botCount ?? bots.length) },
+                      { label: t('pane.groups'), value: String(usage.roomCount ?? rooms.length) },
+                      { label: t('settings.routines'), value: String(usage.routineCount ?? routines.length) },
+                    ],
+                  },
+                }),
+                (usage.byRoom || []).length > 0
+                  ? h('section', { className: 'bm-form' },
+                    h('h2', null, t('pane.groups')),
+                    h('div', { className: 'bm-table-wrap', style: { margin: 0 } },
+                      h('table', { className: 'bm-table' },
+                        h('thead', null, h('tr', null,
+                          h('th', null, t('group.name')),
+                          h('th', null, 'Status'),
+                          h('th', null, 'Msgs'),
+                          h('th', null, 'Tokens'))),
+                        h('tbody', null, usage.byRoom.map(r => h('tr', { key: r.roomId },
+                          h('td', null, r.name),
+                          h('td', null, r.status),
+                          h('td', null, String(r.messages)),
+                          h('td', null, `${Math.round((r.tokensUsed || 0) / 100) / 10}k${r.tokenLimit > 0 ? ` / ${Math.round(r.tokenLimit / 1000)}k` : ''}`)))))))
+                  : null)
+            }
+
+            if (moduleKey === 'integrations') {
+              return h('div', { className: 'bm-set-panel' },
+                h('section', { className: 'bm-form' },
+                  h('h2', null, t('settings.integrations')),
+                  h('div', { className: 'bm-table-wrap', style: { margin: 0 } },
+                    h('table', { className: 'bm-table' },
+                      h('tbody', null,
+                        h('tr', null, h('th', null, 'State Root'), h('td', null, runtimeInfo.root || '—')),
+                        h('tr', null, h('th', null, 'Host PID'), h('td', null, String(runtimeInfo.pid || '—'))),
+                        h('tr', null, h('th', null, 'Memory Provider'), h('td', null, memLabel)),
+                        h('tr', null, h('th', null, 'Registered Tools'), h('td', null, String(allTools.length)))))),
+                  allTools.length > 0
+                    ? h('div', { className: 'bm-picks' }, allTools.map(tn => h('span', { key: tn, className: 'bm-act-chip' }, tn)))
+                    : null))
+            }
+
+            if (moduleKey === 'logs') {
+              return h('div', { className: 'bm-set-panel' },
+                h('section', { className: 'bm-form' },
+                  h('div', { className: 'bm-block-head' },
+                    h('h2', null, t('settings.logs')),
+                    h('button', { type: 'button', className: 'bm-btn small', onClick: () => { void loadLogs() } }, t('settings.logsRefresh'))),
+                  logs.length === 0
+                    ? h('p', { className: 'bm-muted' }, t('settings.logsEmpty'))
+                    : logs.map((entry, idx) => h('div', { key: entry.id || `lg${idx}`, className: 'bm-routine' },
+                      h('div', { className: 'bm-routine-text' },
+                        h('span', { className: 'bm-routine-name' }, `[${entry.roomName || entry.roomId}] ${entry.kind}${entry.botName ? ` · ${entry.botName}` : ''}`),
+                        h('span', { className: 'bm-routine-meta' }, `${entry.at || ''}${entry.reason ? ` · ${entry.reason}` : ''}`))))))
+            }
+
+            // Bot-scoped settings modules
+            if (!bot) {
+              return h('div', { className: 'bm-set-panel' },
+                h('div', { className: 'bm-empty' },
+                  h('p', null, t('settings.noBot')),
+                  h('button', { type: 'button', className: 'bm-btn primary', onClick: props.onNewBot }, t('page.new'))))
+            }
+
+            if (moduleKey === 'model') {
+              const useCustom = Boolean(botModel.provider && botModel.model)
+              return h('div', { className: 'bm-set-panel' },
+                h('section', { className: 'bm-form' },
+                  h('h2', null, `${bot.name} · ${t('settings.model')}`),
+                  h('div', { className: 'bm-seg' },
+                    h('button', {
+                      type: 'button', 'data-active': !useCustom,
+                      onClick: () => setBotModel({ ...EMPTY_MODEL }),
+                    }, t('form.modelDefault')),
+                    h('button', {
+                      type: 'button', 'data-active': useCustom,
+                      onClick: () => {
+                        const firstG = providers[0]
+                        const firstM = firstG && firstG.models && firstG.models[0]
+                        setBotModel({
+                          provider: (firstG && firstG.id) || (catalog && catalog.default && catalog.default.provider) || '',
+                          model: (firstM && firstM.id) || (catalog && catalog.default && catalog.default.model) || '',
+                          reasoningEffort: '',
+                        })
+                      },
+                    }, t('form.modelCustom'))),
+                  useCustom
+                    ? h('div', { className: 'bm-row' },
+                      h('label', { className: 'bm-label' }, t('form.modelProvider'),
+                        providers.length > 0
+                          ? h('select', {
+                            className: 'bm-input', value: botModel.provider,
+                            onChange: (e) => {
+                              const g = providers.find(item => item.id === e.target.value)
+                              const m = g && g.models && g.models[0]
+                              setBotModel({ provider: e.target.value, model: (m && m.id) || '', reasoningEffort: '' })
+                            },
+                          }, providers.map(g => h('option', { key: g.id, value: g.id }, g.name || g.id)))
+                          : h('input', {
+                            className: 'bm-input', value: botModel.provider,
+                            onChange: e => setBotModel({ ...botModel, provider: e.target.value }),
+                          })),
+                      h('label', { className: 'bm-label' }, t('form.modelPick'),
+                        selectedProvider && selectedProvider.models && selectedProvider.models.length > 0
+                          ? h('select', {
+                            className: 'bm-input', value: botModel.model,
+                            onChange: e => setBotModel({ ...botModel, model: e.target.value, reasoningEffort: '' }),
+                          }, selectedProvider.models.map(m => h('option', { key: m.id, value: m.id }, m.name || m.id)))
+                          : h('input', {
+                            className: 'bm-input', value: botModel.model,
+                            onChange: e => setBotModel({ ...botModel, model: e.target.value }),
+                          })))
+                    : h('p', { className: 'bm-form-hint' }, t('form.modelDefaultHint')),
+                  useCustom && selectedModelEntry && selectedModelEntry.reasoning && selectedModelEntry.reasoning.efforts
+                    ? h('label', { className: 'bm-label' }, t('form.reasoning'),
+                      h('select', {
+                        className: 'bm-input', value: botModel.reasoningEffort || '',
+                        onChange: e => setBotModel({ ...botModel, reasoningEffort: e.target.value }),
+                      },
+                        h('option', { value: '' }, t('form.reasoningDefault')),
+                        selectedModelEntry.reasoning.efforts.map(ef => h('option', { key: ef.id, value: ef.id }, ef.name || ef.id))))
+                    : null,
+                  h('div', { className: 'bm-form-actions' },
+                    h('button', { type: 'button', className: 'bm-btn', onClick: () => props.onReloadModels(true) }, t('form.modelRefresh')),
+                    h('button', {
+                      type: 'button', className: 'bm-btn primary', disabled: busy,
+                      onClick: () => runSave(() => saveBotPatch({ model: botModel })),
+                    }, t('settings.save')))))
+            }
+
+            if (moduleKey === 'tools') {
+              const allowSet = new Set(String(botToolsAllow || '').split(/[,\n]/).map(s => s.trim()).filter(Boolean))
+              const toggleTool = (name) => {
+                const next = new Set(allowSet)
+                if (next.has(name)) next.delete(name)
+                else next.add(name)
+                setBotToolsAllow([...next].join(', '))
+              }
+              return h('div', { className: 'bm-set-panel' },
+                h('section', { className: 'bm-form' },
+                  h('h2', null, `${bot.name} · ${t('settings.tools')}`),
+                  h('label', { className: 'bm-label' }, t('form.tools'),
+                    h('input', {
+                      className: 'bm-input', value: botToolsAllow, placeholder: t('form.toolsPlaceholder'),
+                      onChange: e => setBotToolsAllow(e.target.value),
+                    })),
+                  allTools.length > 0
+                    ? h('div', { className: 'bm-picks' }, allTools.map(tn => h('button', {
+                      key: tn, type: 'button', className: 'bm-pick', 'data-on': allowSet.has(tn),
+                      onClick: () => toggleTool(tn),
+                    }, tn)))
+                    : null,
+                  h('div', { className: 'bm-form-actions' },
+                    h('button', {
+                      type: 'button', className: 'bm-btn primary', disabled: busy,
+                      onClick: () => runSave(() => saveBotPatch()),
+                    }, t('settings.save')))))
+            }
+
+            if (moduleKey === 'skills') {
+              return h('div', { className: 'bm-set-panel' },
+                h('section', { className: 'bm-form' },
+                  h('h2', null, `${bot.name} · ${t('settings.skills')}`),
+                  h('p', { className: 'bm-form-hint' }, `${bot.dir ? `${bot.dir}/.dsh/skills/` : ''}`),
+                  h('div', { className: 'bm-picks' },
+                    h('span', { className: 'bm-act-chip' }, 'team (SKILL.md)'),
+                    h('span', { className: 'bm-act-chip' }, 'room-completion (SKILL.md)'),
+                    (bot.skills || []).map(sk => h('span', { key: sk, className: 'bm-act-chip' }, sk)))))
+            }
+
+            if (moduleKey === 'workspace') {
+              return h('div', { className: 'bm-set-panel' },
+                h('section', { className: 'bm-form' },
+                  h('h2', null, `${bot.name} · ${t('settings.workspace')}`),
+                  h('div', { className: 'bm-table-wrap', style: { margin: 0 } },
+                    h('table', { className: 'bm-table' },
+                      h('tbody', null,
+                        h('tr', null, h('th', null, 'Bot Directory'), h('td', null, bot.dir || '—')),
+                        h('tr', null, h('th', null, 'Primary Session'), h('td', null, bot.sessionId || '—')),
+                        h('tr', null, h('th', null, 'Section'), h('td', null, bot.sectionId || 'general')))))))
+            }
+
+            if (moduleKey === 'routines') {
+              return h('div', { className: 'bm-set-panel' },
+                h('section', { className: 'bm-form' },
+                  h('h2', null, `${bot.name} · ${t('settings.routines')}`),
+                  h(RoutineSection, { bot, routines: botRoutines, onCommand: props.onCommand })))
+            }
+
+            if (moduleKey === 'approval') {
+              return h('div', { className: 'bm-set-panel' },
+                h('section', { className: 'bm-form' },
+                  h('h2', null, `${bot.name} · ${t('settings.approval')}`),
+                  h('label', { className: 'bm-label' }, t('form.approval'),
+                    h('select', {
+                      className: 'bm-input', value: botApproval,
+                      onChange: e => setBotApproval(e.target.value),
+                    },
+                      h('option', { value: 'ask' }, t('approval.ask')),
+                      h('option', { value: 'always' }, t('approval.allowAlways')),
+                      h('option', { value: 'never' }, t('approval.denyAlways')))),
+                  h('div', { className: 'bm-form-actions' },
+                    h('button', {
+                      type: 'button', className: 'bm-btn primary', disabled: busy,
+                      onClick: () => runSave(() => saveBotPatch({ approvalPolicy: botApproval })),
+                    }, t('settings.save')))))
+            }
+
+            // Default: `soul`
+            return h('div', { className: 'bm-set-panel' },
+              h('section', { className: 'bm-form' },
+                h('h2', null, `${bot.name} · ${t('settings.soul')}`),
+                h('p', { className: 'bm-form-hint' }, t('settings.soulHint')),
+                h('div', { className: 'bm-row' },
+                  h('label', { className: 'bm-label' }, t('form.name'),
+                    h('input', { className: 'bm-input', value: botName, onChange: e => setBotName(e.target.value) })),
+                  h('label', { className: 'bm-label' }, t('form.role'),
+                    h('input', { className: 'bm-input', value: botRole, onChange: e => setBotRole(e.target.value) }))),
+                h('div', { className: 'bm-row' },
+                  h('label', { className: 'bm-label' }, t('form.section'),
+                    h('select', { className: 'bm-input', value: botSectionId, onChange: e => setBotSectionId(e.target.value) },
+                      sections.map(s => h('option', { key: s.id, value: s.id }, s.nameZh || s.name)))),
+                  h('div', { className: 'bm-label' }, t('form.color'),
+                    h('div', { className: 'bm-swatches' }, COLORS.map(c => h('button', {
+                      key: c, type: 'button', className: 'bm-swatch', 'data-active': botColor === c,
+                      style: { background: c }, onClick: () => setBotColor(c),
+                    }))))),
+                h('label', { className: 'bm-label' }, t('form.instructions'),
+                  h('textarea', { className: 'bm-area', rows: 4, value: botInstructions, onChange: e => setBotInstructions(e.target.value) })),
+                h('label', { className: 'bm-label' }, 'SOUL.md',
+                  h('textarea', { className: 'bm-area', rows: 6, value: soulMd, onChange: e => setSoulMd(e.target.value) })),
+                h('div', { className: 'bm-form-actions' },
+                  h('button', {
+                    type: 'button', className: 'bm-btn primary', disabled: busy,
+                    onClick: () => runSave(() => saveBotPatch({}, { soul: soulMd })),
+                  }, t('settings.save')))))
+          }
+
+          return h('div', { className: 'bm-settings' },
+            h('nav', { className: 'bm-set-nav' },
+              h('div', { className: 'bm-set-hero' },
+                h('div', { className: 'bm-set-hero-top' },
+                  h('strong', { style: { fontSize: '14px' } }, t('settings.title')),
+                  h('button', { type: 'button', className: 'bm-btn small', onClick: props.onNewBot }, `+ ${t('page.new')}`)),
+                bot
+                  ? h('span', { className: 'bm-avatar bm-avatar-lg', style: { background: bot.color || COLORS[0] } }, initialOf(bot.name))
+                  : null,
+                bot ? h('strong', { style: { fontSize: '15px' } }, bot.name) : null,
+                bots.length > 1
+                  ? h('div', { className: 'bm-set-botpills' }, bots.map(item => h('button', {
+                    key: item.id, type: 'button', className: 'bm-pick', 'data-on': bot && bot.id === item.id,
+                    onClick: () => setBotId(item.id),
+                  }, item.name)))
+                  : null),
+              h('div', { className: 'bm-set-card' },
+                navRow('model', 'model', t('settings.model'), activeModelLabel),
+                navRow('skills', 'skills', t('settings.skills'), String((bot && bot.skills ? bot.skills.length : 0) + 2)),
+                navRow('tools', 'tools', t('settings.tools'), toolCountLabel)),
+              h('div', { className: 'bm-set-group-label' }, t('settings.groupWork')),
+              h('div', { className: 'bm-set-card' },
+                navRow('workspace', 'workspace', t('settings.workspace'), ''),
+                navRow('routines', 'routines', t('settings.routines'), String(botRoutines.length)),
+                navRow('artifacts', 'artifacts', t('settings.artifacts'), String(artifacts.length)),
+                navRow('rooms', 'rooms', t('settings.rooms'), String(rooms.length))),
+              h('div', { className: 'bm-set-group-label' }, t('settings.groupAgent')),
+              h('div', { className: 'bm-set-card' },
+                navRow('soul', 'soul', t('settings.soul'), ''),
+                navRow('memory', 'memory', t('settings.memory'), memLabel),
+                navRow('format', 'format', t('settings.format'), rf.enabled !== false ? 'ON' : 'OFF'),
+                navRow('usage', 'usage', t('settings.usage'), `${Math.round((usage.totalTokens || 0) / 100) / 10}k`)),
+              h('div', { className: 'bm-set-card' },
+                h('button', {
+                  type: 'button', className: 'bm-set-row',
+                  onClick: () => setAdvOpen(v => !v),
+                },
+                  h('span', { className: 'bm-set-icon' }, h(SettingsIcon, { kind: 'gear' })),
+                  h('span', { className: 'bm-set-row-label' }, t('settings.groupAdvanced')),
+                  h('span', { className: 'bm-set-chev' }, advOpen ? '⌄' : '›')),
+                advOpen ? navRow('approval', 'approval', t('settings.approval'), bot ? bot.approvalPolicy : '') : null,
+                advOpen ? navRow('integrations', 'integrations', t('settings.integrations'), String(allTools.length)) : null,
+                advOpen ? navRow('logs', 'logs', t('settings.logs'), '') : null)),
+            h('div', { className: 'bm-set-body' },
+              error ? h('div', { className: 'bm-error', style: { maxWidth: '780px', margin: '0 auto 12px' } }, error) : null,
+              notice ? h('div', { className: 'bm-ok', style: { maxWidth: '780px', margin: '0 auto 12px' } }, notice) : null,
+              renderModuleBody()))
+        }
+
+        function MonitorGlyph(props) {
+          const size = props.size || 24
+          return h('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, 'aria-hidden': true },
+            h('rect', { x: 2.5, y: 4, width: 19, height: 13, rx: 2.2 }),
+            h('path', { d: 'M8.5 20h7M12 17v3', strokeLinecap: 'round' }))
+        }
+
+        function ClockGlyph(props) {
+          const size = props.size || 26
+          return h('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, 'aria-hidden': true },
+            h('rect', { x: 7.5, y: 2.5, width: 9, height: 3, rx: 1 }),
+            h('rect', { x: 7.5, y: 18.5, width: 9, height: 3, rx: 1 }),
+            h('circle', { cx: 12, cy: 12, r: 6.2 }))
+        }
+
+        function fmtScreenBytes(bytes) {
+          if (!bytes) return '0 MB'
+          const mb = bytes / (1024 * 1024)
+          return mb >= 10 ? `${Math.round(mb)} MB` : `${mb.toFixed(1)} MB`
+        }
+
+        function ScreenHelpCard(props) {
+          const t = useT()
+          const item = props.entry
+          const [note, setNote] = useState('')
+          const [busy, setBusy] = useState(false)
+          const previewUrl = item.previewDataUrl || `/botmode/api/screen/preview?botId=${encodeURIComponent(item.botId)}&cached=1`
+          const decide = async (decision) => {
+            setBusy(true)
+            try {
+              await props.onCommand('screen.help.decide', { helpId: item.id, decision, note })
+            } catch (_e) { /* handled */ } finally {
+              setBusy(false)
+            }
+          }
+          return h('div', { className: 'bm-help-card' },
+            h('img', {
+              className: 'bm-help-thumb',
+              src: previewUrl,
+              alt: item.botName,
+              onClick: () => props.onTakeover(item),
+              onError: (e) => { e.currentTarget.style.display = 'none' },
+            }),
+            h('div', { className: 'bm-help-body' },
+              h('div', { className: 'bm-help-head' },
+                h('span', { className: 'bm-approval-name' }, item.botName || item.botId),
+                h('span', { className: 'bm-help-badge' }, item.category || 'manual'),
+                h('span', { className: 'bm-muted' }, t('screen.helpTitle'))),
+              h('div', { className: 'bm-help-reason' }, item.reason),
+              h('div', { className: 'bm-help-controls' },
+                h('button', {
+                  type: 'button', className: 'bm-btn small primary', disabled: busy,
+                  onClick: () => props.onTakeover(item),
+                }, t('screen.helpOpen')),
+                h('input', {
+                  className: 'bm-help-note',
+                  value: note,
+                  placeholder: t('screen.helpNotePlaceholder'),
+                  onChange: e => setNote(e.target.value),
+                }),
+                h('button', {
+                  type: 'button', className: 'bm-btn small', disabled: busy,
+                  onClick: () => decide('release'),
+                }, t('screen.helpRelease')),
+                h('button', {
+                  type: 'button', className: 'bm-btn small danger', disabled: busy,
+                  onClick: () => decide('cancel'),
+                }, t('screen.helpCancel')))))
+        }
+
+        function ScreenTakeoverModal(props) {
+          const t = useT()
+          const { modal, screen, onCommand, onClose } = props
+          const [tick, setTick] = useState(0)
+          const [textInput, setTextInput] = useState('')
+          const [note, setNote] = useState('')
+          const [busy, setBusy] = useState(false)
+          const [err, setErr] = useState('')
+          const imgRef = useRef(null)
+
+          useEffect(() => {
+            if (!modal) return undefined
+            const timer = window.setInterval(() => setTick(v => v + 1), 500)
+            return () => window.clearInterval(timer)
+          }, [modal && modal.botId])
+
+          if (!modal) return null
+          const src = `/botmode/api/screen/preview?botId=${encodeURIComponent(modal.botId)}&cached=1&t=${tick}`
+
+          const sendInput = async (input) => {
+            setErr('')
+            try {
+              await onCommand('screen.human_input', { botId: modal.botId, input })
+              setTick(v => v + 1)
+            } catch (e) {
+              setErr(e && e.message ? e.message : String(e))
+            }
+          }
+
+          const mapCoords = (event) => {
+            const node = imgRef.current
+            if (!node) return null
+            const rect = node.getBoundingClientRect()
+            if (rect.width <= 0 || rect.height <= 0) return null
+            const x = Math.max(0, Math.min(1279, Math.round(((event.clientX - rect.left) / rect.width) * 1280)))
+            const y = Math.max(0, Math.min(719, Math.round(((event.clientY - rect.top) / rect.height) * 720)))
+            return { x, y }
+          }
+
+          const handBack = async () => {
+            setBusy(true)
+            setErr('')
+            try {
+              if (modal.helpId) {
+                await onCommand('screen.help.decide', { helpId: modal.helpId, decision: 'release', note })
+              } else {
+                await onCommand('screen.release', { botId: modal.botId })
+              }
+              onClose()
+            } catch (e) {
+              setErr(e && e.message ? e.message : String(e))
+            } finally {
+              setBusy(false)
+            }
+          }
+
+          const sendText = async (event) => {
+            event.preventDefault()
+            if (!textInput) return
+            const val = textInput
+            setTextInput('')
+            await sendInput({ kind: 'type', text: val, press_enter: true })
+          }
+
+          return h('div', { className: 'bm-modal-backdrop', onClick: (e) => { if (e.target === e.currentTarget) onClose() } },
+            h('div', { className: 'bm-modal' },
+              h('div', { className: 'bm-modal-head' },
+                h('span', { className: 'bm-screen-dot', 'data-state': (screen && screen.state) || 'HUMAN_TAKEOVER' }),
+                h('strong', { style: { fontSize: '13px' } }, `${modal.botName || modal.botId} · ${t('screen.takeoverState')}`),
+                modal.reason ? h('span', { className: 'bm-muted', style: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, modal.reason) : h('span', { style: { flex: 1 } }),
+                (() => {
+                  const raw = modal.gatewayStreamUrl
+                  if (!raw) return null
+                  try {
+                    const u = new URL(raw, window.location.href)
+                    const isLoopbackTarget = u.hostname === '127.0.0.1' || u.hostname === 'localhost' || u.hostname === '[::1]'
+                    const isLoopbackPage = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost' || window.location.hostname === '[::1]'
+                    if (isLoopbackTarget && !isLoopbackPage) return null
+                  } catch (_e) { /* keep */ }
+                  return h('a', {
+                    className: 'bm-btn small',
+                    href: raw,
+                    target: '_blank',
+                    rel: 'noreferrer',
+                    style: { textDecoration: 'none' },
+                  }, t('screen.openVnc'))
+                })(),
+                h('button', { type: 'button', className: 'bm-btn small', onClick: onClose }, t('form.cancel'))),
+              h('div', { className: 'bm-modal-stage' },
+                h('img', {
+                  ref: imgRef,
+                  className: 'bm-modal-canvas',
+                  src,
+                  alt: modal.botId,
+                  draggable: false,
+                  onClick: (e) => {
+                    const pos = mapCoords(e)
+                    if (pos) void sendInput({ kind: 'click', x: pos.x, y: pos.y, button: 1 })
+                  },
+                  onDoubleClick: (e) => {
+                    const pos = mapCoords(e)
+                    if (pos) void sendInput({ kind: 'dblclick', x: pos.x, y: pos.y, button: 1 })
+                  },
+                  onContextMenu: (e) => {
+                    e.preventDefault()
+                    const pos = mapCoords(e)
+                    if (pos) void sendInput({ kind: 'click', x: pos.x, y: pos.y, button: 3 })
+                  },
+                  onWheel: (e) => {
+                    const pos = mapCoords(e)
+                    if (!pos) return
+                    const clicks = e.deltaY > 0 ? 3 : -3
+                    void sendInput({ kind: 'scroll', x: pos.x, y: pos.y, clicks })
+                  },
+                })),
+              h('form', { className: 'bm-modal-bar', onSubmit: sendText },
+                h('input', {
+                  className: 'bm-help-note',
+                  value: textInput,
+                  placeholder: t('screen.typePlaceholder'),
+                  onChange: e => setTextInput(e.target.value),
+                }),
+                h('button', { type: 'submit', className: 'bm-btn small primary' }, t('screen.typeSend')),
+                ['Return', 'Tab', 'Escape', 'BackSpace', 'ctrl+l', 'ctrl+r'].map(combo => h('button', {
+                  key: combo,
+                  type: 'button',
+                  className: 'bm-btn small',
+                  onClick: () => void sendInput({ kind: 'key', combo }),
+                }, combo)),
+                h('button', { type: 'button', className: 'bm-btn small', onClick: () => void sendInput({ kind: 'open_app', app: 'chrome' }) }, t('screen.browser')),
+                h('button', { type: 'button', className: 'bm-btn small', onClick: () => void sendInput({ kind: 'open_app', app: 'terminal' }) }, t('screen.terminal'))),
+              err ? h('div', { className: 'bm-error', style: { margin: '0 14px 8px' } }, err) : null,
+              h('div', { className: 'bm-modal-foot' },
+                h('span', { className: 'bm-muted', style: { marginRight: 'auto' } }, t('screen.modalHint')),
+                h('input', {
+                  className: 'bm-help-note',
+                  style: { maxWidth: '280px' },
+                  value: note,
+                  placeholder: t('screen.helpNotePlaceholder'),
+                  onChange: e => setNote(e.target.value),
+                }),
+                h('button', { type: 'button', className: 'bm-btn primary', disabled: busy, onClick: handBack }, t('screen.helpRelease')))))
+        }
+
+        function RightScreenPanel(props) {
+          const t = useT()
+          const { bot, screen, screenGateway, gatewayAvailable, routines, onCommand, onOpenTakeover, onRefreshHost } = props
+          const [railTab, setRailTab] = useState('tasks')
+          const [shotTick, setShotTick] = useState(0)
+          const [busy, setBusy] = useState(false)
+          const [err, setErr] = useState('')
+          const [files, setFiles] = useState([])
+          const [creatingRoutine, setCreatingRoutine] = useState(false)
+          const [rName, setRName] = useState('')
+          const [rCron, setRCron] = useState('*/30 * * * *')
+          const [rPrompt, setRPrompt] = useState('')
+          const fileInputRef = useRef(null)
+
+          const screenState = (screen && screen.state) || 'STOPPED'
+          const healthy = Boolean(screen && screen.healthy)
+          const isRunning = healthy && screenState !== 'STOPPED'
+          const gatewayStarting = Boolean(screenGateway && screenGateway.starting)
+          const autoStartable = !screenGateway || screenGateway.autoStartable !== false
+          const gatewayErr = (screenGateway && screenGateway.error) || ''
+
+          useEffect(() => {
+            if (!gatewayStarting || !onRefreshHost) return undefined
+            const timer = window.setInterval(() => onRefreshHost(), 1500)
+            return () => window.clearInterval(timer)
+          }, [gatewayStarting])
+
+          useEffect(() => {
+            if (!bot || !isRunning || screenState === 'FROZEN') return undefined
+            const timer = window.setInterval(() => setShotTick(v => v + 1), 1800)
+            return () => window.clearInterval(timer)
+          }, [bot && bot.id, isRunning, screenState])
+
+          const refreshFiles = async () => {
+            if (!bot) return
+            try {
+              const res = await fetch(`/botmode/api/screen/files?botId=${encodeURIComponent(bot.id)}`, { credentials: 'include', cache: 'no-store' })
+              const data = await res.json()
+              if (data && data.ok) setFiles(data.files || [])
+            } catch (_e) { /* ignore */ }
+          }
+
+          useEffect(() => {
+            if (railTab === 'files') void refreshFiles()
+          }, [railTab, bot && bot.id])
+
+          const runScreenCmd = async (type, extra = {}) => {
+            setBusy(true)
+            setErr('')
+            try {
+              const res = await onCommand(type, { botId: bot.id, ...extra })
+              setShotTick(v => v + 1)
+              return res
+            } catch (e) {
+              setErr(e && e.message ? e.message : String(e))
+              return null
+            } finally {
+              setBusy(false)
+            }
+          }
+
+          const startAndOpen = async () => {
+            await runScreenCmd('screen.start')
+          }
+
+          const stateLabel = !props.hostScreenSupported
+            ? t('screen.hostOutdated')
+            : gatewayStarting
+              ? t('screen.starting')
+              : !gatewayAvailable
+                ? t('screen.offline')
+                : !isRunning
+                  ? t('screen.stopped')
+                  : screenState === 'FROZEN'
+                    ? t('screen.frozen')
+                    : screenState === 'NEED_HUMAN'
+                      ? t('screen.needHuman')
+                      : screenState === 'HUMAN_TAKEOVER'
+                        ? t('screen.takeoverState')
+                        : t('screen.active')
+
+          const previewUrl = isRunning
+            ? `/botmode/api/screen/preview?botId=${encodeURIComponent(bot.id)}&cached=1&t=${shotTick}`
+            : ''
+
+          const saveNewRoutine = async (event) => {
+            event.preventDefault()
+            if (!rName.trim() || !rPrompt.trim()) return
+            setBusy(true)
+            setErr('')
+            try {
+              await onCommand('routine.save', {
+                botId: bot.id,
+                name: rName.trim(),
+                cron: rCron.trim() || '*/30 * * * *',
+                prompt: rPrompt.trim(),
+                enabled: true,
+              })
+              setCreatingRoutine(false)
+              setRName('')
+              setRPrompt('')
+            } catch (e) {
+              setErr(e && e.message ? e.message : String(e))
+            } finally {
+              setBusy(false)
+            }
+          }
+
+          const uploadScreenFile = async (file) => {
+            if (!file || !bot) return
+            setBusy(true)
+            try {
+              const buf = await file.arrayBuffer()
+              await fetch(`/botmode/api/screen/files?botId=${encodeURIComponent(bot.id)}&name=${encodeURIComponent(file.name)}`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'content-type': file.type || 'application/octet-stream', 'x-file-name': encodeURIComponent(file.name) },
+                body: buf,
+              })
+              await refreshFiles()
+            } finally {
+              setBusy(false)
+            }
+          }
+
+          return h('aside', { className: 'bm-right-rail' },
+            h('div', { className: 'bm-rail-tabs' },
+              h('button', { type: 'button', className: 'bm-rail-tab', 'data-active': railTab === 'tasks', onClick: () => setRailTab('tasks') }, t('detail.routines')),
+              h('button', { type: 'button', className: 'bm-rail-tab', 'data-active': railTab === 'files', onClick: () => setRailTab('files') }, t('screen.files'))),
+            h('div', { className: 'bm-rail-body' },
+              // Top Screen Card (matching screenshot)
+              h('div', null,
+                h('div', { className: 'bm-screen-card', 'data-state': isRunning ? screenState : 'STOPPED' },
+                  isRunning
+                    ? h('img', {
+                      className: 'bm-screen-img',
+                      src: previewUrl,
+                      alt: bot.name,
+                      'data-frozen': screenState === 'FROZEN',
+                      onClick: () => { if (!busy) void onOpenTakeover(bot) },
+                      onError: (e) => { e.currentTarget.style.opacity = '0.15' },
+                    })
+                    : h('div', { className: 'bm-screen-placeholder' }, h(MonitorGlyph, { size: 28 })),
+                  isRunning && screen && screen.display
+                    ? h('span', { className: 'bm-screen-overlay-badge' }, `${screen.display} · ${fmtScreenBytes(screen.memory_bytes)}`)
+                    : null,
+                  h('div', { className: 'bm-screen-footer' },
+                    h('span', { className: 'bm-screen-dot', 'data-state': isRunning ? screenState : 'STOPPED' }),
+                    h('div', { className: 'bm-screen-ftext' },
+                      h('span', { className: 'bm-screen-ftitle' }, t('screen.title')),
+                      h('span', { className: 'bm-screen-fsub' }, stateLabel)),
+                    !isRunning
+                      ? h('button', {
+                        type: 'button',
+                        className: 'bm-screen-cta',
+                        disabled: busy || !props.hostScreenSupported || (!gatewayAvailable && !autoStartable),
+                        onClick: startAndOpen,
+                      }, t('screen.start'))
+                      : screenState === 'FROZEN'
+                        ? h('button', {
+                          type: 'button', className: 'bm-screen-cta', disabled: busy,
+                          onClick: () => void runScreenCmd('screen.thaw'),
+                        }, t('screen.thaw'))
+                        : (screenState === 'NEED_HUMAN' || screenState === 'HUMAN_TAKEOVER')
+                          ? h('button', {
+                            type: 'button', className: 'bm-screen-cta', 'data-tone': 'warn', disabled: busy,
+                            onClick: () => void onOpenTakeover(bot),
+                          }, t('screen.takeover'))
+                          : h('button', {
+                            type: 'button', className: 'bm-screen-cta', disabled: busy,
+                            onClick: () => void onOpenTakeover(bot),
+                          }, t('screen.takeover')))),
+                isRunning
+                  ? h('div', { className: 'bm-screen-toolbar' },
+                    h('button', {
+                      type: 'button', className: 'bm-btn xs', disabled: busy,
+                      onClick: () => void runScreenCmd('screen.human_input', { input: { kind: 'open_app', app: 'chrome' } }),
+                    }, t('screen.browser')),
+                    h('button', {
+                      type: 'button', className: 'bm-btn xs', disabled: busy,
+                      onClick: () => void runScreenCmd('screen.human_input', { input: { kind: 'open_app', app: 'terminal' } }),
+                    }, t('screen.terminal')),
+                    screenState === 'FROZEN'
+                      ? null
+                      : h('button', {
+                        type: 'button', className: 'bm-btn xs', disabled: busy,
+                        onClick: () => void runScreenCmd('screen.freeze'),
+                      }, t('screen.freeze')),
+                    h('button', {
+                      type: 'button', className: 'bm-btn xs danger', disabled: busy,
+                      onClick: () => void runScreenCmd('screen.brake'),
+                    }, t('screen.brake')))
+                  : null,
+                err ? h('div', { className: 'bm-error', style: { marginTop: '6px' } }, err) : null,
+                !err && !props.hostScreenSupported && onRefreshHost
+                  ? h('div', { style: { marginTop: '6px', display: 'flex', justifyContent: 'flex-end' } },
+                    h('button', { type: 'button', className: 'bm-btn xs', onClick: onRefreshHost }, t('screen.refreshHost')))
+                  : null,
+                !err && props.hostScreenSupported && !gatewayAvailable && gatewayErr && !gatewayStarting
+                  ? h('div', { className: 'bm-muted', style: { marginTop: '6px', fontSize: '11px', lineHeight: '1.35', wordBreak: 'break-word' } }, gatewayErr)
+                  : null),
+
+              // Bottom section: Scheduled Tasks or Screen Files
+              railTab === 'tasks'
+                ? h('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: '10px' } },
+                  h('div', { className: 'bm-rail-bothead' },
+                    h('span', { className: 'bm-avatar bm-avatar-sm', style: { background: bot.color || COLORS[0] } }, initialOf(bot.name)),
+                    h('div', { className: 'bm-rail-botmeta' },
+                      h('div', { className: 'bm-rail-botname' },
+                        h('span', null, bot.name),
+                        bot.role ? h('span', { className: 'bm-rail-botrole' }, `@${bot.role}`) : null),
+                      h('span', { className: 'bm-rail-sub' }, t('detail.routines'))),
+                    h('button', {
+                      type: 'button', className: 'bm-rail-plus', title: t('screen.routinesNew'),
+                      onClick: () => setCreatingRoutine(v => !v),
+                    }, creatingRoutine ? '×' : '+')),
+                  creatingRoutine
+                    ? h('form', { className: 'bm-routine-form', onSubmit: saveNewRoutine },
+                      h('input', { className: 'bm-input', value: rName, placeholder: t('routine.name'), onChange: e => setRName(e.target.value), autoFocus: true }),
+                      h('input', { className: 'bm-input', value: rCron, placeholder: '*/30 * * * *', onChange: e => setRCron(e.target.value) }),
+                      h('textarea', { className: 'bm-input', rows: 3, value: rPrompt, placeholder: t('routine.prompt'), onChange: e => setRPrompt(e.target.value) }),
+                      h('div', { style: { display: 'flex', gap: '6px', justifyContent: 'flex-end' } },
+                        h('button', { type: 'button', className: 'bm-btn small', onClick: () => setCreatingRoutine(false) }, t('form.cancel')),
+                        h('button', { type: 'submit', className: 'bm-btn small primary', disabled: busy }, t('form.save'))))
+                    : null,
+                  routines.length === 0 && !creatingRoutine
+                    ? h('div', { className: 'bm-rail-empty' },
+                      h('span', { style: { color: 'var(--dsw-alias-label-tertiary)', opacity: 0.7 } }, h(ClockGlyph, { size: 28 })),
+                      h('div', { className: 'bm-rail-empty-title' }, t('screen.routinesEmptyTitle')),
+                      h('div', { className: 'bm-rail-empty-desc' }, t('screen.routinesEmptyDesc')),
+                      h('button', {
+                        type: 'button', className: 'bm-btn primary', style: { marginTop: '6px' },
+                        onClick: () => setCreatingRoutine(true),
+                      }, t('screen.routinesNew')))
+                    : h('div', { className: 'bm-routine-list' },
+                      routines.map(rt => h('div', { key: rt.id, className: 'bm-routine' },
+                        h('div', { className: 'bm-routine-text' },
+                          h('span', { className: 'bm-routine-name' }, rt.name),
+                          h('span', { className: 'bm-routine-meta' }, `${rt.cron}${rt.enabled ? '' : ' (paused)'}`),
+                          h('span', { className: 'bm-routine-prompt' }, rt.prompt)),
+                        h('div', { className: 'bm-routine-actions' },
+                          h('button', { type: 'button', className: 'bm-btn small', onClick: () => void onCommand('routine.run', { routineId: rt.id }) }, t('routine.run')),
+                          h('button', { type: 'button', className: 'bm-btn small', onClick: () => void onCommand('routine.toggle', { routineId: rt.id, enabled: !rt.enabled }) }, rt.enabled ? t('routine.pause') : t('routine.resume')),
+                          h('button', { type: 'button', className: 'bm-btn small danger', onClick: () => void onCommand('routine.delete', { routineId: rt.id }) }, t('routine.delete')))))))
+                : h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
+                  h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
+                    h('span', { className: 'bm-muted' }, t('screen.files')),
+                    h('div', { style: { display: 'flex', gap: '4px' } },
+                      h('button', { type: 'button', className: 'bm-btn small', onClick: () => void refreshFiles() }, t('settings.logsRefresh')),
+                      h('button', { type: 'button', className: 'bm-btn small primary', onClick: () => fileInputRef.current && fileInputRef.current.click() }, t('screen.upload')),
+                      h('input', {
+                        ref: fileInputRef, type: 'file', hidden: true,
+                        onChange: (e) => { const f = e.target.files && e.target.files[0]; if (f) void uploadScreenFile(f); e.target.value = '' },
+                      }))),
+                  files.length === 0
+                    ? h('p', { className: 'bm-muted' }, t('screen.filesEmpty'))
+                    : files.map(f => h('div', { key: f.name, className: 'bm-routine', style: { alignItems: 'center' } },
+                      h('div', { className: 'bm-routine-text' },
+                        h('span', { className: 'bm-routine-name' }, f.name),
+                        h('span', { className: 'bm-routine-meta' }, `${Math.max(1, Math.round((f.size || 0) / 1024))} KB`)),
+                      h('a', {
+                        className: 'bm-btn small',
+                        href: `/botmode/api/screen/file?botId=${encodeURIComponent(bot.id)}&name=${encodeURIComponent(f.name)}`,
+                        download: f.name,
+                        style: { textDecoration: 'none' },
+                      }, t('rich.download')))))))
+        }
+
         function BotsPage() {
           const t = useT()
           const stored = useSyncExternalStore(roster.subscribe, roster.getSnapshot)
@@ -2926,13 +5524,43 @@ window.__ModuleLoader__.load({
           const sections = (hostSnapshot.state && hostSnapshot.state.sections) || []
           const routines = (hostSnapshot.state && hostSnapshot.state.routines) || []
           const approvals = (hostSnapshot.state && hostSnapshot.state.approvals) || []
+          const questions = (hostSnapshot.state && hostSnapshot.state.questions) || []
+          const screenHelps = (hostSnapshot.state && hostSnapshot.state.screenHelps) || []
+          const screensMap = (hostSnapshot.state && hostSnapshot.state.screens) || {}
+          const screenGateway = (hostSnapshot.state && hostSnapshot.state.screenGateway) || { available: false }
           const memoryHub = (hostSnapshot.state && hostSnapshot.state.memory) || null
+          const appSettings = (hostSnapshot.state && hostSnapshot.state.settings) || null
+          const usageSummary = (hostSnapshot.state && hostSnapshot.state.usage) || null
+          const artifactsList = (hostSnapshot.state && hostSnapshot.state.artifacts) || []
+          const hostTools = (hostSnapshot.state && hostSnapshot.state.tools) || []
+          const runtimeInfo = (hostSnapshot.state && hostSnapshot.state.runtime) || {}
           const bots = stored.filter(bot => bot.hidden !== true)
           const lang = useLang()
           const activeLang = (lang && lang.active) || 'en'
           const [form, setForm] = useState(null)
           const [selection, setSelection] = useState(null)
+          const [addingSection, setAddingSection] = useState(false)
+          const [newSectionName, setNewSectionName] = useState('')
           const [query, setQuery] = useState('')
+          const [railOpen, setRailOpen] = useState(true)
+          const [takeoverModal, setTakeoverModal] = useState(null)
+
+          const openScreenTakeover = async (targetBot, helpEntry = null) => {
+            const botId = (targetBot && targetBot.id) || (helpEntry && helpEntry.botId)
+            if (!botId) return
+            const botObj = bots.find(b => b.id === botId) || targetBot
+            const res = await hostCommand('screen.takeover', {
+              botId,
+              reason: (helpEntry && helpEntry.reason) || 'human',
+            })
+            setTakeoverModal({
+              botId,
+              botName: (botObj && botObj.name) || (helpEntry && helpEntry.botName) || botId,
+              helpId: (helpEntry && helpEntry.id) || '',
+              reason: (helpEntry && helpEntry.reason) || '',
+              gatewayStreamUrl: (res && res.gateway_stream_url) || '',
+            })
+          }
 
           const botActivity = () => () => {}
           const botSeen = () => () => {}
@@ -2959,8 +5587,8 @@ window.__ModuleLoader__.load({
           const selectedBot = selection && selection.kind === 'bot'
             ? bots.find(bot => bot.id === selection.id)
             : undefined
-          const isMemoryView = selection && selection.kind === 'memory'
-          const activeBot = selectedBot || (selection && (selection.kind === 'group' || selection.kind === 'memory') ? undefined : bots[0])
+          const isSettingsView = selection && (selection.kind === 'settings' || selection.kind === 'memory')
+          const activeBot = selectedBot || (selection && (selection.kind === 'group' || selection.kind === 'settings' || selection.kind === 'memory') ? undefined : bots[0])
           const activeGroup = selection && selection.kind === 'group'
             ? groups.find(group => group.id === selection.id)
             : undefined
@@ -2969,17 +5597,23 @@ window.__ModuleLoader__.load({
 
           const openBotEntry = (bot) => { setSelection({ kind: 'bot', id: bot.id }); setForm(null) }
           const openGroupEntry = (group) => { setSelection({ kind: 'group', id: group.id }); setForm(null) }
-          const openMemoryView = () => { setSelection({ kind: 'memory' }); setForm(null) }
+          const openSettingsView = (moduleKey = 'soul', targetBotId = '') => {
+            setSelection({ kind: 'settings', module: moduleKey, botId: targetBotId || (activeBot && activeBot.id) || '' })
+            setForm(null)
+          }
           const createGroup = async (draft) => {
             const room = await hostCommand('room.save', { draft: {
               name: draft.name,
               memberIds: draft.members,
               mode: draft.mode || 'auto',
               leadBotId: draft.leadBotId || '',
+              workDir: draft.workDir || '',
               purpose: draft.purpose || '',
               notes: draft.notes || '',
-              maxRounds: draft.maxRounds || 3,
-              maxMessages: draft.maxMessages || 10,
+              tokenLimit: draft.tokenLimit !== undefined ? draft.tokenLimit : 0,
+              idleRoundLimit: draft.idleRoundLimit || 5,
+              maxRounds: draft.maxRounds !== undefined ? draft.maxRounds : 0,
+              maxMessages: draft.maxMessages !== undefined ? draft.maxMessages : 0,
               color: COLORS[(groups.length + 2) % COLORS.length],
             } })
             setForm(null)
@@ -2991,10 +5625,13 @@ window.__ModuleLoader__.load({
               memberIds: draft.members,
               mode: draft.mode || group.mode || 'auto',
               leadBotId: draft.leadBotId || '',
+              workDir: draft.workDir ?? group.workDir ?? '',
               purpose: draft.purpose ?? group.purpose ?? '',
               notes: draft.notes ?? group.notes ?? '',
-              maxRounds: draft.maxRounds ?? (group.budget && group.budget.maxRounds) ?? 3,
-              maxMessages: draft.maxMessages ?? (group.budget && group.budget.maxMessages) ?? 10,
+              tokenLimit: draft.tokenLimit !== undefined ? draft.tokenLimit : ((group.budget && group.budget.tokenLimit) ?? 0),
+              idleRoundLimit: draft.idleRoundLimit ?? (group.budget && group.budget.idleRoundLimit) ?? 5,
+              maxRounds: draft.maxRounds !== undefined ? draft.maxRounds : ((group.budget && group.budget.maxRounds) ?? 0),
+              maxMessages: draft.maxMessages !== undefined ? draft.maxMessages : ((group.budget && group.budget.maxMessages) ?? 0),
             } })
             setForm(null)
           }
@@ -3013,6 +5650,8 @@ window.__ModuleLoader__.load({
             const active = activeBot && activeBot.id === bot.id
             const time = bot.lastTurnAt ? Date.parse(bot.lastTurnAt) : (summary && summary.updatedAt)
             const preview = bot.lastReply || bot.role || t('card.noPreview')
+            const scr = screensMap[bot.id]
+            const scrState = scr && scr.healthy && scr.state !== 'STOPPED' ? scr.state : ''
             return h('button', {
               key: bot.id, type: 'button', className: 'bm-frow', 'data-active': active,
               onClick: () => openBotEntry(bot),
@@ -3023,6 +5662,7 @@ window.__ModuleLoader__.load({
                   h('span', { className: 'bm-frow-name' }, bot.name),
                   time ? h('span', { className: 'bm-frow-time' }, new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : null),
                 h('span', { className: 'bm-frow-preview' }, preview)),
+              scrState ? h('span', { className: 'bm-bot-screen-dot', 'data-state': scrState, title: scrState }) : null,
               bot.running ? h('span', { className: 'bm-srow-dot', 'data-running': true }) : null)
           }
 
@@ -3052,7 +5692,13 @@ window.__ModuleLoader__.load({
               hostSnapshot.status === 'error'
                 ? h('button', { className: 'bm-btn small', onClick: () => { void refreshHost() } }, t('host.retry'))
                 : null)
-          const approvalBanner = approvals.length === 0 ? null : h('div', { className: 'bm-approvals' },
+          const approvalBanner = (approvals.length === 0 && questions.length === 0 && screenHelps.length === 0) ? null : h('div', { className: 'bm-approvals' },
+            screenHelps.map(help => h(ScreenHelpCard, {
+              key: help.id,
+              entry: help,
+              onCommand: hostCommand,
+              onTakeover: (entry) => { void openScreenTakeover(null, entry) },
+            })),
             approvals.map(approval => h('div', { key: approval.id, className: 'bm-approval' },
               h('div', { className: 'bm-approval-text' },
                 h('span', { className: 'bm-approval-name' }, approval.botName),
@@ -3060,9 +5706,14 @@ window.__ModuleLoader__.load({
                 approval.reason ? h('span', { className: 'bm-approval-reason' }, approval.reason) : null),
               h('div', { className: 'bm-approval-actions' },
                 h('button', { className: 'bm-btn small primary', onClick: () => hostCommand('approval.decide', { approvalId: approval.id, decision: 'once' }).catch(() => {}) }, t('approval.once')),
-                h('button', { className: 'bm-btn small', onClick: () => hostCommand('approval.decide', { approvalId: approval.id, decision: 'session' }).catch(() => {}) }, t('approval.session')),
-                h('button', { className: 'bm-btn small', onClick: () => hostCommand('approval.decide', { approvalId: approval.id, decision: 'always' }).catch(() => {}) }, t('approval.always')),
-                h('button', { className: 'bm-btn small danger', onClick: () => hostCommand('approval.decide', { approvalId: approval.id, decision: 'deny' }).catch(() => {}) }, t('approval.deny'))))))
+                !approval.roomId
+                  ? h('button', { className: 'bm-btn small', onClick: () => hostCommand('approval.decide', { approvalId: approval.id, decision: 'session' }).catch(() => {}) }, t('approval.session'))
+                  : null,
+                !approval.roomId
+                  ? h('button', { className: 'bm-btn small', onClick: () => hostCommand('approval.decide', { approvalId: approval.id, decision: 'always' }).catch(() => {}) }, t('approval.always'))
+                  : null,
+                h('button', { className: 'bm-btn small danger', onClick: () => hostCommand('approval.decide', { approvalId: approval.id, decision: 'deny' }).catch(() => {}) }, t('approval.deny'))))),
+            questions.map(question => h(QuestionCard, { key: question.id, entry: question })))
           const pane = h('aside', { className: 'bm-pane' },
             h('div', { className: 'bm-pane-head' },
               h('span', { className: 'bm-pane-title' }, t('pane.title')),
@@ -3075,16 +5726,35 @@ window.__ModuleLoader__.load({
               h('div', { className: 'bm-section' },
                 h('span', null, t('pane.bots')),
                 h('button', {
+                  type: 'button',
                   className: 'bm-section-add',
-                  onClick: async () => {
-                    const name = window.prompt(t('section.namePrompt'))
-                    if (name && name.trim() !== '') await hostCommand('section.save', { name: name.trim() }).catch(() => {})
-                  },
+                  onClick: () => { setAddingSection(v => !v); setNewSectionName('') },
                 }, t('section.new'))),
+              addingSection ? h('form', {
+                style: { display: 'flex', gap: '4px', padding: '0 8px 6px' },
+                onSubmit: async (event) => {
+                  event.preventDefault()
+                  const trimmed = newSectionName.trim()
+                  if (trimmed === '') return
+                  await hostCommand('section.save', { name: trimmed }).catch(() => {})
+                  setNewSectionName('')
+                  setAddingSection(false)
+                },
+              },
+                h('input', {
+                  className: 'bm-search',
+                  style: { flex: 1, margin: 0 },
+                  autoFocus: true,
+                  value: newSectionName,
+                  placeholder: t('section.namePrompt'),
+                  onChange: event => setNewSectionName(event.target.value),
+                  onKeyDown: (event) => { if (event.key === 'Escape') { setAddingSection(false); setNewSectionName('') } },
+                }),
+                h('button', { type: 'submit', className: 'bm-btn small primary' }, t('form.save'))) : null,
               visibleBots.length === 0
                 ? h('p', { className: 'bm-muted bm-pane-empty' }, t('pane.empty'))
                 : sectionGroups.map(group => h('div', { key: group.section.id, className: 'bm-bot-group' },
-                  h('div', { className: 'bm-group-title' }, group.section.nameZh || group.section.name),
+                  h('div', { className: 'bm-group-title' }, activeLang.startsWith('zh') && group.section.nameZh ? group.section.nameZh : group.section.name),
                   group.bots.map(botRow))),
               orphanBots.length > 0 ? h('div', { className: 'bm-bot-group' }, orphanBots.map(botRow)) : null,
               h('div', { className: 'bm-section' },
@@ -3092,21 +5762,15 @@ window.__ModuleLoader__.load({
                 h('button', { className: 'bm-section-add', onClick: () => setForm({ mode: 'group' }) }, t('pane.newGroup'))),
               visibleGroups.length === 0
                 ? h('p', { className: 'bm-muted bm-pane-empty' }, t('group.none'))
-                : visibleGroups.map(groupRow),
-              h('div', { className: 'bm-section' },
-                h('span', null, t('pane.memory'))),
-              h('button', {
-                type: 'button', className: 'bm-frow', 'data-active': isMemoryView === true,
-                onClick: openMemoryView,
-              },
-                h('span', { className: 'bm-avatar bm-avatar-sm', style: { background: '#0e7490' } }, 'M'),
-                h('span', { className: 'bm-frow-text' },
-                  h('span', { className: 'bm-frow-top' },
-                    h('span', { className: 'bm-frow-name' }, t('pane.memory'))),
-                  h('span', { className: 'bm-frow-preview' },
-                    memoryHub ? `${memoryHub.provider}${memoryHub.health && memoryHub.health.mode ? ` · ${memoryHub.health.mode}` : ''}` : 'memory_tencentdb')))),
+                : visibleGroups.map(groupRow)),
             h('div', { className: 'bm-pane-foot' },
-              h('button', { className: 'bm-btn small', onClick: toHarness }, t('foot.back'))))
+              h('button', {
+                type: 'button',
+                className: `bm-btn small${isSettingsView ? ' primary' : ''}`,
+                style: { display: 'inline-flex', alignItems: 'center', gap: '5px', flex: 1, justifyContent: 'center' },
+                onClick: () => openSettingsView('soul'),
+              }, h(SettingsIcon, { kind: 'gear' }), t('pane.settings')),
+              h('button', { type: 'button', className: 'bm-btn small', onClick: toHarness }, t('foot.back'))))
 
           const detailBody = activeBot
             ? h(BotDetail, {
@@ -3171,29 +5835,62 @@ window.__ModuleLoader__.load({
                   onCancel: () => setForm(null),
                   onDone: () => setForm(null),
                 })
-            : isMemoryView
-              ? h(MemoryHubPanel, {
-                memory: memoryHub,
+            : isSettingsView
+              ? h(SettingsView, {
+                key: `settings-${selection && selection.botId ? selection.botId : 'all'}`,
+                initialBotId: (selection && selection.botId) || '',
+                initialModule: (selection && selection.module) || (selection && selection.kind === 'memory' ? 'memory' : 'soul'),
                 bots,
+                rooms: groups,
+                routines,
+                sections,
+                models,
+                memory: memoryHub,
+                settings: appSettings,
+                usage: usageSummary,
+                artifacts: artifactsList,
+                tools: hostTools,
+                runtime: runtimeInfo,
+                onReloadModels: (force) => { void loadModels(force) },
                 onCommand: hostCommand,
+                onNewBot: () => setForm({ mode: 'create' }),
+                onEditGroup: (room) => setForm({ mode: 'groupEdit', group: room }),
               })
             : activeGroup
               ? h(GroupChat, {
                 key: activeGroup.id,
                 group: activeGroup,
                 bots,
+                settings: appSettings,
                 onEdit: () => setForm({ mode: 'groupEdit', group: activeGroup }),
               })
               : activeBot && activeSessionId
-                ? h(ChatPane, {
-                  key: activeSessionId,
-                  sessionId: activeSessionId,
-                  bot: activeBot,
-                  models,
-                  detail: detailBody,
-                  onActivity: botActivity(activeBot),
-                  onSeen: botSeen(activeBot),
-                })
+                ? h('div', { className: 'bm-workspace' },
+                  h(ChatPane, {
+                    key: activeSessionId,
+                    sessionId: activeSessionId,
+                    bot: activeBot,
+                    models,
+                    detail: detailBody,
+                    railOpen,
+                    onToggleRail: () => setRailOpen(v => !v),
+                    onActivity: botActivity(activeBot),
+                    onSeen: botSeen(activeBot),
+                  }),
+                  railOpen
+                    ? h(RightScreenPanel, {
+                      key: `rail-${activeBot.id}`,
+                      bot: activeBot,
+                      screen: screensMap[activeBot.id] || null,
+                      screenGateway,
+                      hostScreenSupported: Boolean(hostSnapshot.state && 'screenGateway' in hostSnapshot.state),
+                      gatewayAvailable: screenGateway.available === true,
+                      routines: routines.filter(routine => routine.botId === activeBot.id),
+                      onCommand: hostCommand,
+                      onRefreshHost: () => { void refreshHost() },
+                      onOpenTakeover: (b) => openScreenTakeover(b, screenHelps.find(s => s.botId === b.id) || null),
+                    })
+                    : null)
                 : activeBot
                   ? h('section', { className: 'bm-detail-col' }, detailBody)
                   : h('section', { className: 'bm-empty bm-detail-empty' },
@@ -3201,10 +5898,20 @@ window.__ModuleLoader__.load({
                   h('p', null, t('page.empty.body')),
                   h('button', { className: 'bm-btn primary', onClick: () => setForm({ mode: 'create' }) }, t('page.empty.cta')))
 
+          const fullBleedRight = !form && (isSettingsView || activeGroup || (activeBot && activeSessionId))
           return h('div', { className: 'bm-page bm-page-split' },
             h('style', null, CSS),
             pane,
-            h('section', { className: 'bm-detail-col' }, hostNotice, approvalBanner, detail))
+            h('section', {
+              className: 'bm-detail-col',
+              style: fullBleedRight ? { padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' } : undefined,
+            }, hostNotice, approvalBanner, detail),
+            h(ScreenTakeoverModal, {
+              modal: takeoverModal,
+              screen: takeoverModal ? (screensMap[takeoverModal.botId] || null) : null,
+              onCommand: hostCommand,
+              onClose: () => setTakeoverModal(null),
+            }))
         }
 
         function PanelIcon(props) {

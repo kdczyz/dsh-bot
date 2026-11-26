@@ -124,6 +124,7 @@ export class MemoryTencentdbProvider extends MemoryProvider {
       this.#gatewayOnline = false
       this.#lastHealthAt = now
       this.#lastHealthDetail = { status: 'unreachable', error: error instanceof Error ? error.message : String(error) }
+      this.#recordFailure(error)
       return false
     }
   }
@@ -452,6 +453,13 @@ export class MemoryTencentdbProvider extends MemoryProvider {
       sessionId,
     })
     return summary
+  }
+
+  async purgeAgent({ teamId = 'dsh-botmode', agentId }) {
+    if (!agentId) return
+    if (this.#fallbackEnabled) {
+      await this.#fallback.purgeAgent({ teamId, agentId })
+    }
   }
 
   async shutdown() {

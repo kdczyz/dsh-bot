@@ -388,7 +388,7 @@ export class MemoryManager {
   async syncTurnForBot(bot, userText, assistantText, options = {}) {
     const cfg = this.store.state.memory
     if (!cfg || cfg.syncEnabled === false) return
-    if (options.roomId && cfg.syncGroupRooms === false) return
+    if (options.roomId && cfg.syncGroupRooms !== true) return
     try {
       const provider = await this.ensureReady()
       if (!provider || typeof provider.syncTurn !== 'function') return
@@ -466,6 +466,23 @@ export class MemoryManager {
     })
   }
 
+  async purgeBot(botId) {
+    if (!botId) return
+    this.#lastRecallByBot.delete(botId)
+    try {
+      const provider = await this.ensureReady()
+      if (provider && typeof provider.purgeAgent === 'function') {
+        const cfg = this.store.state.memory ?? {}
+        await provider.purgeAgent({
+          teamId: cfg.teamId || 'dsh-botmode',
+          agentId: botId,
+        })
+      }
+    } catch (error) {
+      this.logger?.warn?.(`botmode: memory purgeBot(${botId}) failed: ${String(error)}`)
+    }
+  }
+
   publicSummary() {
     const cfg = this.store.state.memory ?? {}
     const providers = [...this.#registry.values()].map(desc => ({
@@ -490,7 +507,7 @@ export class MemoryManager {
       userId: cfg.userId || 'default',
       prefetchEnabled: cfg.prefetchEnabled !== false,
       syncEnabled: cfg.syncEnabled !== false,
-      syncGroupRooms: cfg.syncGroupRooms !== false,
+      syncGroupRooms: cfg.syncGroupRooms === true,
       health: this.#lastHealth,
       pluginsRoot: this.store.memoryPluginsRoot,
       providers,

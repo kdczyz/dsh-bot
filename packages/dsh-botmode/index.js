@@ -26,7 +26,9 @@ import { BotApi, PREFIX } from './host/api.js'
 import { Approvals } from './host/approvals.js'
 import { MemoryManager } from './host/memory/manager.js'
 import { personaBlock, syncBotFiles, syncTeamFiles } from './host/persona.js'
-import { botModelCatalog, resolveBotSelection } from './host/models.js'
+import { botModelCatalog, modelAcceptsImages, resolveBotSelection } from './host/models.js'
+import { checkRoomWriteSoftLock } from './host/room-locks.js'
+import { ScreenBridge } from './host/screen.js'
 
 export const name = 'botmode'
 export const inject = ['commands', 'tools']
@@ -40,8 +42,20 @@ const MEMORY_TOOLS = [
   'memory_tencentdb_conversation_search',
   'memory_tencentdb_read_scene',
 ]
-const DEFAULT_PRIMARY_TOOLS = ['message_agent', 'bot_team', ...MEMORY_TOOLS]
-const DEFAULT_ROOM_TOOLS = ['bot_team', ...MEMORY_TOOLS]
+const SCREEN_TOOLS = [
+  'screen_screenshot',
+  'screen_click',
+  'screen_type',
+  'screen_key',
+  'screen_scroll',
+  'screen_drag',
+  'screen_open_app',
+  'screen_windows',
+  'screen_request_help',
+]
+const ROOM_COORDINATION_TOOLS = ['claim_subtask', 'room_task_progress', 'room_finish_task']
+const DEFAULT_PRIMARY_TOOLS = ['message_agent', 'bot_team', ...MEMORY_TOOLS, ...SCREEN_TOOLS]
+const DEFAULT_ROOM_TOOLS = ['bot_team', ...ROOM_COORDINATION_TOOLS, ...MEMORY_TOOLS, ...SCREEN_TOOLS]
 
 const sessionIdOf = (agent) => {
   try {
@@ -65,13 +79,22 @@ export function apply(ctx) {
     (agent, bot, meta) => { void configureAgent(agent, bot, meta) },
     memory,
   )
-  const rooms = new Rooms(store, dispatcher, logger)
-  const routines = new Routines(ctx, store, dispatcher, logger)
   const approvals = new Approvals(store, logger)
-  const api = new BotApi({ ctx, store, dispatcher, rooms, routines, approvals, memory, logger })
+  const screen = new ScreenBridge({ approvals, logger, logDir: store.root })
+  const rooms = new Rooms(store, dispatcher, logger, approvals)
+  const routines = new Routines(ctx, store, dispatcher, logger)
+  const api = new BotApi({ ctx, store, dispatcher, rooms, routines, approvals, memory, screen, logger })
 
   const ready = store.load()
-    .then(() => memory.ensureReady())
+    .then(async () => {
+      await memory.ensureReady()
+      // Ensure existing Bot workspaces pick up built-in skills (e.g. `room-completion/SKILL.md`) on startup.
+      for (const bot of store.state.bots) {
+        if (bot.dir) await syncBotFiles(store, bot, store.state).catch(() => undefined)
+      }
+      // Best-effort non-blocking warm-up so local BotScreen gateway starts automatically on plugin load.
+      void screen.warmUp().catch(() => undefined)
+    })
     .catch((error) => {
       logger?.warn?.(`botmode: startup initialization warning: ${String(error)}`)
     })
@@ -80,14 +103,52 @@ export function apply(ctx) {
   ctx.effect(() => () => approvals.clear(), 'botmode: approval cleanup')
   ctx.effect(() => () => { void memory.shutdown() }, 'botmode: memory hub shutdown')
 
-  // Bridge approvals for BOTH primary Bot sessions and isolated hidden Group Room sessions.
+  // Bridge approvals & interactive questions for BOTH primary Bot sessions and isolated Group Room sessions.
   const approvalOff = ctx.on('approval/request', (request, next) => {
     const sessionId = sessionIdOf(request?.agent)
     const resolved = sessionId ? store.botByAnySession(sessionId) : undefined
     if (!resolved) return next()
-    return approvals.ask(resolved.bot, request)
+    return approvals.ask(resolved.bot, request, { roomId: resolved.roomId || '', sessionId })
   })
   ctx.effect(() => approvalOff, 'botmode: approval bridge')
+
+  const questionOff = ctx.on('user-questions/request', (request, next) => {
+    const sessionId = sessionIdOf(request?.agent)
+    const resolved = sessionId ? store.botByAnySession(sessionId) : undefined
+    if (!resolved) return next()
+    return approvals.askQuestion(resolved.bot, request, { roomId: resolved.roomId || '' })
+  })
+  ctx.effect(() => questionOff, 'botmode: user-questions bridge')
+
+  // Path Soft-Lock interceptor: prevent concurrent Group Room Bots from silently overwriting
+  // files currently leased by a teammate via `claim_subtask`.
+  const evaluateRoomSoftLock = (exec) => {
+    if (store.state?.settings?.groupChat?.enableSoftLock === false) return undefined
+    const sessionId = sessionIdOf(exec?.agent)
+    if (!sessionId) return undefined
+    const resolved = store.botByAnySession(sessionId)
+    if (!resolved || resolved.kind !== 'room' || !resolved.roomId) return undefined
+    const room = store.room(resolved.roomId)
+    if (!room) return undefined
+    return checkRoomWriteSoftLock({
+      room,
+      callerBotId: resolved.bot.id,
+      toolName: exec?.name,
+      args: exec?.arguments,
+      baseDir: room.workDir || resolved.bot.dir,
+    })
+  }
+
+  const preExecuteOff = ctx.on('tools/pre-execute', (exec, next) => {
+    const lockReason = evaluateRoomSoftLock(exec)
+    if (lockReason) return { kind: 'deny', reason: lockReason }
+    return next()
+  })
+  ctx.effect(() => preExecuteOff, 'botmode: room file soft-lock pre-execute')
+
+  if (typeof ctx.tools?.guard === 'function') {
+    ctx.effect(() => ctx.tools.guard((exec) => evaluateRoomSoftLock(exec)), 'botmode: room file soft-lock guard')
+  }
 
   // Public Host service: other plugins and the CLI can drive the same roster.
   const botsService = {
@@ -160,7 +221,9 @@ export function apply(ctx) {
       if (tools) {
         const known = new Set((tools.definitions?.() ?? []).map(entry => entry.name))
         const defaultTools = isRoom ? DEFAULT_ROOM_TOOLS : DEFAULT_PRIMARY_TOOLS
-        const baseDeny = isRoom ? [...bot.tools.deny, 'message_agent'] : bot.tools.deny
+        const baseDeny = isRoom
+          ? [...bot.tools.deny, 'message_agent']
+          : [...bot.tools.deny, ...ROOM_COORDINATION_TOOLS]
         const deny = [...new Set(baseDeny)].filter(toolName => known.has(toolName))
         const allow = bot.tools.allow.length > 0
           ? [...new Set([...bot.tools.allow, ...defaultTools])].filter(toolName => known.has(toolName) && !deny.includes(toolName))
@@ -332,6 +395,133 @@ export function apply(ctx) {
     },
   }), 'botmode: bot_team tool')
 
+  ctx.effect(() => ctx.tools.register({
+    name: 'claim_subtask',
+    description: 'Claim, update, complete or release a subtask and its file/directory path leases on the shared Group Room task board so concurrent Bots never overwrite the same files.',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['claim', 'list'], description: 'Optional: pass "list" to inspect all subtasks in the room.' },
+        taskId: { type: 'string', description: 'Short deterministic subtask identifier, e.g. "auth-api" or "ui-login".' },
+        title: { type: 'string', description: 'Brief human-readable description of what this subtask covers.' },
+        paths: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'File or directory paths (relative to workspace or absolute) leased exclusively while status is "in_progress".',
+        },
+        status: {
+          type: 'string',
+          enum: ['in_progress', 'completed', 'released'],
+          description: 'Subtask lifecycle state. Set to "completed" when finished to release file locks.',
+        },
+      },
+      additionalProperties: false,
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(args, exec) {
+      const caller = await resolveCallerBot(exec)
+      if (!caller) return JSON.stringify({ ok: false, error: 'This Session is not a Bot.' })
+      if (caller.kind !== 'room' || !caller.roomId) {
+        return JSON.stringify({ ok: false, code: 'room_only', error: 'claim_subtask is only available inside a Group Room session.' })
+      }
+      const res = await rooms.claimSubtask(caller.roomId, caller.bot, {
+        action: args?.action,
+        taskId: args?.taskId,
+        title: args?.title,
+        paths: args?.paths,
+        status: args?.status,
+      })
+      return JSON.stringify(res)
+    },
+  }), 'botmode: claim_subtask tool')
+
+  ctx.effect(() => ctx.tools.register({
+    name: 'room_task_progress',
+    description: 'Read or update the shared Group Room task progress checklist (used by the room-completion skill to verify milestones autonomously before calling room_finish_task).',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['get', 'update'], description: '"get" returns current checklist and readyToFinish status; "update" upserts checklist items.' },
+        goal: { type: 'string', description: 'Optional concise goal statement for this room task.' },
+        items: {
+          type: 'array',
+          description: 'Checklist items to create or update when action="update".',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Short stable milestone id.' },
+              title: { type: 'string', description: 'Milestone description.' },
+              owner: { type: 'string', description: 'Responsible Bot name.' },
+              done: { type: 'boolean', description: 'Whether this milestone is verified done.' },
+              note: { type: 'string', description: 'Optional verification note or artifact path.' },
+            },
+            required: ['id'],
+            additionalProperties: false,
+          },
+        },
+      },
+      additionalProperties: false,
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(args, exec) {
+      const caller = await resolveCallerBot(exec)
+      if (!caller) return JSON.stringify({ ok: false, error: 'This Session is not a Bot.' })
+      if (caller.kind !== 'room' || !caller.roomId) {
+        return JSON.stringify({ ok: false, code: 'room_only', error: 'room_task_progress is only available inside a Group Room session.' })
+      }
+      const res = await rooms.updateTaskProgress(caller.roomId, caller.bot, {
+        action: args?.action,
+        goal: args?.goal,
+        items: args?.items,
+      })
+      return JSON.stringify(res)
+    },
+  }), 'botmode: room_task_progress tool')
+
+  ctx.effect(() => ctx.tools.register({
+    name: 'room_finish_task',
+    description: 'Formally mark the Group Room task as completed once all deliverables and subtasks are verified. Writing "task completed" in chat text will NOT close the room.',
+    parameters: {
+      type: 'object',
+      properties: {
+        summary: { type: 'string', description: 'Concise final acceptance summary of what the team accomplished and verified.' },
+        deliverables: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional list of modified files, artifacts, or verification outputs.',
+        },
+        verification: { type: 'string', description: 'Optional test or verification evidence.' },
+        force: { type: 'boolean', description: 'Optional override when closing despite superseded subtasks.' },
+      },
+      required: ['summary'],
+      additionalProperties: false,
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(args, exec) {
+      const caller = await resolveCallerBot(exec)
+      if (!caller) return JSON.stringify({ ok: false, error: 'This Session is not a Bot.' })
+      if (caller.kind !== 'room' || !caller.roomId) {
+        return JSON.stringify({ ok: false, code: 'room_only', error: 'room_finish_task is only available inside a Group Room session.' })
+      }
+      const res = await rooms.finishTask(caller.roomId, caller.bot, {
+        summary: args?.summary,
+        deliverables: args?.deliverables,
+        verification: args?.verification,
+        force: args?.force === true,
+      })
+      return JSON.stringify(res)
+    },
+  }), 'botmode: room_finish_task tool')
+
   // Unified Memory Hub tools (routed to the globally active memory provider,
   // scoped strictly to the calling Bot's `agent_id`).
   const registerMemorySearchTool = (toolName) => ctx.effect(() => ctx.tools.register({
@@ -448,6 +638,322 @@ export function apply(ctx) {
     },
   }), 'botmode: memory_save tool')
 
+  // ---- Per-Bot Virtual Screen tools (auto-scoped to caller Bot) ----------
+  const encodeShotResult = async (caller, meta, shot) => {
+    let attachment
+    let visionNote = ''
+    if (shot?.buffer && shot?.mimeType) {
+      const accepts = await modelAcceptsImages(ctx, resolveBotSelection(ctx, caller.bot)).catch(() => undefined)
+      if (accepts === false) {
+        visionNote = 'Current Bot model does not accept image inputs; switch to a vision-capable model to view screenshots.'
+      } else {
+        const attachments = ctx.get('attachments')
+        if (attachments && typeof attachments.saveImages === 'function') {
+          try {
+            const [saved] = await attachments.saveImages([{
+              data: shot.buffer,
+              mediaType: shot.mimeType,
+              name: `${caller.bot.id}-screen.jpg`,
+            }])
+            if (saved) attachment = saved
+          } catch (error) {
+            logger?.warn?.(`botmode: saveImages for screen failed: ${String(error)}`)
+          }
+        }
+      }
+    }
+    const payload = { ...meta, ...(visionNote ? { visionNote } : {}) }
+    return {
+      text: JSON.stringify(payload),
+      ...(attachment ? { attachment } : {}),
+    }
+  }
+
+  const renderShotOutput = (_args, value) => {
+    if (value && typeof value === 'object') {
+      const blocks = [{ type: 'text', text: String(value.text ?? JSON.stringify(value)) }]
+      if (value.attachment) blocks.push({ type: 'image', attachment: value.attachment })
+      return blocks
+    }
+    return [{ type: 'text', text: String(value ?? '') }]
+  }
+
+  const SHOT_OUTPUT_SCHEMA = {
+    type: 'object',
+    properties: {
+      text: { type: 'string' },
+      attachment: { type: 'object' },
+    },
+  }
+
+  ctx.effect(() => ctx.tools.register({
+    name: 'screen_screenshot',
+    description: 'Capture a 1280x720 screenshot of this Bot\'s dedicated Linux virtual screen (automatically wakes frozen screens).',
+    parameters: {
+      type: 'object',
+      properties: {
+        format: { type: 'string', enum: ['jpeg', 'webp', 'png'], description: 'Image format (default jpeg).' },
+        include_focus: { type: 'boolean', description: 'Include active window title & geometry.' },
+      },
+      additionalProperties: false,
+    },
+    output: { schema: SHOT_OUTPUT_SCHEMA, render: renderShotOutput },
+    async execute(args, exec) {
+      const caller = await resolveCallerBot(exec)
+      if (!caller) return { text: JSON.stringify({ ok: false, error: 'This Session is not a Bot.' }) }
+      const shot = await screen.screenshot(caller.bot, {
+        format: String(args?.format || 'jpeg'),
+        includeFocus: args?.include_focus === true,
+        signal: exec?.signal,
+      })
+      if (shot?.abortedByHuman) return { text: JSON.stringify(shot) }
+      const meta = {
+        ok: true,
+        width: shot.width,
+        height: shot.height,
+        state: shot.state,
+        resumedFromLongFreeze: shot.resumedFromLongFreeze,
+        focusedWindow: shot.focusedWindow,
+        ...(shot.resumedFromLongFreeze
+          ? { hint: 'Screen resumed from a long freeze; refresh pages if WebSockets or sessions expired.' }
+          : {}),
+      }
+      return encodeShotResult(caller, meta, shot)
+    },
+  }), 'botmode: screen_screenshot tool')
+
+  ctx.effect(() => ctx.tools.register({
+    name: 'screen_click',
+    description: 'Click at (x, y) on this Bot\'s 1280x720 virtual screen. Optionally set observe=true to return an updated screenshot.',
+    parameters: {
+      type: 'object',
+      properties: {
+        x: { type: 'integer', description: 'X coordinate (0..1279).' },
+        y: { type: 'integer', description: 'Y coordinate (0..719).' },
+        button: { type: 'integer', description: 'Mouse button: 1=left, 2=middle, 3=right.' },
+        double: { type: 'boolean', description: 'Double-click when true.' },
+        observe: { type: 'boolean', description: 'Capture and return updated screenshot after clicking.' },
+      },
+      required: ['x', 'y'],
+      additionalProperties: false,
+    },
+    output: { schema: SHOT_OUTPUT_SCHEMA, render: renderShotOutput },
+    async execute(args, exec) {
+      const caller = await resolveCallerBot(exec)
+      if (!caller) return { text: JSON.stringify({ ok: false, error: 'This Session is not a Bot.' }) }
+      const res = await screen.click(caller.bot, {
+        x: Number(args?.x ?? 0),
+        y: Number(args?.y ?? 0),
+        button: Number(args?.button ?? 1),
+        double: args?.double === true,
+        observe: args?.observe === true,
+        signal: exec?.signal,
+      })
+      const shot = res?.screenshot
+      if (res && typeof res === 'object' && 'screenshot' in res) delete res.screenshot
+      return encodeShotResult(caller, res, shot)
+    },
+  }), 'botmode: screen_click tool')
+
+  ctx.effect(() => ctx.tools.register({
+    name: 'screen_type',
+    description: 'Type text into the focused element on this Bot\'s virtual screen (supports Chinese & emoji via clipboard paste). Use paste_key="shift+Insert" inside terminals.',
+    parameters: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'Text to input.' },
+        press_enter: { type: 'boolean', description: 'Press Enter after pasting.' },
+        paste_key: { type: 'string', description: 'Paste shortcut: "ctrl+v" (default, browsers/GUI) or "shift+Insert" (terminals).' },
+        observe: { type: 'boolean', description: 'Capture updated screenshot after typing.' },
+      },
+      required: ['text'],
+      additionalProperties: false,
+    },
+    output: { schema: SHOT_OUTPUT_SCHEMA, render: renderShotOutput },
+    async execute(args, exec) {
+      const caller = await resolveCallerBot(exec)
+      if (!caller) return { text: JSON.stringify({ ok: false, error: 'This Session is not a Bot.' }) }
+      const res = await screen.type(caller.bot, {
+        text: String(args?.text ?? ''),
+        press_enter: args?.press_enter === true,
+        paste_key: String(args?.paste_key || 'ctrl+v'),
+        observe: args?.observe === true,
+        signal: exec?.signal,
+      })
+      const shot = res?.screenshot
+      if (res && typeof res === 'object' && 'screenshot' in res) delete res.screenshot
+      return encodeShotResult(caller, res, shot)
+    },
+  }), 'botmode: screen_type tool')
+
+  ctx.effect(() => ctx.tools.register({
+    name: 'screen_key',
+    description: 'Send a key or shortcut combination (e.g. "Return", "Escape", "ctrl+l", "alt+F4", "Page_Down") on this Bot\'s virtual screen.',
+    parameters: {
+      type: 'object',
+      properties: {
+        combo: { type: 'string', description: 'xdotool key combo.' },
+        observe: { type: 'boolean', description: 'Capture updated screenshot afterwards.' },
+      },
+      required: ['combo'],
+      additionalProperties: false,
+    },
+    output: { schema: SHOT_OUTPUT_SCHEMA, render: renderShotOutput },
+    async execute(args, exec) {
+      const caller = await resolveCallerBot(exec)
+      if (!caller) return { text: JSON.stringify({ ok: false, error: 'This Session is not a Bot.' }) }
+      const res = await screen.key(caller.bot, {
+        combo: String(args?.combo ?? ''),
+        observe: args?.observe === true,
+        signal: exec?.signal,
+      })
+      const shot = res?.screenshot
+      if (res && typeof res === 'object' && 'screenshot' in res) delete res.screenshot
+      return encodeShotResult(caller, res, shot)
+    },
+  }), 'botmode: screen_key tool')
+
+  ctx.effect(() => ctx.tools.register({
+    name: 'screen_scroll',
+    description: 'Scroll mouse wheel at (x, y) on this Bot\'s virtual screen. clicks > 0 scrolls down, clicks < 0 scrolls up.',
+    parameters: {
+      type: 'object',
+      properties: {
+        x: { type: 'integer', description: 'X coordinate (default 640).' },
+        y: { type: 'integer', description: 'Y coordinate (default 360).' },
+        clicks: { type: 'integer', description: 'Scroll clicks (+down / -up).' },
+        observe: { type: 'boolean', description: 'Capture updated screenshot afterwards.' },
+      },
+      required: ['clicks'],
+      additionalProperties: false,
+    },
+    output: { schema: SHOT_OUTPUT_SCHEMA, render: renderShotOutput },
+    async execute(args, exec) {
+      const caller = await resolveCallerBot(exec)
+      if (!caller) return { text: JSON.stringify({ ok: false, error: 'This Session is not a Bot.' }) }
+      const res = await screen.scroll(caller.bot, {
+        x: Number(args?.x ?? 640),
+        y: Number(args?.y ?? 360),
+        clicks: Number(args?.clicks ?? 3),
+        observe: args?.observe === true,
+        signal: exec?.signal,
+      })
+      const shot = res?.screenshot
+      if (res && typeof res === 'object' && 'screenshot' in res) delete res.screenshot
+      return encodeShotResult(caller, res, shot)
+    },
+  }), 'botmode: screen_scroll tool')
+
+  ctx.effect(() => ctx.tools.register({
+    name: 'screen_drag',
+    description: 'Drag mouse from (x1, y1) to (x2, y2) on this Bot\'s virtual screen.',
+    parameters: {
+      type: 'object',
+      properties: {
+        x1: { type: 'integer' },
+        y1: { type: 'integer' },
+        x2: { type: 'integer' },
+        y2: { type: 'integer' },
+        button: { type: 'integer' },
+        observe: { type: 'boolean' },
+      },
+      required: ['x1', 'y1', 'x2', 'y2'],
+      additionalProperties: false,
+    },
+    output: { schema: SHOT_OUTPUT_SCHEMA, render: renderShotOutput },
+    async execute(args, exec) {
+      const caller = await resolveCallerBot(exec)
+      if (!caller) return { text: JSON.stringify({ ok: false, error: 'This Session is not a Bot.' }) }
+      const res = await screen.drag(caller.bot, {
+        x1: Number(args?.x1 ?? 0),
+        y1: Number(args?.y1 ?? 0),
+        x2: Number(args?.x2 ?? 0),
+        y2: Number(args?.y2 ?? 0),
+        button: Number(args?.button ?? 1),
+        observe: args?.observe === true,
+        signal: exec?.signal,
+      })
+      const shot = res?.screenshot
+      if (res && typeof res === 'object' && 'screenshot' in res) delete res.screenshot
+      return encodeShotResult(caller, res, shot)
+    },
+  }), 'botmode: screen_drag tool')
+
+  ctx.effect(() => ctx.tools.register({
+    name: 'screen_open_app',
+    description: 'Launch an application ("chrome", "terminal", or "files") inside this Bot\'s isolated virtual screen, optionally opening a URL in Chrome, and observe the screen.',
+    parameters: {
+      type: 'object',
+      properties: {
+        app: { type: 'string', enum: ['chrome', 'terminal', 'files'], description: 'Application to launch (default chrome).' },
+        url: { type: 'string', description: 'Optional URL to open in Chrome.' },
+      },
+      additionalProperties: false,
+    },
+    output: { schema: SHOT_OUTPUT_SCHEMA, render: renderShotOutput },
+    async execute(args, exec) {
+      const caller = await resolveCallerBot(exec)
+      if (!caller) return { text: JSON.stringify({ ok: false, error: 'This Session is not a Bot.' }) }
+      const res = await screen.openApp(caller.bot, {
+        app: String(args?.app || 'chrome'),
+        url: args?.url ? String(args.url) : undefined,
+        observe: true,
+        signal: exec?.signal,
+      })
+      const shot = res?.screenshot
+      if (res && typeof res === 'object' && 'screenshot' in res) delete res.screenshot
+      return encodeShotResult(caller, res, shot)
+    },
+  }), 'botmode: screen_open_app tool')
+
+  ctx.effect(() => ctx.tools.register({
+    name: 'screen_windows',
+    description: 'List visible windows and the focused window inside this Bot\'s virtual screen.',
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(_args, exec) {
+      const caller = await resolveCallerBot(exec)
+      if (!caller) return JSON.stringify({ ok: false, error: 'This Session is not a Bot.' })
+      const res = await screen.windows(caller.bot, { signal: exec?.signal })
+      return JSON.stringify(res)
+    },
+  }), 'botmode: screen_windows tool')
+
+  ctx.effect(() => ctx.tools.register({
+    name: 'screen_request_help',
+    description: 'Call this whenever you hit a problem you cannot solve inside your virtual screen (CAPTCHA, login/MFA/QR, payment confirmation, repeated UI failure). Pops a Human Takeover Card in the UI, waits until the human resolves it and hands control back, and returns the updated screen.',
+    parameters: {
+      type: 'object',
+      properties: {
+        category: {
+          type: 'string',
+          enum: ['captcha', 'login', 'mfa', 'payment', 'confirm', 'manual'],
+          description: 'Type of human intervention needed.',
+        },
+        reason: { type: 'string', description: 'Clear explanation of what you are stuck on and what the human should do.' },
+      },
+      required: ['reason'],
+      additionalProperties: false,
+    },
+    output: { schema: SHOT_OUTPUT_SCHEMA, render: renderShotOutput },
+    async execute(args, exec) {
+      const caller = await resolveCallerBot(exec)
+      if (!caller) return { text: JSON.stringify({ ok: false, error: 'This Session is not a Bot.' }) }
+      const res = await screen.requestHelp(caller.bot, {
+        category: String(args?.category || 'manual'),
+        reason: String(args?.reason || 'Need human assistance on virtual screen.'),
+        roomId: caller.roomId || '',
+        signal: exec?.signal,
+      })
+      const shot = res?.screenshot
+      if (res && typeof res === 'object' && 'screenshot' in res) delete res.screenshot
+      return encodeShotResult(caller, res, shot)
+    },
+  }), 'botmode: screen_request_help tool')
+
   // Human command for headless use and troubleshooting.
   ctx.effect(() => ctx.commands.register({
     name: 'botmode',
@@ -551,7 +1057,7 @@ export function apply(ctx) {
     },
   }), 'botmode: command')
 
-  ctx.inject(['webServer'], (scope) => {
+  ctx.inject(['webServer', 'connection'], (scope) => {
     scope.effect(() => scope.webServer.register({
       kind: 'prefix',
       path: PREFIX.replace(/\/$/, ''),

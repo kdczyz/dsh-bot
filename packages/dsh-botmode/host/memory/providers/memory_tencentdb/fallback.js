@@ -36,6 +36,10 @@ const normalizeKeywords = (query) => String(query ?? '')
   .filter(Boolean)
   .slice(0, 6)
 
+const escapeLike = (value) => String(value ?? '').replace(/[\\%_]/g, '\\$&')
+
+const MAX_FTS_INDEX_CHARS = 4000
+
 /**
  * Heuristic fact extraction for local mode so completed turns automatically
  * populate L1 atomic facts without requiring an extra LLM round-trip.
@@ -74,6 +78,8 @@ export class LocalFourLayerStore {
     const db = new DatabaseSync(this.dbPath)
     db.exec('PRAGMA journal_mode = WAL;')
     db.exec('PRAGMA synchronous = NORMAL;')
+    db.exec('PRAGMA busy_timeout = 5000;')
+    db.exec('PRAGMA wal_autocheckpoint = 256;')
     db.exec(`
       CREATE TABLE IF NOT EXISTS conversations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -158,28 +164,39 @@ export class LocalFourLayerStore {
 
     let lastUser = ''
     let lastAssistant = ''
-    for (const msg of messages) {
-      const content = String(msg?.content ?? '').trim()
-      if (content === '') continue
-      const role = String(msg?.role ?? 'user')
-      const at = typeof msg?.timestamp === 'string' && msg.timestamp !== '' ? msg.timestamp : new Date().toISOString()
-      const info = insertConv.run(teamId, agentId, userId, sessionId, role, content, source, at)
-      if (insertConvFts) {
-        try { insertConvFts.run(info.lastInsertRowid, content) } catch (_error) { /* best effort */ }
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      for (const msg of messages) {
+        const content = String(msg?.content ?? '').trim()
+        if (content === '') continue
+        const role = String(msg?.role ?? 'user')
+        const at = typeof msg?.timestamp === 'string' && msg.timestamp !== '' ? msg.timestamp : new Date().toISOString()
+        const info = insertConv.run(teamId, agentId, userId, sessionId, role, content, source, at)
+        if (insertConvFts) {
+          try { insertConvFts.run(info.lastInsertRowid, content.slice(0, MAX_FTS_INDEX_CHARS)) } catch (_error) { /* best effort */ }
+        }
+        if (role === 'user') lastUser = content
+        if (role === 'assistant') lastAssistant = content
       }
-      if (role === 'user') lastUser = content
-      if (role === 'assistant') lastAssistant = content
+      db.exec('COMMIT')
+    } catch (error) {
+      try { db.exec('ROLLBACK') } catch (_err) { /* ignore */ }
+      throw error
     }
 
-    const candidates = extractAtomicCandidates(lastUser, lastAssistant)
-    for (const item of candidates) {
-      await this.addAtomic({
-        teamId,
-        agentId,
-        userId,
-        type: item.type,
-        content: item.content,
-      })
+    // Never auto-extract personal preferences from Group Room multi-bot deltas;
+    // group rooms share state via transcript/notes/taskboard or explicit `memory_save`.
+    if (source !== 'room') {
+      const candidates = extractAtomicCandidates(lastUser, lastAssistant)
+      for (const item of candidates) {
+        await this.addAtomic({
+          teamId,
+          agentId,
+          userId,
+          type: item.type,
+          content: item.content,
+        })
+      }
     }
     return { ok: true, count: messages.length }
   }
@@ -249,13 +266,15 @@ export class LocalFourLayerStore {
       }
     }
 
-    if (rows.length === 0) {
-      const keywords = normalizeKeywords(query)
-      if (keywords.length > 0) {
-        const likes = keywords.map(() => 'content LIKE ?').join(' OR ')
+    const keywords = normalizeKeywords(query)
+    const shortKeywords = keywords.filter(kw => kw.length < 3)
+    if (rows.length === 0 || (shortKeywords.length > 0 && rows.length < cap)) {
+      const likeTerms = rows.length === 0 ? keywords : shortKeywords
+      if (likeTerms.length > 0) {
+        const likes = likeTerms.map(() => "content LIKE ? ESCAPE '\\'").join(' OR ')
         const params = [teamId, agentId, userId]
         if (typeFilter) params.push(typeFilter)
-        for (const kw of keywords) params.push(`%${kw}%`)
+        for (const kw of likeTerms) params.push(`%${escapeLike(kw)}%`)
         params.push(cap)
         const sql = `
           SELECT id, type, content, scene, created_at FROM atomic_memories
@@ -264,7 +283,18 @@ export class LocalFourLayerStore {
             AND (${likes})
           ORDER BY id DESC LIMIT ?
         `
-        rows = db.prepare(sql).all(...params)
+        const extra = db.prepare(sql).all(...params)
+        if (rows.length === 0) {
+          rows = extra
+        } else {
+          const seenIds = new Set(rows.map(r => r.id))
+          for (const r of extra) {
+            if (!seenIds.has(r.id) && rows.length < cap) {
+              seenIds.add(r.id)
+              rows.push(r)
+            }
+          }
+        }
       }
     }
 
@@ -301,13 +331,15 @@ export class LocalFourLayerStore {
       }
     }
 
-    if (rows.length === 0) {
-      const keywords = normalizeKeywords(query)
-      if (keywords.length > 0) {
-        const likes = keywords.map(() => 'content LIKE ?').join(' OR ')
+    const keywords = normalizeKeywords(query)
+    const shortKeywords = keywords.filter(kw => kw.length < 3)
+    if (rows.length === 0 || (shortKeywords.length > 0 && rows.length < cap)) {
+      const likeTerms = rows.length === 0 ? keywords : shortKeywords
+      if (likeTerms.length > 0) {
+        const likes = likeTerms.map(() => "content LIKE ? ESCAPE '\\'").join(' OR ')
         const params = [teamId, agentId, userId]
         if (sessionId) params.push(sessionId)
-        for (const kw of keywords) params.push(`%${kw}%`)
+        for (const kw of likeTerms) params.push(`%${escapeLike(kw)}%`)
         params.push(cap)
         const sql = `
           SELECT id, role, content, session_id, created_at FROM conversations
@@ -316,7 +348,18 @@ export class LocalFourLayerStore {
             AND (${likes})
           ORDER BY id DESC LIMIT ?
         `
-        rows = db.prepare(sql).all(...params)
+        const extra = db.prepare(sql).all(...params)
+        if (rows.length === 0) {
+          rows = extra
+        } else {
+          const seenIds = new Set(rows.map(r => r.id))
+          for (const r of extra) {
+            if (!seenIds.has(r.id) && rows.length < cap) {
+              seenIds.add(r.id)
+              rows.push(r)
+            }
+          }
+        }
       }
     }
 
@@ -381,8 +424,31 @@ export class LocalFourLayerStore {
     return { conversations: Number(conv?.n ?? 0), atomic: Number(atomic?.n ?? 0), scenes: Number(scenes?.n ?? 0) }
   }
 
+  async purgeAgent({ teamId = 'default', agentId }) {
+    if (!agentId) return
+    const db = await this.open()
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      db.prepare('DELETE FROM conversations WHERE team_id = ? AND agent_id = ?').run(teamId, agentId)
+      db.prepare('DELETE FROM atomic_memories WHERE team_id = ? AND agent_id = ?').run(teamId, agentId)
+      db.prepare('DELETE FROM scenes WHERE team_id = ? AND agent_id = ?').run(teamId, agentId)
+      db.prepare('DELETE FROM core_profiles WHERE team_id = ? AND agent_id = ?').run(teamId, agentId)
+      if (this.#ftsEnabled) {
+        try {
+          db.exec("INSERT INTO atomic_fts(atomic_fts) VALUES('rebuild');")
+          db.exec("INSERT INTO conversations_fts(conversations_fts) VALUES('rebuild');")
+        } catch (_err) { /* ignore */ }
+      }
+      db.exec('COMMIT')
+    } catch (error) {
+      try { db.exec('ROLLBACK') } catch (_err) { /* ignore */ }
+      throw error
+    }
+  }
+
   close() {
     if (this.#db) {
+      try { this.#db.exec('PRAGMA wal_checkpoint(TRUNCATE);') } catch (_error) { /* ignore */ }
       try { this.#db.close() } catch (_error) { /* ignore */ }
       this.#db = null
     }
