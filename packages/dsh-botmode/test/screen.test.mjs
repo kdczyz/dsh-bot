@@ -171,6 +171,10 @@ function startMockGateway() {
   })
 }
 
+// Auto-spawn tests use a mock gateway; do not let them alter the host system.
+const prevAutoInstallDeps = process.env.BOTSCREEN_AUTO_INSTALL_DEPS
+process.env.BOTSCREEN_AUTO_INSTALL_DEPS = '0'
+
 const dir = await mkdtemp(join(tmpdir(), 'botmode-screen-test-'))
 const gw = await startMockGateway()
 
@@ -428,7 +432,53 @@ server.listen(${upgradePort}, '127.0.0.1')
   }
 
   console.log('✓ screen.test.mjs all assertions passed')
+
+  // Python bootstrap must seed pip from the vendored wheel even when the host
+  // Python has neither pip nor ensurepip, and must not spawn bin/pip directly.
+  const bootstrapRoot = await mkdtemp(join(tmpdir(), 'botmode-bootstrap-test-'))
+  await mkdir(join(bootstrapRoot, 'vendor', 'pip'), { recursive: true })
+  await writeFile(join(bootstrapRoot, 'vendor', 'pip', 'pip-25.1.1-py3-none-any.whl'), '')
+  await writeFile(join(bootstrapRoot, 'vendor', 'pip', 'setuptools-78.1.1-py3-none-any.whl'), '')
+  await mkdir(join(bootstrapRoot, 'botscreen'), { recursive: true })
+  await writeFile(join(bootstrapRoot, 'botscreen', '__main__.py'), '')
+  await writeFile(join(bootstrapRoot, 'botscreen', 'requirements.txt'), 'fastapi\n')
+  const fakeVenv = join(bootstrapRoot, 'screen-venv')
+  await mkdir(join(fakeVenv, 'bin'), { recursive: true })
+  const fakePython = join(fakeVenv, 'bin', 'python')
+  const bootstrapLog = join(bootstrapRoot, 'bootstrap.log')
+  await writeFile(fakePython, `#!/bin/sh
+printf '%s\n' "$*" >> "${bootstrapLog}"
+case "$*" in
+  *"import fastapi, uvicorn"*) exit 1 ;;
+  *"sys.prefix != sys.base_prefix"*) exit 0 ;;
+  *"-m pip install --no-index"*) touch "${bootstrapRoot}/pip-ready"; exit 0 ;;
+  *"-m pip --version"*) if [ -f "${bootstrapRoot}/pip-ready" ]; then exit 0; fi; exit 1 ;;
+  *"-m ensurepip"*) exit 1 ;;
+  *"-m pip install -q -r"*) exit 0 ;;
+esac
+exit 0
+`, { mode: 0o755 })
+  const bootstrapScreen = new ScreenBridge({
+    approvals,
+    logger: console,
+    gatewayUrl: 'http://127.0.0.1:35209',
+    autoSpawn: true,
+    botscreenRoot: bootstrapRoot,
+    logDir: bootstrapRoot,
+  })
+  try {
+    await bootstrapScreen.ensure('bot_bootstrap')
+  } catch (_e) {
+    // The mock gateway is intentionally absent; bootstrap runs before spawn.
+  }
+  const calls = await readFile(bootstrapLog, 'utf8')
+  assert.match(calls, /-m ensurepip --upgrade/)
+  assert.match(calls, /-m pip install --no-index/)
+  assert.doesNotMatch(calls, /bin\/pip/)
+  await rm(bootstrapRoot, { recursive: true, force: true })
 } finally {
   await gw.close()
   await rm(dir, { recursive: true, force: true })
+  if (prevAutoInstallDeps === undefined) delete process.env.BOTSCREEN_AUTO_INSTALL_DEPS
+  else process.env.BOTSCREEN_AUTO_INSTALL_DEPS = prevAutoInstallDeps
 }

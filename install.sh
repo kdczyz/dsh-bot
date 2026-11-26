@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATA_ROOT="${BOTSCREEN_DATA_ROOT:-/data/botscreen}"
 BOTS="${BOTSCREEN_BOTS:-bot_01,bot_02,bot_03,bot_04}"
-PY="${ROOT}/.venv/bin/python"
+PY="${BOTSCREEN_VENV_DIR:-${ROOT}/.venv}/bin/python"
 
 say() { printf '\033[1;36m[botscreen]\033[0m %s\n' "$*"; }
 
@@ -80,11 +80,27 @@ fi
 
 # ---- 2. Python 环境 --------------------------------------------------------
 say "创建虚拟环境并安装依赖"
-if [ ! -d "${ROOT}/.venv" ]; then
-  python3 -m venv "${ROOT}/.venv"
+VENV_DIR="${BOTSCREEN_VENV_DIR:-${ROOT}/.venv}"
+VENV_PY="${VENV_DIR}/bin/python"
+if [ ! -x "${VENV_PY}" ]; then
+  python3 -m venv --without-pip "${VENV_DIR}" 2>/dev/null || python3 -m venv "${VENV_DIR}"
 fi
-"${ROOT}/.venv/bin/pip" install -q --upgrade pip
-"${ROOT}/.venv/bin/pip" install -q -r "${ROOT}/requirements.txt"
+if ! "${VENV_PY}" -m pip --version >/dev/null 2>&1; then
+  if "${VENV_PY}" -m ensurepip --upgrade >/dev/null 2>&1; then
+    :
+  elif [ -f "${ROOT}/vendor/pip/get-pip.py" ]; then
+    "${VENV_PY}" "${ROOT}/vendor/pip/get-pip.py"
+  elif [ -d "${ROOT}/vendor/pip" ]; then
+    PYTHONPATH="$(echo "${ROOT}"/vendor/pip/pip-*.whl | head -1)" \
+      "${VENV_PY}" -m pip install --no-index --find-links "${ROOT}/vendor/pip" \
+      --ignore-installed --upgrade pip setuptools
+  else
+    say "当前 Python 缺少 ensurepip/pip；请安装 python3-venv 和 python3-pip 后重试"
+    exit 1
+  fi
+fi
+"${VENV_PY}" -m pip install -q --upgrade pip
+"${VENV_PY}" -m pip install -q -r "${ROOT}/requirements.txt"
 
 # ---- 3. cgroup v2 ----------------------------------------------------------
 say "检查 cgroup v2"
@@ -149,6 +165,6 @@ print("  ✓ Xvnc:", version or "(version banner unavailable)")
 sys.exit(0 if ok else 1)
 EOF
 
-say "安装完成。启动：${ROOT}/.venv/bin/python -m botscreen"
+say "安装完成。启动：${PY} -m botscreen"
 say "控制台：http://127.0.0.1:${BOTSCREEN_PORT:-6200}/"
-say "MCP：${ROOT}/.venv/bin/python -m botscreen.mcp_server"
+say "MCP：${PY} -m botscreen.mcp_server"
