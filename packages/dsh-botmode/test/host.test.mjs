@@ -1846,5 +1846,5 @@ agents.set('s_ops', fakeAgent('s_ops'))
   }
 }
 
-await rm(root, { recursive: true, force: true })
+await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
 console.log('all host, group-room and memory-hub tests passed')

@@ -3,6 +3,7 @@
  * suspension (`screenHelps`), and BotApi screen routes/commands.
  */
 import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
 import http from 'node:http'
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import net from 'node:net'
@@ -36,7 +37,14 @@ function startMockGateway() {
       res.end(JSON.stringify(data))
     }
 
-    if (url.pathname === '/healthz') return send(200, { ok: true, bots: stateByBot.size })
+    if (url.pathname === '/healthz') {
+      return send(200, {
+        ok: true,
+        api_version: 2,
+        capabilities: ['ensure', 'tile_stream', 'xtest_input', 'ratio_coords', 'human_pause'],
+        bots: stateByBot.size,
+      })
+    }
     if (url.pathname === '/api/screens') {
       return send(200, { screens: [...stateByBot.values()], host: { available_mb: 8192 } })
     }
@@ -93,7 +101,20 @@ function startMockGateway() {
     if (previewMatch) {
       res.statusCode = 200
       res.setHeader('content-type', 'image/jpeg')
+      res.setHeader('x-screen-width', '1280')
+      res.setHeader('x-screen-height', '720')
       res.end(tinyJpeg)
+      return
+    }
+
+    const streamMatch = /^\/api\/screens\/([^/]+)\/stream$/.exec(url.pathname)
+    if (streamMatch) {
+      const botId = decodeURIComponent(streamMatch[1])
+      res.statusCode = 200
+      res.setHeader('content-type', 'text/event-stream')
+      res.write(`data: ${JSON.stringify({ type: 'meta', bot_id: botId, w: 1280, h: 720, state: 'HUMAN_TAKEOVER' })}\n\n`)
+      res.write(`data: ${JSON.stringify({ type: 'frame', seq: 1, full: true, w: 1280, h: 720, mime: 'image/jpeg', tiles: [{ x: 0, y: 0, w: 64, h: 64, d: tinyJpeg.toString('base64') }] })}\n\n`)
+      res.end()
       return
     }
 
@@ -208,6 +229,85 @@ try {
   const takeRes = await api.command({ type: 'screen.takeover', botId: bot.id })
   assert.equal(takeRes.state, 'HUMAN_TAKEOVER')
   assert.ok(takeRes.gateway_stream_url.startsWith(gw.url))
+
+  // 4b. Fast HTTP screen/input & preview pointer headers via BotApi.handle
+  const reqCountBefore = gw.requests.length
+  const apiWithAuth = new BotApi({
+    ctx: { get: (k) => (k === 'connection' ? { requestRejection: () => undefined } : undefined) },
+    store,
+    dispatcher: { status: () => ({ busy: {}, last: {} }), inRoom: () => false },
+    rooms: { state: () => ({}) },
+    routines: {},
+    approvals,
+    screen,
+    logger: console,
+  })
+  const runApiReq = async ({ method = 'GET', url, headers = {}, body = '' }) => {
+    const req = (async function* () { if (body) yield Buffer.from(body) })()
+    req.method = method
+    req.url = url
+    req.headers = headers
+    const outHeaders = {}
+    const chunks = []
+    const res = {
+      statusCode: 200,
+      writableEnded: false,
+      setHeader: (k, v) => { outHeaders[String(k).toLowerCase()] = String(v) },
+      write: (chunk) => { chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk || ''))) },
+      end: (chunk) => {
+        if (chunk) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk || '')))
+        res.writableEnded = true
+      },
+    }
+    await apiWithAuth.handle(req, res)
+    return { status: res.statusCode, headers: outHeaders, body: Buffer.concat(chunks) }
+  }
+  for (const input of [
+    { kind: 'mousedown', rx: 0.25, ry: 0.5, button: 1 },
+    { kind: 'move_batch', normalized: true, points: [[0.3, 0.55], [0.4, 0.6]] },
+    { kind: 'mouseup', rx: 0.4, ry: 0.6, button: 1 },
+  ]) {
+    const r = await runApiReq({
+      method: 'POST',
+      url: '/botmode/api/screen/input',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ botId: bot.id, input }),
+    })
+    assert.equal(r.status, 200)
+    assert.equal(JSON.parse(r.body.toString('utf8')).ok, true)
+  }
+  const inputReqs = gw.requests.slice(reqCountBefore)
+  assert.deepEqual(
+    inputReqs.map(r => r.path),
+    [
+      `/api/screens/${bot.id}/human_input`,
+      `/api/screens/${bot.id}/human_input`,
+      `/api/screens/${bot.id}/human_input`,
+    ],
+  )
+  assert.deepEqual(
+    inputReqs.map(r => JSON.parse(r.body).kind),
+    ['mousedown', 'move_batch', 'mouseup'],
+  )
+  assert.equal(JSON.parse(inputReqs[0].body).rx, 0.25)
+  assert.equal(JSON.parse(inputReqs[1].body).normalized, true)
+
+  const prevResp = await runApiReq({
+    method: 'GET',
+    url: `/botmode/api/screen/preview?botId=${encodeURIComponent(bot.id)}&cached=1&onlyCached=1`,
+  })
+  assert.equal(prevResp.status, 200)
+  assert.equal(prevResp.headers['x-screen-width'], '1280')
+  assert.equal(prevResp.headers['x-screen-height'], '720')
+
+  const streamResp = await runApiReq({
+    method: 'GET',
+    url: `/botmode/api/screen/stream?botId=${encodeURIComponent(bot.id)}&fmt=jpeg`,
+  })
+  assert.equal(streamResp.status, 200)
+  assert.ok(streamResp.headers['content-type'].includes('text/event-stream'))
+  assert.ok(streamResp.body.toString('utf8').includes('"type":"frame"'))
+
   const relRes = await api.command({ type: 'screen.release', botId: bot.id })
   assert.equal(relRes.state, 'AGENT_ACTIVE')
 
@@ -236,9 +336,9 @@ const http = require('node:http')
 const fs = require('node:fs')
 fs.writeFileSync(${JSON.stringify(pidFile)}, String(process.pid))
 const port = Number(process.env.BOTSCREEN_PORT)
-const server = http.createServer((req, res) => {
+  const server = http.createServer((req, res) => {
   res.setHeader('content-type', 'application/json')
-  if (req.url === '/healthz') return res.end(JSON.stringify({ ok: true, bots: 0 }))
+  if (req.url === '/healthz') return res.end(JSON.stringify({ ok: true, api_version: 2, capabilities: ['ensure', 'tile_stream'], bots: 0 }))
   if (req.url === '/api/screens') return res.end(JSON.stringify({ screens: [], host: { available_mb: 4096 } }))
   if (req.url.includes('/ensure')) return res.end(JSON.stringify({ bot_id: 'bot_auto', state: 'STOPPED', healthy: false, agent_token: 'tok_auto', epoch: 0 }))
   res.statusCode = 404
@@ -265,6 +365,62 @@ server.listen(port, '127.0.0.1')
     assert.equal(listed.available, true)
     assert.equal(listed.autoStartable, true)
   } finally {
+    try {
+      const pid = Number((await readFile(pidFile, 'utf8')).trim())
+      if (pid > 0) process.kill(pid, 'SIGTERM')
+    } catch (_e) { /* ignore */ }
+  }
+
+  // 7. Auto-replace outdated v1 local gateway squatting on port (missing /ensure -> 404)
+  const upgradePort = await new Promise((resolvePort, reject) => {
+    const srv = net.createServer()
+    srv.once('error', reject)
+    srv.listen(0, '127.0.0.1', () => {
+      const p = srv.address().port
+      srv.close(() => resolvePort(p))
+    })
+  })
+  const staleScript = join(autoRoot, 'stale-botscreen.js')
+  await writeFile(
+    staleScript,
+    `const http = require('node:http')
+const server = http.createServer((req, res) => {
+  res.setHeader('content-type', 'application/json')
+  if (req.url === '/healthz') return res.end(JSON.stringify({ ok: true, bots: 4 }))
+  res.statusCode = 404
+  res.end(JSON.stringify({ detail: 'Not Found' }))
+})
+server.listen(${upgradePort}, '127.0.0.1')
+`,
+  )
+  const staleChild = spawn(process.execPath, [staleScript, 'botscreen'], { stdio: 'ignore', detached: true })
+  staleChild.unref()
+  for (let i = 0; i < 20; i += 1) {
+    try {
+      const r = await fetch(`http://127.0.0.1:${upgradePort}/healthz`)
+      if (r.ok) break
+    } catch (_e) { /* wait */ }
+    await new Promise(r => setTimeout(r, 100))
+  }
+  const upgradeScreen = new ScreenBridge({
+    approvals,
+    logger: console,
+    gatewayUrl: `http://127.0.0.1:${upgradePort}`,
+    autoSpawn: true,
+    botscreenRoot: autoRoot,
+    pythonBin: mockPy,
+    logDir: autoRoot,
+  })
+  try {
+    const healthBefore = await upgradeScreen.health()
+    assert.equal(healthBefore.available, false)
+    assert.equal(healthBefore.outdated, true)
+    const upgraded = await upgradeScreen.ensure('bot_auto')
+    assert.equal(upgraded.bot_id, 'bot_auto')
+    const healthAfter = await upgradeScreen.health()
+    assert.equal(healthAfter.available, true)
+  } finally {
+    try { staleChild.kill('SIGTERM') } catch (_e) { /* already replaced */ }
     try {
       const pid = Number((await readFile(pidFile, 'utf8')).trim())
       if (pid > 0) process.kill(pid, 'SIGTERM')

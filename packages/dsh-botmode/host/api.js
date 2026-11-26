@@ -143,16 +143,81 @@ export class BotApi {
           return
         }
         const cached = url.searchParams.get('cached') !== '0'
+        const onlyCached = url.searchParams.get('onlyCached') === '1'
         try {
-          const shot = await this.screen.preview(botId, { cached })
+          const shot = await this.screen.preview(botId, { cached, onlyCached })
           res.statusCode = 200
           res.setHeader('content-type', shot.mimeType)
           res.setHeader('cache-control', 'no-store')
           if (shot.frozen) res.setHeader('x-screen-frozen', 'true')
+          if (shot.width) res.setHeader('x-screen-width', String(shot.width))
+          if (shot.height) res.setHeader('x-screen-height', String(shot.height))
           res.end(shot.buffer)
         } catch (error) {
           sendJson(res, error?.status || 409, { ok: false, error: error instanceof Error ? error.message : String(error) })
         }
+        return
+      }
+      if (route === 'screen/stream' && req.method === 'GET') {
+        const botId = stringOr(url.searchParams.get('botId'))
+        if (!botId || !this.screen) {
+          sendJson(res, 404, { ok: false, error: 'unknown bot or screen unavailable' })
+          return
+        }
+        const format = url.searchParams.get('fmt') === 'webp' ? 'webp' : 'jpeg'
+        const ac = new AbortController()
+        const onAbort = () => ac.abort()
+        req.on?.('close', onAbort)
+        res.on?.('close', onAbort)
+        try {
+          const upstream = await this.screen.openTileStream(botId, { format, signal: ac.signal })
+          res.statusCode = 200
+          res.setHeader('content-type', 'text/event-stream; charset=utf-8')
+          res.setHeader('cache-control', 'no-cache, no-transform')
+          res.setHeader('connection', 'keep-alive')
+          res.setHeader('x-accel-buffering', 'no')
+          res.flushHeaders?.()
+          for await (const chunk of upstream.body) {
+            if (ac.signal.aborted || res.writableEnded) break
+            res.write(Buffer.from(chunk))
+          }
+          if (!res.writableEnded) res.end()
+        } catch (error) {
+          if (!ac.signal.aborted && !res.headersSent) {
+            sendJson(res, error?.status || 502, { ok: false, error: error instanceof Error ? error.message : String(error) })
+          } else if (!res.writableEnded) {
+            res.end()
+          }
+        } finally {
+          ac.abort()
+        }
+        return
+      }
+      if (route === 'screen/input' && req.method === 'POST') {
+        const ct = String(req.headers?.['content-type'] ?? '').split(';')[0].trim().toLowerCase()
+        if (ct !== 'application/json') {
+          sendJson(res, 415, { ok: false, error: 'content-type must be application/json' })
+          return
+        }
+        const raw = await readBody(req)
+        if (raw === undefined) {
+          sendJson(res, 413, { ok: false, error: 'body too large' })
+          return
+        }
+        let payload
+        try {
+          payload = JSON.parse(raw)
+        } catch (_error) {
+          sendJson(res, 400, { ok: false, error: 'invalid JSON' })
+          return
+        }
+        const botId = stringOr(payload?.botId)
+        if (!botId || !this.screen) {
+          sendJson(res, 400, { ok: false, error: 'missing botId or screen unavailable' })
+          return
+        }
+        const result = await this.screen.humanInput(botId, payload?.input || payload)
+        sendJson(res, 200, { ok: true, result })
         return
       }
       if (route === 'screen/audit' && req.method === 'GET') {

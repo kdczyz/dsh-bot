@@ -37,6 +37,7 @@ from .config import (
 )
 from .driver import ScreenDriver
 from .state import ScreenLock, State
+from .streamer import TileStreamHub
 
 OPENBOX_RC = """<?xml version="1.0" encoding="UTF-8"?>
 <openbox_config xmlns="http://openbox.org/3.4/rc">
@@ -103,6 +104,7 @@ class ScreenWorker:
         self.cg = CgroupManager()
         self.driver = ScreenDriver(bot_id, self.display, self.paths)
         self.auditor = Auditor(bot_id, self.paths)
+        self.streamer = TileStreamHub(self)
         self.desktop = DesktopShell(
             bot_id, self.paths,
             os.path.join(os.path.dirname(__file__), "desktop", "assets"),
@@ -366,19 +368,13 @@ class ScreenWorker:
                 pass
 
     def _spawn_xvfb(self) -> None:
-        """X.Org xserver 的 Xvfb（源码编译）+ 独立推流栈。
-
-        与 KasmVNC 的 Xvnc 相比：X server 来自上游项目本身，推流由 x11vnc +
-        websockify + noVNC 组成，每一层都可单独替换/升级。
-        限制：Xvfb 只支持 24 位深度，没有 ARGB visual，所以 dock 不能透明圆角。
-        """
+        """极致轻量纯内存帧缓冲 Xvfb，平时不启动任何常驻 VNC / 视频编码进程。"""
         env = dict(os.environ)
         env.update(
             HOME=self.paths.home,
             XAUTHORITY=SHARED_XAUTHORITY,
             DISPLAY=f":{self.display}",
         )
-        log = open(os.path.join(self.paths.runtime, "xvfb.log"), "ab", buffering=0)
         argv = [
             XVFB_BIN,
             f":{self.display}",
@@ -386,28 +382,29 @@ class ScreenWorker:
             "-nolisten", "tcp",
             "-auth", SHARED_XAUTHORITY,
             "-dpi", "96",
+            "+extension", "MIT-SHM",
+            "+extension", "XTEST",
         ]
         self._reap_stale_display()
-        self._xvnc = subprocess.Popen(
-            argv, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True
-        )
+        with open(os.path.join(self.paths.runtime, "xvfb.log"), "ab", buffering=0) as log:
+            self._xvnc = subprocess.Popen(
+                argv, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True
+            )
         self.cg.reap(self.bot_id, self._xvnc.pid)
-        # 推流：x11vnc（RFB）→ websockify（WS + noVNC 静态）
-        vnc_log = open(os.path.join(self.paths.runtime, "x11vnc.log"), "ab", buffering=0)
-        self._vnc_procs.append(subprocess.Popen(
-            ["x11vnc", "-display", f":{self.display}", "-rfbport", str(self.rfb_port),
-             "-localhost", "-forever", "-shared", "-nopw", "-quiet", "-noxdamage",
-             "-repeat", "-cursor", "arrow"],
-            env=env, stdout=vnc_log, stderr=subprocess.STDOUT, start_new_session=True,
-        ))
-        ws_log = open(os.path.join(self.paths.runtime, "websockify.log"), "ab", buffering=0)
-        self._vnc_procs.append(subprocess.Popen(
-            ["websockify", "--web", VNC_WEB_DIR, str(self.ws_port), f"localhost:{self.rfb_port}"],
-            env=env, stdout=ws_log, stderr=subprocess.STDOUT, start_new_session=True,
-        ))
-        # 推流层（x11vnc + websockify）**不放进 bot 的 cgroup**：
-        # 否则 freeze 会把 WS 连接一起冻住，浏览器侧静默超时 → 长连接反复掉线。
-        # 它们留在网关的 cgroup 里，冻结时画面静止但连接保持。
+        # 仅当显式开启 BOTSCREEN_ENABLE_VNC=1 且工具已安装时，才附带启动 x11vnc/websockify
+        if os.environ.get("BOTSCREEN_ENABLE_VNC", "0") == "1" and shutil.which("x11vnc") and shutil.which("websockify"):
+            with open(os.path.join(self.paths.runtime, "x11vnc.log"), "ab", buffering=0) as vnc_log:
+                self._vnc_procs.append(subprocess.Popen(
+                    ["x11vnc", "-display", f":{self.display}", "-rfbport", str(self.rfb_port),
+                     "-localhost", "-forever", "-shared", "-nopw", "-quiet", "-noxdamage",
+                     "-repeat", "-cursor", "arrow"],
+                    env=env, stdout=vnc_log, stderr=subprocess.STDOUT, start_new_session=True,
+                ))
+            with open(os.path.join(self.paths.runtime, "websockify.log"), "ab", buffering=0) as ws_log:
+                self._vnc_procs.append(subprocess.Popen(
+                    ["websockify", "--web", VNC_WEB_DIR, str(self.ws_port), f"localhost:{self.rfb_port}"],
+                    env=env, stdout=ws_log, stderr=subprocess.STDOUT, start_new_session=True,
+                ))
         self._last_error = None
 
     def _spawn_xvnc(self) -> None:
@@ -417,7 +414,6 @@ class ScreenWorker:
             XAUTHORITY=SHARED_XAUTHORITY,
             DISPLAY=f":{self.display}",
         )
-        log = open(os.path.join(self.paths.runtime, "xvnc.log"), "ab", buffering=0)
         argv = [
             "Xvnc",
             f":{self.display}",
@@ -442,15 +438,24 @@ class ScreenWorker:
             SHARED_XAUTHORITY,
         ]
         self._reap_stale_display()
-        self._xvnc = subprocess.Popen(
-            argv, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True
-        )
+        with open(os.path.join(self.paths.runtime, "xvnc.log"), "ab", buffering=0) as log:
+            self._xvnc = subprocess.Popen(
+                argv, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True
+            )
         self.cg.reap(self.bot_id, self._xvnc.pid)
 
     def _spawn_wm(self) -> None:
-        """窗口管理器。默认 xfwm4：openbox 会把 tint2 dock 强制甩到右上角。"""
-        if WINDOW_MANAGER == "openbox":
-            return self._spawn_openbox()
+        """轻量窗口管理器：支持 none（无 WM 单应用全屏）、openbox（默认 <10MB）、fluxbox、xfwm4。"""
+        wm = (WINDOW_MANAGER or "openbox").strip().lower()
+        if wm in ("none", "off", "0", "false"):
+            return
+        if wm == "openbox":
+            if shutil.which("openbox"):
+                return self._spawn_openbox()
+            if shutil.which("fluxbox"):
+                wm = "fluxbox"
+            else:
+                return
         env = dict(os.environ)
         env.update(
             HOME=self.paths.home,
@@ -460,11 +465,25 @@ class ScreenWorker:
             XDG_CACHE_HOME=os.path.join(self.paths.home, ".cache"),
             XDG_DATA_HOME=os.path.join(self.paths.home, ".local", "share"),
         )
-        log = open(os.path.join(self.paths.runtime, "xfwm4.log"), "ab", buffering=0)
-        self._openbox = subprocess.Popen(
-            ["xfwm4", "--compositor=off"],
-            env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
-        )
+        if wm == "fluxbox":
+            if not shutil.which("fluxbox"):
+                return
+            with open(os.path.join(self.paths.runtime, "fluxbox.log"), "ab", buffering=0) as log:
+                self._openbox = subprocess.Popen(
+                    ["fluxbox"],
+                    env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+                )
+            self.cg.reap(self.bot_id, self._openbox.pid)
+            return
+        if not shutil.which("xfwm4"):
+            if shutil.which("openbox"):
+                return self._spawn_openbox()
+            return
+        with open(os.path.join(self.paths.runtime, "xfwm4.log"), "ab", buffering=0) as log:
+            self._openbox = subprocess.Popen(
+                ["xfwm4", "--compositor=off"],
+                env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+            )
         self.cg.reap(self.bot_id, self._openbox.pid)
 
     def _spawn_openbox(self) -> None:
@@ -475,14 +494,14 @@ class ScreenWorker:
             DISPLAY=f":{self.display}",
             XDG_CONFIG_HOME=os.path.join(self.paths.home, ".config"),
         )
-        log = open(os.path.join(self.paths.runtime, "openbox.log"), "ab", buffering=0)
-        self._openbox = subprocess.Popen(
-            ["openbox", "--config-file", os.path.join(self.paths.runtime, "openbox", "rc.xml")],
-            env=env,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+        with open(os.path.join(self.paths.runtime, "openbox.log"), "ab", buffering=0) as log:
+            self._openbox = subprocess.Popen(
+                ["openbox", "--config-file", os.path.join(self.paths.runtime, "openbox", "rc.xml")],
+                env=env,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
         self.cg.reap(self.bot_id, self._openbox.pid)
 
     def _spawn_app(self, argv: List[str]) -> int:
@@ -492,10 +511,10 @@ class ScreenWorker:
             XAUTHORITY=SHARED_XAUTHORITY,
             DISPLAY=f":{self.display}",
         )
-        log = open(os.path.join(self.paths.runtime, "apps.log"), "ab", buffering=0)
-        proc = subprocess.Popen(
-            argv, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True
-        )
+        with open(os.path.join(self.paths.runtime, "apps.log"), "ab", buffering=0) as log:
+            proc = subprocess.Popen(
+                argv, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True
+            )
         self._apps.append(proc)
         try:
             self.cg.reap(self.bot_id, proc.pid)
@@ -506,6 +525,7 @@ class ScreenWorker:
     def open_app(self, app: str = "chrome", url: Optional[str] = None) -> dict:
         """在虚拟屏内拉起常用应用（隔离 HOME 与 Chrome Profile）。"""
         kind = (app or "chrome").strip().lower()
+        no_wm = (WINDOW_MANAGER or "").strip().lower() in ("none", "off", "0", "false")
         if kind in ("chrome", "browser"):
             exe = next(
                 (shutil.which(n) for n in ("google-chrome", "chromium", "chromium-browser") if shutil.which(n)),
@@ -513,6 +533,8 @@ class ScreenWorker:
             )
             if not exe:
                 raise RuntimeError("未找到 google-chrome / chromium 可执行文件")
+            win_w = SCREEN_WIDTH if (no_wm or not DESKTOP_SHELL) else (SCREEN_WIDTH - 40)
+            win_h = SCREEN_HEIGHT if (no_wm or not DESKTOP_SHELL) else (SCREEN_HEIGHT - 80)
             argv = [
                 exe,
                 "--no-sandbox",
@@ -520,7 +542,8 @@ class ScreenWorker:
                 "--no-first-run",
                 "--disable-dev-shm-usage",
                 f"--user-data-dir={os.path.join(self.paths.home, '.config', 'google-chrome')}",
-                f"--window-size={SCREEN_WIDTH - 40},{SCREEN_HEIGHT - 80}",
+                "--window-position=0,0",
+                f"--window-size={win_w},{win_h}",
             ]
             if url:
                 argv.append(url)
@@ -528,7 +551,7 @@ class ScreenWorker:
             exe = shutil.which("xterm") or shutil.which("x-terminal-emulator")
             if not exe:
                 raise RuntimeError("未找到 xterm 终端可执行文件")
-            argv = [exe, "-fa", "Monospace", "-fs", "11"]
+            argv = [exe, "-fa", "Monospace", "-fs", "11", "-geometry", "136x34+0+0"]
         elif kind in ("files", "pcmanfm"):
             exe = shutil.which("pcmanfm")
             if not exe:
@@ -568,6 +591,9 @@ class ScreenWorker:
     async def freeze(self) -> dict:
         if not self.healthy():
             return self.status()
+        if self.lock.state in (State.HUMAN_TAKEOVER, State.NEED_HUMAN):
+            return self.status()
+        await asyncio.to_thread(self.driver.close_capture)
         already = self.cg.is_frozen(self.bot_id)
         if not already:
             await asyncio.to_thread(self.cg.freeze, self.bot_id, True)
@@ -622,6 +648,7 @@ class ScreenWorker:
                 proc.kill()
 
     async def stop(self) -> dict:
+        await self.streamer.shutdown()
         await asyncio.to_thread(self._stop_sync)
         self.lock.mark_stopped("stop")
         return self.status()
@@ -684,10 +711,18 @@ class ScreenWorker:
                 "ws_port": self.ws_port,
                 "rfb_port": self.rfb_port if X_BACKEND == "xvfb" else None,
                 "x_backend": X_BACKEND,
+                "wm": WINDOW_MANAGER,
+                "width": SCREEN_WIDTH,
+                "height": SCREEN_HEIGHT,
+                "depth": SCREEN_DEPTH,
                 "healthy": self.healthy(),
                 "cgroup_frozen": frozen,
                 "pids": pids,
                 "memory_bytes": mem,
+                "stream": {
+                    "subscribers": self.streamer.active_subscribers,
+                    "capture_active": self.streamer.capture_active,
+                },
                 "uptime": None if not self._started_at else round(time.time() - self._started_at, 1),
                 "last_error": self._last_error,
                 "memory_gate": memory_summary(),

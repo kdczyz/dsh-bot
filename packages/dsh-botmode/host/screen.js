@@ -11,7 +11,8 @@
  */
 import { Buffer } from 'node:buffer'
 import { execFile, execFileSync, spawn } from 'node:child_process'
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync } from 'node:fs'
+import net from 'node:net'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,6 +20,7 @@ import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 const DEFAULT_GATEWAY = 'http://127.0.0.1:6200'
+const REQUIRED_GATEWAY_API_VERSION = 2
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PY_DEPS_CHECK = 'import fastapi, uvicorn, PIL, Xlib, websockets, httpx'
@@ -108,6 +110,69 @@ function readLogTail(logPath, maxBytes = 1200) {
   }
 }
 
+function findLocalGatewayPidsOnPort(port, hintedPid = 0) {
+  const pids = new Set()
+  const isBotscreenProc = (pid) => {
+    try {
+      const cmd = readFileSync(`/proc/${pid}/cmdline`, 'utf8').replace(/\0+/g, ' ')
+      return cmd.includes('botscreen') || cmd.includes('uvicorn')
+    } catch (_e) {
+      return false
+    }
+  }
+  if (hintedPid > 0 && isBotscreenProc(hintedPid)) pids.add(hintedPid)
+
+  const inodes = new Set()
+  for (const table of ['/proc/net/tcp', '/proc/net/tcp6']) {
+    try {
+      const lines = readFileSync(table, 'utf8').split('\n').slice(1)
+      for (const line of lines) {
+        const cols = line.trim().split(/\s+/)
+        if (cols.length < 10 || cols[3] !== '0A') continue
+        const hexPort = (cols[1].split(':')[1] || '')
+        if (Number.parseInt(hexPort, 16) === port && cols[9] !== '0') {
+          inodes.add(`socket:[${cols[9]}]`)
+        }
+      }
+    } catch (_e) { /* non-linux or unreadable */ }
+  }
+  if (inodes.size === 0) return [...pids]
+
+  try {
+    for (const entry of readdirSync('/proc')) {
+      if (!/^\d+$/.test(entry)) continue
+      const pid = Number(entry)
+      if (pid === process.pid) continue
+      let fds
+      try { fds = readdirSync(`/proc/${pid}/fd`) } catch (_e) { continue }
+      for (const fd of fds) {
+        try {
+          const link = readlinkSync(`/proc/${pid}/fd/${fd}`)
+          if (inodes.has(link) && isBotscreenProc(pid)) {
+            pids.add(pid)
+            break
+          }
+        } catch (_e) { /* ignore */ }
+      }
+    }
+  } catch (_e) { /* ignore */ }
+  return [...pids]
+}
+
+function isPortListening(host, port, timeoutMs = 400) {
+  return new Promise((resolvePort) => {
+    const sock = net.connect({ host: host || '127.0.0.1', port })
+    const done = (open) => {
+      sock.destroy()
+      resolvePort(open)
+    }
+    sock.setTimeout(timeoutMs)
+    sock.once('connect', () => done(true))
+    sock.once('timeout', () => done(false))
+    sock.once('error', () => done(false))
+  })
+}
+
 export class ScreenBridge {
   #tokens = new Map() // botId -> agent_token
   #epochs = new Map() // botId -> epoch
@@ -189,6 +254,36 @@ export class ScreenBridge {
     return this.#bootPromise
   }
 
+  async #evictOutdatedLocalGateway(host, port, hintedPid = 0) {
+    try {
+      await fetch(`${this.gatewayUrl}/api/admin/shutdown`, {
+        method: 'POST',
+        headers: this.#adminHeaders(),
+        signal: AbortSignal.timeout(1200),
+      }).catch(() => undefined)
+    } catch (_e) { /* ignore */ }
+
+    const pids = findLocalGatewayPidsOnPort(port, hintedPid)
+    for (const pid of pids) {
+      try { process.kill(pid, 'SIGTERM') } catch (_e) { /* ignore */ }
+    }
+
+    const waitDeadline = Date.now() + 3000
+    let escalated = false
+    while (Date.now() < waitDeadline) {
+      const open = await isPortListening(host, port)
+      if (!open) return true
+      if (!escalated && Date.now() + 1000 >= waitDeadline) {
+        escalated = true
+        for (const pid of findLocalGatewayPidsOnPort(port, hintedPid)) {
+          try { process.kill(pid, 'SIGKILL') } catch (_e) { /* ignore */ }
+        }
+      }
+      await new Promise(r => setTimeout(r, 150))
+    }
+    return !(await isPortListening(host, port))
+  }
+
   async #ensureGatewayInner({ timeoutMs }) {
     const quick = await this.health()
     if (quick.available) {
@@ -211,6 +306,14 @@ export class ScreenBridge {
 
     this.#bootAttempted = true
     const { host, port } = this.#parsedGateway()
+    if (quick.outdated) {
+      this.logger?.info?.(`botmode: replacing outdated local BotScreen gateway (v${quick.foundVersion || 1}) at ${this.gatewayUrl}`)
+      const freed = await this.#evictOutdatedLocalGateway(host || '127.0.0.1', port || 6200, quick.pid || 0)
+      if (!freed) {
+        this.#lastError = `端口 ${port || 6200} 被旧版网关占用且无法自动停止（可能由 root/systemd 启动），请手动重启该服务以加载新版接口`
+        return { available: false, spawned: false, error: this.#lastError }
+      }
+    }
     const logBase = this.#logDir || join(homedir(), '.dsh', 'botmode')
     let logFd = null
     const logPath = join(logBase, 'botscreen-gateway.log')
@@ -245,6 +348,7 @@ export class ScreenBridge {
           PYTHONPATH: process.env.PYTHONPATH ? `${runtime.root}:${process.env.PYTHONPATH}` : runtime.root,
           BOTSCREEN_HOST: process.env.BOTSCREEN_HOST || host || '127.0.0.1',
           BOTSCREEN_PORT: process.env.BOTSCREEN_PORT || String(port || 6200),
+          BOTSCREEN_BOTS: process.env.BOTSCREEN_BOTS ?? '',
           PYTHONUNBUFFERED: '1',
         },
         detached: true,
@@ -341,10 +445,27 @@ export class ScreenBridge {
 
   async health() {
     try {
-      const data = await this.#json('/healthz', { timeoutMs: 2500 })
+      const res = await fetch(`${this.gatewayUrl}/healthz`, { signal: AbortSignal.timeout(2500) })
+      if (!res.ok) throw new Error(`healthz ${res.status}`)
+      const data = await res.json()
+      const apiVersion = Number(data?.api_version || 1)
+      const caps = Array.isArray(data?.capabilities) ? data.capabilities : []
+      const outdated = apiVersion < REQUIRED_GATEWAY_API_VERSION || (caps.length > 0 && !caps.includes('tile_stream'))
+      if (outdated && this.#autoSpawn && this.isLocalGateway()) {
+        this.#gatewayAvailable = false
+        const msg = `检测到旧版网关 (v${apiVersion}) 占用端口，缺少 ensure / 增量帧路由`
+        return {
+          available: false,
+          outdated: true,
+          foundVersion: apiVersion,
+          pid: Number(data?.pid || 0),
+          gatewayUrl: this.gatewayUrl,
+          error: msg,
+        }
+      }
       this.#gatewayAvailable = true
       this.#lastError = ''
-      return { available: true, gatewayUrl: this.gatewayUrl, ...data }
+      return { available: true, outdated, gatewayUrl: this.gatewayUrl, ...data }
     } catch (error) {
       this.#gatewayAvailable = false
       return { available: false, gatewayUrl: this.gatewayUrl, error: error instanceof Error ? error.message : String(error) }
@@ -352,6 +473,23 @@ export class ScreenBridge {
   }
 
   async listScreens() {
+    if (this.#gatewayAvailable !== true && this.canAutoStart()) {
+      const probe = await this.health()
+      if (!probe.available && !this.#bootPromise) {
+        void this.ensureGateway()
+      }
+      if (!probe.available) {
+        return {
+          available: false,
+          gatewayUrl: this.gatewayUrl,
+          autoStartable: this.canAutoStart(),
+          starting: Boolean(this.#bootPromise),
+          screens: [],
+          host: null,
+          error: this.#lastError || probe.error || '',
+        }
+      }
+    }
     try {
       const data = await this.#json('/api/screens', {
         headers: this.#adminHeaders(),
@@ -406,8 +544,9 @@ export class ScreenBridge {
       if (Number.isFinite(Number(data?.epoch))) this.#epochs.set(botId, Number(data.epoch))
       return data
     } catch (error) {
-      // Gateway may have stopped since last check; retry once after auto-starting.
-      if (error?.status === undefined && this.canAutoStart()) {
+      // Gateway may have stopped or been replaced by an outdated v1 gateway (404 on /ensure); auto-upgrade & retry.
+      if ((error?.status === undefined || error?.status === 404) && this.canAutoStart()) {
+        this.#gatewayAvailable = false
         const ready = await this.ensureGateway()
         if (ready.available) {
           const data = await this.#json(`/api/screens/${encodeURIComponent(botId)}/ensure${qs}`, {
@@ -419,6 +558,9 @@ export class ScreenBridge {
           if (Number.isFinite(Number(data?.epoch))) this.#epochs.set(botId, Number(data.epoch))
           return data
         }
+      }
+      if (error?.status === 404) {
+        throw new Error(`BotScreen 网关 (${this.gatewayUrl}) 运行的是旧版服务，不存在 /api/screens/${botId}/ensure 注册路由，请重启或升级网关。`)
       }
       throw error
     }
@@ -520,17 +662,59 @@ export class ScreenBridge {
   }
 
   async humanInput(botId, input) {
-    await this.ensure(botId)
-    return this.#json(`/api/screens/${encodeURIComponent(botId)}/human_input`, {
-      method: 'POST',
-      headers: this.#adminHeaders({ 'content-type': 'application/json' }),
-      body: JSON.stringify(input || {}),
-      timeoutMs: 15_000,
+    return this.#withLock(botId, async () => {
+      const send = () => this.#json(`/api/screens/${encodeURIComponent(botId)}/human_input`, {
+        method: 'POST',
+        headers: this.#adminHeaders({ 'content-type': 'application/json' }),
+        body: JSON.stringify(input || {}),
+        timeoutMs: 15_000,
+      })
+      try {
+        return await send()
+      } catch (error) {
+        if (error?.status === 404 || error?.status === undefined) {
+          await this.ensure(botId)
+          return send()
+        }
+        throw error
+      }
     })
   }
 
-  async preview(botId, { cached = true } = {}) {
-    const qs = cached ? '?cached=1' : ''
+  async openTileStream(botId, { format = 'jpeg', signal } = {}) {
+    if (this.#gatewayAvailable !== true && this.canAutoStart()) {
+      const ready = await this.ensureGateway()
+      if (!ready.available) throw new Error(ready.error || 'BotScreen gateway unavailable')
+    }
+    const url = `${this.gatewayUrl}/api/screens/${encodeURIComponent(botId)}/stream?fmt=${encodeURIComponent(format)}`
+    const connect = () => fetch(url, {
+      headers: this.#adminHeaders({ accept: 'text/event-stream' }),
+      signal,
+    })
+    let res = await connect()
+    if (res.status === 404 && this.canAutoStart()) {
+      this.#gatewayAvailable = false
+      const ready = await this.ensureGateway()
+      if (ready.available) {
+        await this.ensure(botId)
+        res = await connect()
+      }
+    }
+    if (!res.ok || !res.body) {
+      const detail = await res.text().catch(() => '')
+      const err = new Error(detail || `stream ${res.status}`)
+      err.status = res.status
+      throw err
+    }
+    this.#gatewayAvailable = true
+    return res
+  }
+
+  async preview(botId, { cached = true, onlyCached = false } = {}) {
+    const params = new URLSearchParams()
+    if (cached) params.set('cached', '1')
+    if (onlyCached) params.set('only_cached', '1')
+    const qs = params.toString() ? `?${params.toString()}` : ''
     const res = await this.#req(`/api/screens/${encodeURIComponent(botId)}/preview${qs}`, {
       headers: this.#adminHeaders(),
       timeoutMs: 10_000,
@@ -542,10 +726,14 @@ export class ScreenBridge {
       throw err
     }
     const buffer = Buffer.from(await res.arrayBuffer())
+    const width = Number(res.headers.get('x-screen-width'))
+    const height = Number(res.headers.get('x-screen-height'))
     return {
       buffer,
       mimeType: (res.headers.get('content-type') || 'image/jpeg').split(';')[0],
       frozen: res.headers.get('x-screen-frozen') === 'true',
+      width: Number.isFinite(width) && width > 0 ? width : undefined,
+      height: Number.isFinite(height) && height > 0 ? height : undefined,
     }
   }
 

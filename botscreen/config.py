@@ -37,12 +37,19 @@ WEB_ROOT = os.environ.get(
 DISPLAY_BASE = int(os.environ.get("BOTSCREEN_DISPLAY_BASE", "100"))
 WS_PORT_BASE = int(os.environ.get("BOTSCREEN_WS_PORT_BASE", "6100"))
 
-# ---- 虚拟屏固定几何（方案四.1：锁死分辨率，视觉模型坐标才稳定） -------------------
+#: 网关协议代数（DSH Host 用于校验网关接口兼容性并自动替换旧进程）
+GATEWAY_API_VERSION = 2
+
+# ---- 虚拟屏固定几何（锁死最小够用分辨率，兼顾视觉识别与低带宽/低内存） ----------
 SCREEN_WIDTH = int(os.environ.get("BOTSCREEN_WIDTH", "1280"))
 SCREEN_HEIGHT = int(os.environ.get("BOTSCREEN_HEIGHT", "720"))
-#: 色深。KasmVNC 用 32 才有 ARGB visual（dock 透明圆角）；Xvfb 只支持 24。
+#: 色深：默认 24 位（亦支持 16 位进一步压缩帧缓冲带宽）。
 SCREEN_DEPTH = int(os.environ.get("BOTSCREEN_DEPTH", "24"))
-FRAME_RATE = 30
+FRAME_RATE = int(os.environ.get("BOTSCREEN_FPS", "10"))
+#: 按需增量推流：64×64 脏矩形网格 + 100ms 采样 + 断开 5 秒自动销毁抓屏会话
+TILE_SIZE = int(os.environ.get("BOTSCREEN_TILE_SIZE", "64"))
+STREAM_INTERVAL_MS = int(os.environ.get("BOTSCREEN_STREAM_MS", "100"))
+CAPTURE_IDLE_HIBERNATE = float(os.environ.get("BOTSCREEN_CAPTURE_HIBERNATE", "5.0"))
 
 # ---- 生命周期参数 ------------------------------------------------------------
 IDLE_FREEZE_SECONDS = float(os.environ.get("BOTSCREEN_IDLE_FREEZE", "180"))
@@ -65,24 +72,24 @@ def _detect_x_backend() -> str:
     raw = os.environ.get("BOTSCREEN_X_BACKEND", "").strip().lower()
     if raw in ("xvfb", "kasmvnc"):
         return raw
-    if shutil.which(XVFB_BIN) and shutil.which("x11vnc") and shutil.which("websockify"):
+    if shutil.which(XVFB_BIN) or os.path.isfile(XVFB_BIN):
         return "xvfb"
     if shutil.which("Xvnc"):
         return "kasmvnc"
     return "xvfb"
 
 
-#: X server 后端：xvfb（Xvfb + x11vnc + websockify）或 kasmvnc（Xvnc 内嵌 websocket）
+#: X server 后端：默认极致轻量纯 Xvfb（无常驻 VNC 编码器）；可选 kasmvnc
 X_BACKEND = _detect_x_backend()
-#: noVNC 静态前端目录
+#: noVNC 静态前端目录（仅可选外部 VNC 模式使用）
 VNC_WEB_DIR = os.environ.get("BOTSCREEN_VNC_WEB", "/usr/share/novnc")
-#: x11vnc 的 RFB 端口基址（5900 + 序号）
+#: x11vnc 按需 RFB 端口基址（5950 + 序号，仅按需拉起 -once 时使用）
 RFB_PORT_BASE = int(os.environ.get("BOTSCREEN_RFB_PORT_BASE", "5950"))
 
-#: 窗口管理器：xfwm4（默认，能正确放置 dock）或 openbox（极简，但会顶掉 dock 窗口）
-WINDOW_MANAGER = os.environ.get("BOTSCREEN_WM", "xfwm4")
-#: 是否铺桌面壳（壁纸 + 桌面图标 + dock + 合成器）
-DESKTOP_SHELL = os.environ.get("BOTSCREEN_DESKTOP", "1") == "1"
+#: 窗口管理器：默认极简 openbox（<10MB）；单应用全屏可设 none；亦兼容 fluxbox / xfwm4
+WINDOW_MANAGER = os.environ.get("BOTSCREEN_WM", "openbox").strip().lower()
+#: 默认关闭重型桌面壳（xfdesktop/picom/tint2/gvfs），保持每屏 15~30MB 极致轻量
+DESKTOP_SHELL = os.environ.get("BOTSCREEN_DESKTOP", "0") == "1"
 
 #: 人类持有时是否连 Agent 截图一并拒绝（Hermes 的 fail-closed 语义：人可能在输密码）。
 SCREENSHOT_FAIL_CLOSED = os.environ.get("BOTSCREEN_SCREENSHOT_FAIL_CLOSED", "1") == "1"

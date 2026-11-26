@@ -365,7 +365,7 @@ window.__ModuleLoader__.load({
         'screen.helpRelease': 'Done & hand back',
         'screen.helpCancel': 'Cancel',
         'screen.helpNotePlaceholder': 'Optional note for the Bot (e.g. Logged in, continue)…',
-        'screen.modalHint': 'Click or scroll directly on the canvas to interact, or open full VNC.',
+        'screen.modalHint': 'Click, drag/draw, scroll, or type directly on the canvas; or open full VNC.',
         'screen.typePlaceholder': 'Type text / password to send to screen…',
         'screen.typeSend': 'Send',
         'screen.openVnc': 'Open VNC window',
@@ -723,7 +723,7 @@ window.__ModuleLoader__.load({
         'screen.helpRelease': '处理完成，交还 Bot',
         'screen.helpCancel': '取消',
         'screen.helpNotePlaceholder': '可选备注（如：已完成验证码/登录，请继续）…',
-        'screen.modalHint': '可直接在画面上点击、双击、滚轮或输入文本；本地也可点右侧打开完整 VNC 窗口。',
+        'screen.modalHint': '可直接在画布上点击、拖拽绘制、滚轮、键盘或文本输入；本地也可点右上角打开完整 VNC。',
         'screen.typePlaceholder': '输入要发送到屏幕的文本或密码…',
         'screen.typeSend': '发送',
         'screen.openVnc': '新窗口 VNC',
@@ -1497,8 +1497,8 @@ window.__ModuleLoader__.load({
         border-bottom: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); }
       .bm-modal-stage { position: relative; background: #05070a; display: flex; align-items: center; justify-content: center;
         overflow: hidden; max-height: 62vh; }
-      .bm-modal-canvas { max-width: 100%; max-height: 62vh; aspect-ratio: 16 / 9; object-fit: contain; display: block;
-        cursor: crosshair; user-select: none; }
+      .bm-modal-canvas { width: auto; height: auto; max-width: 100%; max-height: 62vh; display: block;
+        cursor: default; touch-action: none; user-select: none; outline: none; }
       .bm-modal-bar { display: flex; align-items: center; gap: 6px; padding: 8px 14px; flex-wrap: wrap;
         border-top: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); }
       .bm-modal-foot { display: flex; align-items: center; gap: 8px; padding: 10px 14px; flex-wrap: wrap;
@@ -1550,6 +1550,24 @@ window.__ModuleLoader__.load({
           })
           hostStore.set({ state: response.state, status: 'ready', error: '' })
           return response.result
+        }
+        const sendScreenInput = async (botId, input) => {
+          const response = await fetch('/botmode/api/screen/input', {
+            method: 'POST',
+            credentials: 'include',
+            cache: 'no-store',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ botId, input }),
+          })
+          if (response.status === 404) {
+            return hostCommand('screen.human_input', { botId, input })
+          }
+          let payload
+          try { payload = await response.json() } catch (_failure) { payload = null }
+          if (!response.ok || !payload || payload.ok !== true) {
+            throw new Error((payload && payload.error) || `Bot mode API answered ${response.status}`)
+          }
+          return payload.result
         }
         let modelLoad = null
         const loadModels = async (force = false) => {
@@ -5098,41 +5116,333 @@ window.__ModuleLoader__.load({
 
         function ScreenTakeoverModal(props) {
           const t = useT()
-          const { modal, screen, onCommand, onClose } = props
-          const [tick, setTick] = useState(0)
+          const { modal, screen, onCommand, onScreenInput, onClose } = props
           const [textInput, setTextInput] = useState('')
           const [note, setNote] = useState('')
           const [busy, setBusy] = useState(false)
           const [err, setErr] = useState('')
-          const imgRef = useRef(null)
+          const canvasRef = useRef(null)
+          const screenSizeRef = useRef({ w: 1280, h: 720 })
+          const dragRef = useRef({ active: false, pointerId: null, button: 1, lastRatio: null, pendingMoves: [] })
+          const inputQueueRef = useRef(Promise.resolve())
+          const paintQueueRef = useRef(Promise.resolve())
+          const moveFlushTimerRef = useRef(null)
+          const fallbackPollRef = useRef(null)
+          const legacyModeRef = useRef(false)
 
           useEffect(() => {
             if (!modal) return undefined
-            const timer = window.setInterval(() => setTick(v => v + 1), 500)
-            return () => window.clearInterval(timer)
+            let cancelled = false
+            legacyModeRef.current = false
+            const canvas = canvasRef.current
+            if (canvas) {
+              const ctx = canvas.getContext('2d')
+              if (ctx) {
+                ctx.fillStyle = '#05070a'
+                ctx.fillRect(0, 0, canvas.width, canvas.height)
+                ctx.fillStyle = 'rgba(226, 232, 240, 0.55)'
+                ctx.font = '14px sans-serif'
+                ctx.textAlign = 'center'
+                ctx.fillText('Connecting stream…', canvas.width / 2, canvas.height / 2)
+              }
+            }
+
+            const decodeBase64Tile = async (b64, mime) => {
+              if (typeof window.createImageBitmap === 'function') {
+                const bin = window.atob(b64)
+                const bytes = new Uint8Array(bin.length)
+                for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i)
+                const blob = new Blob([bytes], { type: mime || 'image/jpeg' })
+                return window.createImageBitmap(blob)
+              }
+              return new Promise((resolve, reject) => {
+                const img = new Image()
+                img.onload = () => resolve(img)
+                img.onerror = reject
+                img.src = `data:${mime || 'image/jpeg'};base64,${b64}`
+              })
+            }
+
+            const applyFramePacket = (pkt) => {
+              const task = async () => {
+                if (cancelled) return
+                const node = canvasRef.current
+                if (!node) return
+                if (pkt.w > 0 && pkt.h > 0 && (node.width !== pkt.w || node.height !== pkt.h)) {
+                  screenSizeRef.current = { w: pkt.w, h: pkt.h }
+                  node.width = pkt.w
+                  node.height = pkt.h
+                }
+                const tiles = Array.isArray(pkt.tiles) ? pkt.tiles : []
+                if (tiles.length === 0) return
+                const decoded = await Promise.all(
+                  tiles.map(tile => decodeBase64Tile(tile.d, pkt.mime).then(bmp => ({ tile, bmp }))),
+                )
+                if (cancelled) {
+                  for (const item of decoded) {
+                    if (item.bmp && typeof item.bmp.close === 'function') item.bmp.close()
+                  }
+                  return
+                }
+                const ctx = node.getContext('2d')
+                if (ctx) {
+                  for (const { tile, bmp } of decoded) {
+                    ctx.drawImage(bmp, tile.x, tile.y, tile.w, tile.h)
+                    if (bmp && typeof bmp.close === 'function') bmp.close()
+                  }
+                }
+              }
+              paintQueueRef.current = paintQueueRef.current.then(task, () => undefined)
+            }
+
+            const startFallbackPolling = () => {
+              if (cancelled || fallbackPollRef.current) return
+              const pullOnce = async () => {
+                if (cancelled) return
+                try {
+                  const res = await fetch(
+                    `/botmode/api/screen/preview?botId=${encodeURIComponent(modal.botId)}&cached=1&t=${Date.now()}`,
+                    { credentials: 'include', cache: 'no-store' },
+                  )
+                  if (!cancelled && res.ok) {
+                    const blob = await res.blob()
+                    const bmp = typeof window.createImageBitmap === 'function'
+                      ? await window.createImageBitmap(blob)
+                      : null
+                    const node = canvasRef.current
+                    if (!cancelled && bmp && node) {
+                      if (node.width !== bmp.width || node.height !== bmp.height) {
+                        screenSizeRef.current = { w: bmp.width, h: bmp.height }
+                        node.width = bmp.width
+                        node.height = bmp.height
+                      }
+                      const ctx = node.getContext('2d')
+                      if (ctx) ctx.drawImage(bmp, 0, 0, node.width, node.height)
+                      bmp.close()
+                    }
+                  }
+                } catch (_e) { /* retry */ }
+                if (!cancelled) {
+                  fallbackPollRef.current = window.setTimeout(() => { void pullOnce() }, 350)
+                }
+              }
+              fallbackPollRef.current = window.setTimeout(() => { void pullOnce() }, 50)
+            }
+
+            // 按需接入 64×64 脏矩形增量帧 SSE 流；关闭弹窗即刻断连，5 秒后远端自动休眠抓屏器
+            const streamUrl = `/botmode/api/screen/stream?botId=${encodeURIComponent(modal.botId)}&fmt=jpeg`
+            let es = null
+            if (typeof window.EventSource === 'function') {
+              es = new window.EventSource(streamUrl, { withCredentials: true })
+              es.onmessage = (ev) => {
+                if (cancelled || !ev.data) return
+                try {
+                  const pkt = JSON.parse(ev.data)
+                  if (pkt.type === 'meta' && pkt.w > 0 && pkt.h > 0) {
+                    screenSizeRef.current = { w: pkt.w, h: pkt.h }
+                    const node = canvasRef.current
+                    if (node && (node.width !== pkt.w || node.height !== pkt.h)) {
+                      node.width = pkt.w
+                      node.height = pkt.h
+                    }
+                  } else if (pkt.type === 'frame') {
+                    applyFramePacket(pkt)
+                  }
+                } catch (_e) { /* ignore malformed frame */ }
+              }
+              es.onerror = () => {
+                if (cancelled) return
+                if (es && es.readyState === window.EventSource.CLOSED) {
+                  startFallbackPolling()
+                }
+              }
+            } else {
+              startFallbackPolling()
+            }
+
+            return () => {
+              cancelled = true
+              if (es) {
+                try { es.close() } catch (_e) { /* ignore */ }
+                es = null
+              }
+              if (fallbackPollRef.current) {
+                window.clearTimeout(fallbackPollRef.current)
+                fallbackPollRef.current = null
+              }
+              if (moveFlushTimerRef.current) {
+                window.clearTimeout(moveFlushTimerRef.current)
+                moveFlushTimerRef.current = null
+              }
+            }
           }, [modal && modal.botId])
 
           if (!modal) return null
-          const src = `/botmode/api/screen/preview?botId=${encodeURIComponent(modal.botId)}&cached=1&t=${tick}`
 
-          const sendInput = async (input) => {
-            setErr('')
-            try {
-              await onCommand('screen.human_input', { botId: modal.botId, input })
-              setTick(v => v + 1)
-            } catch (e) {
-              setErr(e && e.message ? e.message : String(e))
-            }
+          const dispatchInput = async (input) => {
+            if (onScreenInput) return onScreenInput(modal.botId, input)
+            return onCommand('screen.human_input', { botId: modal.botId, input })
           }
 
-          const mapCoords = (event) => {
-            const node = imgRef.current
+          const sendInput = (input) => {
+            const task = async () => {
+              setErr('')
+              try {
+                if (legacyModeRef.current && (input.kind === 'mousedown' || input.kind === 'move' || input.kind === 'move_batch')) {
+                  return
+                }
+                if (legacyModeRef.current && input.kind === 'mouseup') {
+                  await dispatchInput({ kind: 'click', x: input.x, y: input.y, rx: input.rx, ry: input.ry, button: input.button || 1 })
+                } else {
+                  await dispatchInput(input)
+                }
+              } catch (e) {
+                const msg = e && e.message ? e.message : String(e)
+                if (msg.includes('unknown human_input kind') && (input.kind === 'mousedown' || input.kind === 'mouseup' || input.kind === 'move' || input.kind === 'move_batch')) {
+                  legacyModeRef.current = true
+                  if (input.kind === 'mouseup') {
+                    await dispatchInput({ kind: 'click', x: input.x, y: input.y, button: input.button || 1 }).catch(() => undefined)
+                  }
+                  return
+                }
+                setErr(msg)
+              }
+            }
+            inputQueueRef.current = inputQueueRef.current.then(task, task)
+            return inputQueueRef.current
+          }
+
+          // 零开销系统光标 + 归一化比例坐标映射 (rx = x / canvasWidth, ry = y / canvasHeight)
+          const mapRatio = (event) => {
+            const node = canvasRef.current
             if (!node) return null
             const rect = node.getBoundingClientRect()
             if (rect.width <= 0 || rect.height <= 0) return null
-            const x = Math.max(0, Math.min(1279, Math.round(((event.clientX - rect.left) / rect.width) * 1280)))
-            const y = Math.max(0, Math.min(719, Math.round(((event.clientY - rect.top) / rect.height) * 720)))
-            return { x, y }
+            const sw = screenSizeRef.current.w || 1280
+            const sh = screenSizeRef.current.h || 720
+            const scale = Math.min(rect.width / sw, rect.height / sh)
+            const drawW = sw * scale
+            const drawH = sh * scale
+            const offX = rect.left + (rect.width - drawW) / 2
+            const offY = rect.top + (rect.height - drawH) / 2
+            const rx = Math.max(0, Math.min(1, Number(((event.clientX - offX) / drawW).toFixed(5))))
+            const ry = Math.max(0, Math.min(1, Number(((event.clientY - offY) / drawH).toFixed(5))))
+            const x = Math.round(rx * (sw - 1))
+            const y = Math.round(ry * (sh - 1))
+            return { rx, ry, x, y }
+          }
+
+          const flushPendingMoves = () => {
+            if (moveFlushTimerRef.current) {
+              window.clearTimeout(moveFlushTimerRef.current)
+              moveFlushTimerRef.current = null
+            }
+            const pending = dragRef.current.pendingMoves
+            if (!pending || pending.length === 0) return
+            dragRef.current.pendingMoves = []
+            void sendInput({ kind: 'move_batch', normalized: true, points: pending })
+          }
+
+          const handlePointerDown = (event) => {
+            if (event.button > 2 && event.pointerType === 'mouse') return
+            event.preventDefault()
+            const node = canvasRef.current
+            if (node) {
+              try { node.focus({ preventScroll: true }) } catch (_e) { /* ignore */ }
+              try { node.setPointerCapture(event.pointerId) } catch (_e) { /* ignore */ }
+            }
+            const pos = mapRatio(event)
+            if (!pos) return
+            const button = event.button === 2 ? 3 : event.button === 1 ? 2 : 1
+            dragRef.current = {
+              active: true,
+              pointerId: event.pointerId,
+              button,
+              lastRatio: pos,
+              pendingMoves: [],
+            }
+            void sendInput({ kind: 'mousedown', rx: pos.rx, ry: pos.ry, x: pos.x, y: pos.y, button })
+          }
+
+          const handlePointerMove = (event) => {
+            // 仅在按下拖拽时发送增量轨迹；普通悬停直接使用浏览器原生光标（0ms 响应，零网络开销）
+            if (!dragRef.current.active || dragRef.current.pointerId !== event.pointerId) return
+            const pos = mapRatio(event)
+            if (!pos) return
+            const prev = dragRef.current.lastRatio
+            if (!prev || prev.x !== pos.x || prev.y !== pos.y) {
+              dragRef.current.lastRatio = pos
+              dragRef.current.pendingMoves.push([pos.rx, pos.ry])
+              if (!moveFlushTimerRef.current) {
+                moveFlushTimerRef.current = window.setTimeout(flushPendingMoves, 35)
+              }
+            }
+          }
+
+          const finishPointer = (event) => {
+            if (!dragRef.current.active || dragRef.current.pointerId !== event.pointerId) return
+            const node = canvasRef.current
+            if (node) {
+              try {
+                if (node.hasPointerCapture && node.hasPointerCapture(event.pointerId)) {
+                  node.releasePointerCapture(event.pointerId)
+                }
+              } catch (_e) { /* ignore */ }
+            }
+            flushPendingMoves()
+            const pos = mapRatio(event) || dragRef.current.lastRatio
+            const button = dragRef.current.button
+            dragRef.current = { active: false, pointerId: null, button: 1, lastRatio: null, pendingMoves: [] }
+            if (pos) {
+              void sendInput({ kind: 'mouseup', rx: pos.rx, ry: pos.ry, x: pos.x, y: pos.y, button })
+            }
+          }
+
+          const handleKeyDown = (event) => {
+            if (event.target !== canvasRef.current) return
+            if (event.key === 'Shift' || event.key === 'Control' || event.key === 'Alt' || event.key === 'Meta') return
+            const SPECIAL_KEYS = {
+              Enter: 'Return',
+              Backspace: 'BackSpace',
+              Escape: 'Escape',
+              Tab: 'Tab',
+              Delete: 'Delete',
+              ArrowUp: 'Up',
+              ArrowDown: 'Down',
+              ArrowLeft: 'Left',
+              ArrowRight: 'Right',
+              Home: 'Home',
+              End: 'End',
+              PageUp: 'Prior',
+              PageDown: 'Next',
+              ' ': 'space',
+            }
+            const mapped = SPECIAL_KEYS[event.key]
+            if (event.ctrlKey || event.altKey) {
+              const base = mapped || (event.key.length === 1 ? event.key.toLowerCase() : '')
+              if (!base) return
+              event.preventDefault()
+              const combo = `${event.ctrlKey ? 'ctrl+' : ''}${event.altKey ? 'alt+' : ''}${base}`
+              void sendInput({ kind: 'key', combo })
+              return
+            }
+            if (mapped) {
+              event.preventDefault()
+              void sendInput({ kind: 'key', combo: mapped })
+              return
+            }
+            if (event.key.length === 1 && !event.metaKey) {
+              event.preventDefault()
+              void sendInput({ kind: 'type', text: event.key, press_enter: false })
+            }
+          }
+
+          const closeModalAndResume = () => {
+            // 临时人工接管关闭连接时自动解除 PAUSE 锁，恢复 Bot 运行
+            if (!modal.helpId) {
+              void onCommand('screen.release', { botId: modal.botId }).catch(() => undefined)
+            }
+            onClose()
           }
 
           const handBack = async () => {
@@ -5160,7 +5470,7 @@ window.__ModuleLoader__.load({
             await sendInput({ kind: 'type', text: val, press_enter: true })
           }
 
-          return h('div', { className: 'bm-modal-backdrop', onClick: (e) => { if (e.target === e.currentTarget) onClose() } },
+          return h('div', { className: 'bm-modal-backdrop', onClick: (e) => { if (e.target === e.currentTarget) closeModalAndResume() } },
             h('div', { className: 'bm-modal' },
               h('div', { className: 'bm-modal-head' },
                 h('span', { className: 'bm-screen-dot', 'data-state': (screen && screen.state) || 'HUMAN_TAKEOVER' }),
@@ -5183,33 +5493,29 @@ window.__ModuleLoader__.load({
                     style: { textDecoration: 'none' },
                   }, t('screen.openVnc'))
                 })(),
-                h('button', { type: 'button', className: 'bm-btn small', onClick: onClose }, t('form.cancel'))),
+                h('button', { type: 'button', className: 'bm-btn small', onClick: closeModalAndResume }, t('form.cancel'))),
               h('div', { className: 'bm-modal-stage' },
-                h('img', {
-                  ref: imgRef,
+                h('canvas', {
+                  ref: canvasRef,
                   className: 'bm-modal-canvas',
-                  src,
-                  alt: modal.botId,
-                  draggable: false,
-                  onClick: (e) => {
-                    const pos = mapCoords(e)
-                    if (pos) void sendInput({ kind: 'click', x: pos.x, y: pos.y, button: 1 })
-                  },
-                  onDoubleClick: (e) => {
-                    const pos = mapCoords(e)
-                    if (pos) void sendInput({ kind: 'dblclick', x: pos.x, y: pos.y, button: 1 })
-                  },
-                  onContextMenu: (e) => {
-                    e.preventDefault()
-                    const pos = mapCoords(e)
-                    if (pos) void sendInput({ kind: 'click', x: pos.x, y: pos.y, button: 3 })
-                  },
+                  width: screenSizeRef.current.w,
+                  height: screenSizeRef.current.h,
+                  tabIndex: 0,
+                  'aria-label': modal.botId,
+                  onPointerDown: handlePointerDown,
+                  onPointerMove: handlePointerMove,
+                  onPointerUp: finishPointer,
+                  onPointerCancel: finishPointer,
+                  onLostPointerCapture: finishPointer,
+                  onContextMenu: (e) => { e.preventDefault() },
                   onWheel: (e) => {
-                    const pos = mapCoords(e)
+                    e.preventDefault()
+                    const pos = mapRatio(e)
                     if (!pos) return
                     const clicks = e.deltaY > 0 ? 3 : -3
-                    void sendInput({ kind: 'scroll', x: pos.x, y: pos.y, clicks })
+                    void sendInput({ kind: 'scroll', rx: pos.rx, ry: pos.ry, x: pos.x, y: pos.y, clicks })
                   },
+                  onKeyDown: handleKeyDown,
                 })),
               h('form', { className: 'bm-modal-bar', onSubmit: sendText },
                 h('input', {
@@ -5267,11 +5573,7 @@ window.__ModuleLoader__.load({
             return () => window.clearInterval(timer)
           }, [gatewayStarting])
 
-          useEffect(() => {
-            if (!bot || !isRunning || screenState === 'FROZEN') return undefined
-            const timer = window.setInterval(() => setShotTick(v => v + 1), 1800)
-            return () => window.clearInterval(timer)
-          }, [bot && bot.id, isRunning, screenState])
+          const screenRev = `${(screen && screen.epoch) || 0}_${Math.floor((screen && screen.last_agent_call) || 0)}_${shotTick}`
 
           const refreshFiles = async () => {
             if (!bot) return
@@ -5322,7 +5624,7 @@ window.__ModuleLoader__.load({
                         : t('screen.active')
 
           const previewUrl = isRunning
-            ? `/botmode/api/screen/preview?botId=${encodeURIComponent(bot.id)}&cached=1&t=${shotTick}`
+            ? `/botmode/api/screen/preview?botId=${encodeURIComponent(bot.id)}&cached=1&onlyCached=1&t=${screenRev}`
             : ''
 
           const saveNewRoutine = async (event) => {
@@ -5379,7 +5681,12 @@ window.__ModuleLoader__.load({
                       src: previewUrl,
                       alt: bot.name,
                       'data-frozen': screenState === 'FROZEN',
-                      onClick: () => { if (!busy) void onOpenTakeover(bot) },
+                      onClick: () => {
+                        if (busy) return
+                        setErr('')
+                        Promise.resolve(onOpenTakeover(bot)).catch(e => setErr(e && e.message ? e.message : String(e)))
+                      },
+                      onLoad: (e) => { e.currentTarget.style.opacity = '' },
                       onError: (e) => { e.currentTarget.style.opacity = '0.15' },
                     })
                     : h('div', { className: 'bm-screen-placeholder' }, h(MonitorGlyph, { size: 28 })),
@@ -5406,11 +5713,17 @@ window.__ModuleLoader__.load({
                         : (screenState === 'NEED_HUMAN' || screenState === 'HUMAN_TAKEOVER')
                           ? h('button', {
                             type: 'button', className: 'bm-screen-cta', 'data-tone': 'warn', disabled: busy,
-                            onClick: () => void onOpenTakeover(bot),
+                            onClick: () => {
+                              setErr('')
+                              Promise.resolve(onOpenTakeover(bot)).catch(e => setErr(e && e.message ? e.message : String(e)))
+                            },
                           }, t('screen.takeover'))
                           : h('button', {
                             type: 'button', className: 'bm-screen-cta', disabled: busy,
-                            onClick: () => void onOpenTakeover(bot),
+                            onClick: () => {
+                              setErr('')
+                              Promise.resolve(onOpenTakeover(bot)).catch(e => setErr(e && e.message ? e.message : String(e)))
+                            },
                           }, t('screen.takeover')))),
                 isRunning
                   ? h('div', { className: 'bm-screen-toolbar' },
@@ -5910,6 +6223,7 @@ window.__ModuleLoader__.load({
               modal: takeoverModal,
               screen: takeoverModal ? (screensMap[takeoverModal.botId] || null) : null,
               onCommand: hostCommand,
+              onScreenInput: sendScreenInput,
               onClose: () => setTakeoverModal(null),
             }))
         }

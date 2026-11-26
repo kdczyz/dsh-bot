@@ -7,9 +7,10 @@ import io
 import json
 import os
 import secrets
+import signal
 import time
 from contextlib import asynccontextmanager
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence, Union
 
 import httpx
 from fastapi import (
@@ -36,6 +37,10 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .config import (
+    CAPTURE_IDLE_HIBERNATE,
+    GATEWAY_API_VERSION,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
     SHARED_XAUTHORITY,
     DEFAULT_BOTS,
     GATEWAY_HOST,
@@ -129,11 +134,18 @@ def registry() -> Registry:
 
 # ---------------------------------------------------------------- 后台守护 ----
 async def idle_reaper(reg: Registry) -> None:
-    """双信号闲置判定：无 Agent 调用 + 无观看连接 → 冻结。"""
+    """双信号闲置判定：无观看者满 5s 释放抓屏连接；长时间无活动自动冻结进程树。"""
     while True:
-        await asyncio.sleep(3)
+        await asyncio.sleep(2.5)
+        now = time.time()
         for worker in reg.workers.values():
             try:
+                if (
+                    worker.streamer.active_subscribers == 0
+                    and worker.driver._grabber is not None
+                    and (now - worker.driver._last_capture_at) >= CAPTURE_IDLE_HIBERNATE
+                ):
+                    await asyncio.to_thread(worker.driver.close_capture)
                 if worker.lock.should_freeze(IDLE_FREEZE_SECONDS):
                     await worker.freeze()
             except Exception:  # noqa: BLE001
@@ -280,7 +292,22 @@ async def console() -> Response:
 
 @app.get("/healthz")
 async def healthz() -> dict:
-    return {"ok": True, "bots": len(registry().workers)}
+    return {
+        "ok": True,
+        "api_version": GATEWAY_API_VERSION,
+        "capabilities": ["ensure", "tile_stream", "xtest_input", "ratio_coords", "human_pause"],
+        "x_backend": X_BACKEND,
+        "pid": os.getpid(),
+        "bots": len(registry().workers),
+    }
+
+
+@app.post("/api/admin/shutdown", dependencies=[Depends(require_admin)])
+async def admin_shutdown() -> dict:
+    """供本地 DSH Host 在检测到旧版网关协议时优雅热升级替换。"""
+    loop = asyncio.get_running_loop()
+    loop.call_later(0.15, lambda: os.kill(os.getpid(), signal.SIGTERM))
+    return {"ok": True, "shutting_down": True, "pid": os.getpid()}
 
 
 @app.get("/api/screens", dependencies=[Depends(require_admin)])
@@ -358,28 +385,44 @@ async def screen_takeover(bot_id: str, reason: str = Query("human")) -> dict:
     await worker.ensure_awake()
     await worker.lock.takeover(reason)
     token = registry().issue_human_token(bot_id)
-    return {
+    has_vnc = X_BACKEND == "kasmvnc" or os.environ.get("BOTSCREEN_ENABLE_VNC", "0") == "1"
+    out = {
         "bot_id": bot_id,
         "state": worker.lock.state.value,
+        "paused": True,
         "token": token,
-        "stream_url": f"/vnc/{bot_id}/vnc.html?autoconnect=1&resize=scale"
-        # noVNC 把 path 当作页面目录的相对路径；传绝对路径（/ 开头）才会直接用
-        f"&path=%2Fvnc%2F{bot_id}%2Fwebsockify&token={token}",
+        "width": SCREEN_WIDTH,
+        "height": SCREEN_HEIGHT,
+        "tile_stream_url": f"/api/screens/{bot_id}/stream",
+        "ws_stream_url": f"/ws/screens/{bot_id}/stream?token={token}",
+        "stream_url": (
+            f"/vnc/{bot_id}/vnc.html?autoconnect=1&resize=scale"
+            f"&path=%2Fvnc%2F{bot_id}%2Fwebsockify&token={token}"
+        ) if has_vnc else "",
         "expires_in": 3600,
     }
+    return out
 
 
 @app.post("/api/screens/{bot_id}/release", dependencies=[Depends(require_admin)])
 async def screen_release(bot_id: str) -> dict:
     worker = registry().get(bot_id)
     await worker.lock.release()
-    return {"bot_id": bot_id, "state": worker.lock.state.value}
+    return {"bot_id": bot_id, "state": worker.lock.state.value, "paused": False}
 
 
 class HumanInputBody(BaseModel):
-    kind: str  # click | dblclick | scroll | type | key | open_app
+    kind: str  # click | dblclick | mousedown | mouseup | move | move_batch | drag | scroll | type | key | open_app
     x: int = 0
     y: int = 0
+    x2: int = 0
+    y2: int = 0
+    rx: Optional[float] = None
+    ry: Optional[float] = None
+    rx2: Optional[float] = None
+    ry2: Optional[float] = None
+    normalized: bool = False
+    points: Optional[List[List[float]]] = None
     button: int = 1
     clicks: int = 3
     text: str = ""
@@ -389,19 +432,31 @@ class HumanInputBody(BaseModel):
     url: Optional[str] = None
 
 
-@app.post("/api/screens/{bot_id}/human_input", dependencies=[Depends(require_admin)])
-async def screen_human_input(bot_id: str, body: HumanInputBody) -> dict:
-    """供内嵌插件 UI 在人工接管期间向虚拟屏发送键鼠事件。"""
-    worker = registry().get(bot_id)
-    await worker.ensure_awake()
+async def _apply_human_input(worker: ScreenWorker, body: HumanInputBody) -> dict:
+    if not worker.healthy() or worker.lock.state is not State.HUMAN_TAKEOVER or worker.cg.is_frozen(worker.bot_id):
+        await worker.ensure_awake()
+    # 人类介入即刻挂起 Bot 输入锁（PAUSE 语义），防止人机争抢光标与焦点
     worker.lock.touch_human()
     kind = body.kind.strip().lower()
+    px, py = worker.driver.resolve_xy(body.x, body.y, body.rx, body.ry)
     if kind == "click":
-        await asyncio.to_thread(worker.driver.click, body.x, body.y, body.button, False)
+        await asyncio.to_thread(worker.driver.click, px, py, body.button, False)
     elif kind == "dblclick":
-        await asyncio.to_thread(worker.driver.click, body.x, body.y, body.button, True)
+        await asyncio.to_thread(worker.driver.click, px, py, body.button, True)
+    elif kind == "mousedown":
+        await asyncio.to_thread(worker.driver.mousedown, px, py, body.button)
+    elif kind == "mouseup":
+        await asyncio.to_thread(worker.driver.mouseup, px, py, body.button)
+    elif kind == "move":
+        await asyncio.to_thread(worker.driver.move, px, py)
+    elif kind == "move_batch":
+        pts = [p for p in (body.points or []) if isinstance(p, (list, tuple)) and len(p) >= 2]
+        await asyncio.to_thread(worker.driver.move_path, pts, body.normalized)
+    elif kind == "drag":
+        px2, py2 = worker.driver.resolve_xy(body.x2, body.y2, body.rx2, body.ry2)
+        await asyncio.to_thread(worker.driver.drag, px, py, px2, py2, body.button)
     elif kind == "scroll":
-        await asyncio.to_thread(worker.driver.scroll, body.x, body.y, body.clicks)
+        await asyncio.to_thread(worker.driver.scroll, px, py, body.clicks)
     elif kind == "type":
         await asyncio.to_thread(worker.driver.type_text, body.text, body.press_enter)
     elif kind == "key":
@@ -410,8 +465,119 @@ async def screen_human_input(bot_id: str, body: HumanInputBody) -> dict:
         await asyncio.to_thread(worker.open_app, body.app or "chrome", body.url)
     else:
         raise HTTPException(400, f"unknown human_input kind: {body.kind}")
-    worker.auditor.record("human_" + kind, {"x": body.x, "y": body.y}, state=worker.lock.state.value)
-    return {"ok": True, "state": worker.lock.state.value}
+    worker.streamer.notify_input()
+    if kind not in ("move", "move_batch"):
+        worker.auditor.record("human_" + kind, {"x": px, "y": py}, state=worker.lock.state.value)
+    return {"ok": True, "state": worker.lock.state.value, "paused": worker.lock.state is State.HUMAN_TAKEOVER}
+
+
+@app.post("/api/screens/{bot_id}/human_input", dependencies=[Depends(require_admin)])
+async def screen_human_input(bot_id: str, body: HumanInputBody) -> dict:
+    """供内嵌插件 UI 在人工接管期间向虚拟屏发送键鼠事件（支持比例坐标 + 免 Root XTest）。"""
+    worker = registry().ensure(bot_id)
+    return await _apply_human_input(worker, body)
+
+
+@app.get("/api/screens/{bot_id}/stream", dependencies=[Depends(require_admin)])
+async def screen_tile_stream_sse(
+    request: Request,
+    bot_id: str,
+    fmt: str = Query("jpeg"),
+) -> StreamingResponse:
+    """按需 64×64 脏矩形增量帧 SSE 流；无变化零流量，断开 5 秒自动销毁抓屏连接。"""
+    worker = registry().ensure(bot_id)
+    sub = await worker.streamer.subscribe(fmt=fmt)
+
+    async def _gen():
+        try:
+            meta = {
+                "type": "meta",
+                "bot_id": bot_id,
+                "w": SCREEN_WIDTH,
+                "h": SCREEN_HEIGHT,
+                "state": worker.lock.state.value,
+            }
+            yield f"data: {json.dumps(meta, separators=(',', ':'))}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    pkt = await asyncio.wait_for(sub.queue.get(), timeout=12.0)
+                    yield f"data: {json.dumps(pkt, separators=(',', ':'))}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            return
+        finally:
+            worker.streamer.unsubscribe(sub)
+
+    return StreamingResponse(
+        _gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.websocket("/ws/screens/{bot_id}/stream")
+async def screen_tile_stream_ws(
+    websocket: WebSocket,
+    bot_id: str,
+    fmt: str = Query("jpeg"),
+    token: Optional[str] = Query(default=None),
+):
+    """WebSocket 双向按需增量流：下行 64×64 脏块帧，上行比例坐标键鼠注入。"""
+    admin_hdr = websocket.headers.get("x-admin-token", "")
+    admin_ok = (not ADMIN_TOKEN) or (admin_hdr == ADMIN_TOKEN)
+    cookie_token = websocket.cookies.get(f"botscreen_human_{bot_id}")
+    token_ok = registry().check_human_token(bot_id, token) or registry().check_human_token(bot_id, cookie_token)
+    if not (admin_ok or token_ok):
+        await websocket.close(code=4401)
+        return
+
+    worker = registry().ensure(bot_id)
+    await websocket.accept()
+    sub = await worker.streamer.subscribe(fmt=fmt)
+
+    async def _sender():
+        await websocket.send_text(json.dumps({
+            "type": "meta",
+            "bot_id": bot_id,
+            "w": SCREEN_WIDTH,
+            "h": SCREEN_HEIGHT,
+            "state": worker.lock.state.value,
+        }, separators=(",", ":")))
+        while True:
+            pkt = await sub.queue.get()
+            await websocket.send_text(json.dumps(pkt, separators=(",", ":")))
+
+    async def _receiver():
+        while True:
+            raw = await websocket.receive_text()
+            data = json.loads(raw)
+            if isinstance(data, dict) and data.get("kind"):
+                await _apply_human_input(worker, HumanInputBody(**data))
+
+    tasks = [asyncio.create_task(_sender()), asyncio.create_task(_receiver())]
+    try:
+        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for t in pending:
+            t.cancel()
+        for t in done:
+            with contextlib.suppress(BaseException):
+                t.result()
+    except (WebSocketDisconnect, asyncio.CancelledError):
+        pass
+    finally:
+        for t in tasks:
+            if not t.done():
+                t.cancel()
+        worker.streamer.unsubscribe(sub)
+        with contextlib.suppress(Exception):
+            await websocket.close()
 
 
 @app.post("/api/screens/{bot_id}/brake", dependencies=[Depends(require_admin)])
@@ -440,10 +606,15 @@ async def global_brake() -> dict:
 
 
 @app.get("/api/screens/{bot_id}/preview", dependencies=[Depends(require_admin)])
-async def screen_preview(bot_id: str, cached: bool = Query(False)) -> Response:
-    """控制台缩略预览（只读，不改变状态机，不续命闲置计时）。
+async def screen_preview(
+    bot_id: str,
+    cached: bool = Query(False),
+    only_cached: bool = Query(False),
+) -> Response:
+    """控制台低频静态快照（只读，不改变状态机，不续命闲置计时）。
 
-    冻结屏默认返回 409；传 cached=1 时返回冻结前最后一帧缓存。
+    * `only_cached=1`：若已有缓存帧则直接返回零抓屏开销；仅首次无缓存时抓一帧（5s 后自动释放抓屏器）。
+    * 冻结屏传 `cached=1` 返回冻结前最后一帧缓存。
     """
     worker = registry().get(bot_id)
     if not worker.healthy():
@@ -453,13 +624,36 @@ async def screen_preview(bot_id: str, cached: bool = Query(False)) -> Response:
             return Response(
                 worker.last_preview,
                 media_type="image/jpeg",
-                headers={"Cache-Control": "no-store", "X-Screen-Frozen": "true"},
+                headers={
+                    "Cache-Control": "no-store",
+                    "X-Screen-Frozen": "true",
+                    "X-Screen-Width": str(SCREEN_WIDTH),
+                    "X-Screen-Height": str(SCREEN_HEIGHT),
+                },
             )
         raise HTTPException(409, "screen frozen")
+    if only_cached and worker.last_preview:
+        return Response(
+            worker.last_preview,
+            media_type="image/jpeg",
+            headers={
+                "Cache-Control": "no-store",
+                "X-Screen-Width": str(SCREEN_WIDTH),
+                "X-Screen-Height": str(SCREEN_HEIGHT),
+            },
+        )
     shot = await asyncio.to_thread(worker.driver.screenshot, "jpeg", 70, False)
     worker.last_preview = shot.data
     worker.last_preview_at = time.time()
-    return Response(shot.data, media_type=shot.mime, headers={"Cache-Control": "no-store"})
+    return Response(
+        shot.data,
+        media_type=shot.mime,
+        headers={
+            "Cache-Control": "no-store",
+            "X-Screen-Width": str(shot.width),
+            "X-Screen-Height": str(shot.height),
+        },
+    )
 
 
 @app.get("/api/screens/{bot_id}/audit")
@@ -573,6 +767,41 @@ async def agent_screenshot(
     return Response(shot.data, media_type=shot.mime, headers=headers)
 
 
+async def _run_agent_mutation(
+    worker: ScreenWorker,
+    x_expected_epoch: Optional[str],
+    action: str,
+    meta: dict,
+    fn,
+    want_thumb: bool = False,
+):
+    try:
+        worker.lock.guard_agent()
+        agent_epoch_header(x_expected_epoch, worker)
+    except HumanInControl as exc:
+        return locked_response(exc)
+    except StaleLease as exc:
+        return stale_lease_response(exc)
+    await worker.ensure_awake()
+    async with worker.lock.op_lock:
+        try:
+            worker.lock.guard_agent()
+            agent_epoch_header(x_expected_epoch, worker)
+        except HumanInControl as exc:
+            return locked_response(exc)
+        except StaleLease as exc:
+            return stale_lease_response(exc)
+        thumb = None
+        if want_thumb:
+            thumb = (await asyncio.to_thread(worker.driver.screenshot, "jpeg", 82, True)).thumb
+        res = await asyncio.to_thread(fn)
+        worker.auditor.record(action, meta, thumb=thumb, state=worker.lock.state.value)
+        worker.lock.touch_agent()
+        worker.streamer.notify_input()
+        base = res if isinstance(res, dict) else {"ok": True}
+        return {**base, "state": worker.lock.state.value, "epoch": worker.lock.epoch}
+
+
 class ClickBody(BaseModel):
     x: int = Field(ge=0, le=10000)
     y: int = Field(ge=0, le=10000)
@@ -586,26 +815,16 @@ async def agent_click(
     body: ClickBody,
     x_agent_token: Optional[str] = Header(default=None),
     x_expected_epoch: Optional[str] = Header(default=None),
-) -> dict:
+):
     worker = require_agent(bot_id, x_agent_token)
-    try:
-        worker.lock.guard_agent()
-        agent_epoch_header(x_expected_epoch, worker)
-    except HumanInControl as exc:
-        return locked_response(exc)
-    except StaleLease as exc:
-        return stale_lease_response(exc)
-    await worker.ensure_awake()
-    thumb = (await asyncio.to_thread(worker.driver.screenshot, "jpeg", 82, True)).thumb
-    worker.auditor.record(
+    return await _run_agent_mutation(
+        worker,
+        x_expected_epoch,
         "click",
         {"x": body.x, "y": body.y, "button": body.button, "double": body.double},
-        thumb=thumb,
-        state=worker.lock.state.value,
+        lambda: worker.driver.click(body.x, body.y, body.button, body.double),
+        want_thumb=True,
     )
-    await asyncio.to_thread(worker.driver.click, body.x, body.y, body.button, body.double)
-    worker.lock.touch_agent()
-    return {"ok": True, "state": worker.lock.state.value, "epoch": worker.lock.epoch}
 
 
 class TypeBody(BaseModel):
@@ -620,26 +839,16 @@ async def agent_type(
     body: TypeBody,
     x_agent_token: Optional[str] = Header(default=None),
     x_expected_epoch: Optional[str] = Header(default=None),
-) -> dict:
+):
     worker = require_agent(bot_id, x_agent_token)
-    try:
-        worker.lock.guard_agent()
-        agent_epoch_header(x_expected_epoch, worker)
-    except HumanInControl as exc:
-        return locked_response(exc)
-    except StaleLease as exc:
-        return stale_lease_response(exc)
-    await worker.ensure_awake()
-    thumb = (await asyncio.to_thread(worker.driver.screenshot, "jpeg", 82, True)).thumb
-    worker.auditor.record(
+    return await _run_agent_mutation(
+        worker,
+        x_expected_epoch,
         "type",
         {"text": body.text[:200], "press_enter": body.press_enter, "paste_key": body.paste_key},
-        thumb=thumb,
-        state=worker.lock.state.value,
+        lambda: worker.driver.type_text(body.text, body.press_enter, body.paste_key),
+        want_thumb=True,
     )
-    await asyncio.to_thread(worker.driver.type_text, body.text, body.press_enter, body.paste_key)
-    worker.lock.touch_agent()
-    return {"ok": True, "state": worker.lock.state.value, "epoch": worker.lock.epoch}
 
 
 class ScrollBody(BaseModel):
@@ -654,20 +863,15 @@ async def agent_scroll(
     body: ScrollBody,
     x_agent_token: Optional[str] = Header(default=None),
     x_expected_epoch: Optional[str] = Header(default=None),
-) -> dict:
+):
     worker = require_agent(bot_id, x_agent_token)
-    try:
-        worker.lock.guard_agent()
-        agent_epoch_header(x_expected_epoch, worker)
-    except HumanInControl as exc:
-        return locked_response(exc)
-    except StaleLease as exc:
-        return stale_lease_response(exc)
-    await worker.ensure_awake()
-    worker.auditor.record("scroll", {"x": body.x, "y": body.y, "clicks": body.clicks}, state=worker.lock.state.value)
-    await asyncio.to_thread(worker.driver.scroll, body.x, body.y, body.clicks)
-    worker.lock.touch_agent()
-    return {"ok": True, "state": worker.lock.state.value, "epoch": worker.lock.epoch}
+    return await _run_agent_mutation(
+        worker,
+        x_expected_epoch,
+        "scroll",
+        {"x": body.x, "y": body.y, "clicks": body.clicks},
+        lambda: worker.driver.scroll(body.x, body.y, body.clicks),
+    )
 
 
 class DragBody(BaseModel):
@@ -684,26 +888,16 @@ async def agent_drag(
     body: DragBody,
     x_agent_token: Optional[str] = Header(default=None),
     x_expected_epoch: Optional[str] = Header(default=None),
-) -> dict:
+):
     worker = require_agent(bot_id, x_agent_token)
-    try:
-        worker.lock.guard_agent()
-        agent_epoch_header(x_expected_epoch, worker)
-    except HumanInControl as exc:
-        return locked_response(exc)
-    except StaleLease as exc:
-        return stale_lease_response(exc)
-    await worker.ensure_awake()
-    thumb = (await asyncio.to_thread(worker.driver.screenshot, "jpeg", 82, True)).thumb
-    worker.auditor.record(
+    return await _run_agent_mutation(
+        worker,
+        x_expected_epoch,
         "drag",
         {"x1": body.x1, "y1": body.y1, "x2": body.x2, "y2": body.y2},
-        thumb=thumb,
-        state=worker.lock.state.value,
+        lambda: worker.driver.drag(body.x1, body.y1, body.x2, body.y2, body.button),
+        want_thumb=True,
     )
-    await asyncio.to_thread(worker.driver.drag, body.x1, body.y1, body.x2, body.y2, body.button)
-    worker.lock.touch_agent()
-    return {"ok": True, "state": worker.lock.state.value, "epoch": worker.lock.epoch}
 
 
 class OpenAppBody(BaseModel):
@@ -717,20 +911,15 @@ async def agent_open_app(
     body: OpenAppBody,
     x_agent_token: Optional[str] = Header(default=None),
     x_expected_epoch: Optional[str] = Header(default=None),
-) -> dict:
+):
     worker = require_agent(bot_id, x_agent_token)
-    try:
-        worker.lock.guard_agent()
-        agent_epoch_header(x_expected_epoch, worker)
-    except HumanInControl as exc:
-        return locked_response(exc)
-    except StaleLease as exc:
-        return stale_lease_response(exc)
-    await worker.ensure_awake()
-    res = await asyncio.to_thread(worker.open_app, body.app, body.url)
-    worker.auditor.record("open_app", {"app": body.app, "url": body.url}, state=worker.lock.state.value)
-    worker.lock.touch_agent()
-    return {**res, "state": worker.lock.state.value, "epoch": worker.lock.epoch}
+    return await _run_agent_mutation(
+        worker,
+        x_expected_epoch,
+        "open_app",
+        {"app": body.app, "url": body.url},
+        lambda: worker.open_app(body.app, body.url),
+    )
 
 
 @app.get("/api/agent/{bot_id}/windows")
@@ -760,20 +949,15 @@ async def agent_key(
     body: KeyBody,
     x_agent_token: Optional[str] = Header(default=None),
     x_expected_epoch: Optional[str] = Header(default=None),
-) -> dict:
+):
     worker = require_agent(bot_id, x_agent_token)
-    try:
-        worker.lock.guard_agent()
-        agent_epoch_header(x_expected_epoch, worker)
-    except HumanInControl as exc:
-        return locked_response(exc)
-    except StaleLease as exc:
-        return stale_lease_response(exc)
-    await worker.ensure_awake()
-    worker.auditor.record("key", {"combo": body.combo}, state=worker.lock.state.value)
-    await asyncio.to_thread(worker.driver.key, body.combo)
-    worker.lock.touch_agent()
-    return {"ok": True, "state": worker.lock.state.value, "epoch": worker.lock.epoch}
+    return await _run_agent_mutation(
+        worker,
+        x_expected_epoch,
+        "key",
+        {"combo": body.combo},
+        lambda: worker.driver.key(body.combo),
+    )
 
 
 class HelpBody(BaseModel):
@@ -787,6 +971,8 @@ async def agent_request_help(
     x_agent_token: Optional[str] = Header(default=None),
 ) -> dict:
     worker = require_agent(bot_id, x_agent_token)
+    if worker.lock.state is State.HUMAN_TAKEOVER:
+        return locked_response(HumanInControl(bot_id, worker.lock.state.value, "control"))
     await worker.ensure_awake()
     await worker.lock.request_help(body.reason)
     worker.auditor.record("request_help", {"reason": body.reason}, state=worker.lock.state.value)
