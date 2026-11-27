@@ -23,12 +23,22 @@ import tempfile
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from .config import SCREEN_HEIGHT, SCREEN_WIDTH, SHARED_XAUTHORITY, TOPBAR_HEIGHT
+from .config import DOCK_MARGIN_BOTTOM, SCREEN_HEIGHT, SCREEN_WIDTH, SHARED_XAUTHORITY, TOPBAR_HEIGHT
 
 TERMINAL_NAMES = {"xterm", "xfce4-terminal", "lxterminal", "gnome-terminal", "konsole", "alacritty", "urxvt"}
 FILEMGR_NAMES = {"pcmanfm", "thunar", "nautilus", "nemo", "dolphin"}
 CHROME_NAMES = {"google-chrome", "chrome", "chromium", "chromium-browser"}
-SKIP_CLASSES = {"botscreen-desktop", "botscreen-topbar", "xfdesktop", "tint2", "xfce4-panel", "plank", "picom"}
+SKIP_CLASSES = {
+    "botscreen-desktop",
+    "botscreen-topbar",
+    "botscreen-dock",
+    "botscreen-menu",
+    "xfdesktop",
+    "tint2",
+    "xfce4-panel",
+    "plank",
+    "picom",
+}
 SKIP_WM_TYPES = {
     "_NET_WM_WINDOW_TYPE_DESKTOP",
     "_NET_WM_WINDOW_TYPE_DOCK",
@@ -210,11 +220,12 @@ def _window_root_geometry(root, win) -> Tuple[int, int, int, int]:
         x, y = int(tr.x), int(tr.y)
     except Exception:  # noqa: BLE001
         x, y = int(geom.x), int(geom.y)
-    # 限制在有效工作区范围内，避免越界或压住顶部导航栏
+    # 限制在有效工作区范围内（顶部导航栏下方、底部 Dock 上方），避免越界或遮挡
+    work_h = max(240, SCREEN_HEIGHT - TOPBAR_HEIGHT - DOCK_MARGIN_BOTTOM)
     x = max(0, min(SCREEN_WIDTH - 120, x))
-    y = max(TOPBAR_HEIGHT, min(SCREEN_HEIGHT - 80, y))
+    y = max(TOPBAR_HEIGHT, min(SCREEN_HEIGHT - DOCK_MARGIN_BOTTOM - 80, y))
     w = min(w, SCREEN_WIDTH)
-    h = min(h, SCREEN_HEIGHT - TOPBAR_HEIGHT)
+    h = min(h, work_h)
     return x, y, w, h
 
 
@@ -498,10 +509,11 @@ def _apply_window_geometry_and_state(
 
             # 先取消最大化，再精确移动缩放，最后按原状态恢复最大化/最小化
             _send_root(a_wm_state, [0, a_max_h, a_max_v, 1, 0])
+            work_h = max(240, SCREEN_HEIGHT - TOPBAR_HEIGHT - DOCK_MARGIN_BOTTOM)
             x = max(0, min(SCREEN_WIDTH - 120, int(entry.get("x", 40))))
-            y = max(TOPBAR_HEIGHT, min(SCREEN_HEIGHT - 80, int(entry.get("y", TOPBAR_HEIGHT + 16))))
+            y = max(TOPBAR_HEIGHT, min(SCREEN_HEIGHT - DOCK_MARGIN_BOTTOM - 80, int(entry.get("y", TOPBAR_HEIGHT + 12))))
             w = max(200, min(SCREEN_WIDTH, int(entry.get("width", 1040))))
-            h = max(160, min(SCREEN_HEIGHT - TOPBAR_HEIGHT, int(entry.get("height", 620))))
+            h = max(160, min(work_h, int(entry.get("height", work_h - 16))))
             win.configure(x=x, y=y, width=w, height=h)
 
             if entry.get("maximized"):

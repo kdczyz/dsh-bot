@@ -40,9 +40,11 @@ WS_PORT_BASE = int(os.environ.get("BOTSCREEN_WS_PORT_BASE", "6100"))
 #: 网关协议代数（DSH Host 用于校验网关接口兼容性并自动替换旧进程）
 GATEWAY_API_VERSION = 3
 #: 统一虚拟桌面规格代数（用于检测并淘汰旧版/错位桌面进程）
-DESKTOP_SPEC_VERSION = 3
+DESKTOP_SPEC_VERSION = 4
 #: 顶部统一导航栏固定高度（px），Openbox margins 与 iconlayer 共享此常量
 TOPBAR_HEIGHT = 34
+#: 底部浮动 Dock 栏预留高度（px），保证 Dock 始终完整显示在屏幕底部不被窗口遮挡
+DOCK_MARGIN_BOTTOM = 76
 
 # ---- 虚拟屏固定几何（锁死最小够用分辨率，兼顾视觉识别与低带宽/低内存） ----------
 SCREEN_WIDTH = int(os.environ.get("BOTSCREEN_WIDTH", "1280"))

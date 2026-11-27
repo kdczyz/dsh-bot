@@ -17,6 +17,7 @@ from .config import (
     BOOT_TIMEOUT,
     DESKTOP_SHELL,
     DESKTOP_SPEC_VERSION,
+    DOCK_MARGIN_BOTTOM,
     FRAME_RATE,
     IDLE_MODE,
     LONG_FREEZE_SECONDS,
@@ -204,7 +205,7 @@ OPENBOX_RC = """<?xml version="1.0" encoding="UTF-8"?>
   </resize>
   <margins>
     <top>{topbar_height}</top>
-    <bottom>0</bottom>
+    <bottom>{dock_margin}</bottom>
     <left>0</left>
     <right>0</right>
   </margins>
@@ -335,6 +336,15 @@ OPENBOX_RC = """<?xml version="1.0" encoding="UTF-8"?>
       <focus>no</focus>
       <position force="yes"><x>0</x><y>0</y></position>
     </application>
+    <application name="botscreen-dock">
+      <decor>no</decor>
+      <layer>below</layer>
+      <desktop>all</desktop>
+      <skip_taskbar>yes</skip_taskbar>
+      <skip_pager>yes</skip_pager>
+      <focus>no</focus>
+      <position force="yes"><x>center</x><y>-10</y></position>
+    </application>
     <application name="botscreen-desktop">
       <decor>no</decor>
       <layer>below</layer>
@@ -444,7 +454,10 @@ class ScreenWorker:
                     fps=FRAME_RATE,
                 )
             )
-        rc_text = OPENBOX_RC.format(topbar_height=TOPBAR_HEIGHT if DESKTOP_SHELL else 0)
+        rc_text = OPENBOX_RC.format(
+            topbar_height=TOPBAR_HEIGHT if DESKTOP_SHELL else 0,
+            dock_margin=DOCK_MARGIN_BOTTOM if DESKTOP_SHELL else 0,
+        )
         with open(os.path.join(self.paths.runtime, "openbox", "rc.xml"), "w", encoding="utf-8") as fh:
             fh.write(rc_text)
         with open(os.path.join(self.paths.home, ".config", "openbox", "rc.xml"), "w", encoding="utf-8") as fh:
@@ -893,9 +906,10 @@ class ScreenWorker:
     ) -> dict:
         """在虚拟屏内拉起常用应用（隔离 HOME 与 Chrome Profile，严格位于顶部导航栏下方）。"""
         kind = (app or "chrome").strip().lower()
-        top_offset = TOPBAR_HEIGHT + 14 if DESKTOP_SHELL else 0
+        top_offset = TOPBAR_HEIGHT + 12 if DESKTOP_SHELL else 0
+        bottom_pad = DOCK_MARGIN_BOTTOM + 8 if DESKTOP_SHELL else 0
         win_w = SCREEN_WIDTH - 80 if DESKTOP_SHELL else SCREEN_WIDTH
-        win_h = SCREEN_HEIGHT - top_offset - 22 if DESKTOP_SHELL else SCREEN_HEIGHT
+        win_h = max(360, SCREEN_HEIGHT - top_offset - bottom_pad) if DESKTOP_SHELL else SCREEN_HEIGHT
         if kind in ("chrome", "browser"):
             exe = next(
                 (shutil.which(n) for n in ("google-chrome", "chromium", "chromium-browser") if shutil.which(n)),

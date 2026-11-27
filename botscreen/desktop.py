@@ -28,6 +28,27 @@ ASSETS = (
     "terminal.png",
 )
 
+SEARCH_HTML = """<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<title>搜索</title><style>
+html,body{margin:0;height:100%;background:#0d1013;color:#d7dee4;
+  font-family:-apple-system,"PingFang SC","Noto Sans CJK SC",sans-serif;display:flex;
+  align-items:center;justify-content:center}
+form{width:min(680px,86vw);text-align:center}
+h1{font:600 15px ui-monospace;letter-spacing:.16em;color:#46b39d;margin:0 0 26px}
+input{width:100%;box-sizing:border-box;font-size:20px;padding:16px 20px;border-radius:12px;
+  border:1px solid #2a333d;background:#15191d;color:#e6edf3;outline:none}
+input:focus{border-color:#46b39d;box-shadow:0 0 0 3px #46b39d22}
+p{margin:18px 0 0;color:#63707a;font-size:12.5px}
+</style></head><body><form onsubmit="go(event)">
+<h1>SEARCH</h1>
+<input id=q placeholder="搜索网页，回车用 Bing" autofocus>
+<p>输入后回车 · 也可以直接粘一个 URL</p></form>
+<script>
+function go(e){e.preventDefault();var q=document.getElementById('q').value.trim();
+if(!q)return;location.href=/^(https?:\\/\\/|file:)/.test(q)?q:('https://www.bing.com/search?q='+encodeURIComponent(q));}
+</script></body></html>
+"""
+
 
 class DesktopShell:
     """给一张虚拟屏铺统一轻量桌面。所有进程均交由调用方纳管进 cgroup。"""
@@ -50,6 +71,8 @@ class DesktopShell:
                 not os.path.exists(dst) or os.path.getmtime(src) > os.path.getmtime(dst)
             ):
                 shutil.copy2(src, dst)
+        with open(os.path.join(self.assets_dir, "search.html"), "w", encoding="utf-8") as fh:
+            fh.write(SEARCH_HTML)
 
     def prepare_files(self) -> None:
         self._ensure_assets()
