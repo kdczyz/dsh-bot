@@ -11,21 +11,47 @@
  */
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { readFile, stat } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { qrDataUrl, qrSvg } from './qr.js'
 
 const execFileAsync = promisify(execFile)
+const HERE = dirname(fileURLToPath(import.meta.url))
+const BUNDLED_BIN = join(HERE, '..', 'remote', 'bin', 'dsh-remote.mjs')
 
 const DEFAULT_HOME = process.env.DSH_REMOTE_HOME || join(homedir(), '.dsh-remote')
 const BIN_CANDIDATES = [
   process.env.DSH_REMOTE_BIN,
+  BUNDLED_BIN,
   join(process.cwd(), 'bin', 'dsh-remote.mjs'),
   join(homedir(), 'Desktop', 'dsh-remote', 'bin', 'dsh-remote.mjs'),
   join(homedir(), 'dsh-remote', 'bin', 'dsh-remote.mjs'),
 ].filter(Boolean)
+
+function normalizeSocketHost(raw) {
+  const s = String(raw ?? '').trim().replace(/^::ffff:/i, '')
+  if (!s || s === '::' || s === '::1' || s === '0.0.0.0') return '127.0.0.1'
+  return s
+}
+
+function extractDshAuthCookie(cookieHeader) {
+  if (typeof cookieHeader !== 'string' || !cookieHeader.trim()) return ''
+  const parts = cookieHeader.split(';')
+  for (const part of parts) {
+    const trimmed = part.trim()
+    const eq = trimmed.indexOf('=')
+    if (eq <= 0) continue
+    const name = trimmed.slice(0, eq).trim()
+    // 跳过 dsh-remote 自身的 relay cookie，避免自循环；只取宿主机真实 dsh-auth-* cookie
+    if (name.startsWith('dsh-auth-') && name !== 'dsh-auth-relay') {
+      return trimmed
+    }
+  }
+  return ''
+}
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -118,8 +144,70 @@ export class RemoteGateway {
     this.serviceName = serviceName
     this.useSystemd = useSystemd ?? (home === DEFAULT_HOME && !bin && process.platform === 'linux')
     this.runtimePath = join(home, 'state', 'runtime.json')
+    this.hintPath = join(home, 'state', 'upstream-hint.json')
+    this.configPath = join(home, 'config.json')
     this.linkPath = join(home, 'link.txt')
     this.lastAction = null
+  }
+
+  /**
+   * 记录当前活跃 `dsh web` 进程的真实监听地址与已鉴权 cookie 到 `state/upstream-hint.json`。
+   * 即使用户在新机器终端裸跑 `dsh web`（无日志文件），dsh-remote 也能零配置自动对接。
+   */
+  async recordUpstreamHintFromRequest(req) {
+    try {
+      const port = Number(req?.socket?.localPort)
+      if (!Number.isInteger(port) || port <= 0) return false
+      const host = normalizeSocketHost(req?.socket?.localAddress)
+      const cookie = extractDshAuthCookie(req?.headers?.cookie)
+      if (!cookie) return false
+      await mkdir(dirname(this.hintPath), { recursive: true })
+      const tmp = `${this.hintPath}.${process.pid}.tmp`
+      const body = `${JSON.stringify({ host, port, cookie, pid: process.pid, updatedAt: Date.now() }, null, 2)}\n`
+      await writeFile(tmp, body, { encoding: 'utf8', mode: 0o600 })
+      await chmod(tmp, 0o600).catch(() => {})
+      await rename(tmp, this.hintPath)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async #ensureDefaultConfig() {
+    if (existsSync(this.configPath)) return this.configPath
+    await mkdir(this.home, { recursive: true })
+    const homeDir = homedir()
+    const defaults = {
+      version: 1,
+      listen: { host: '127.0.0.1', port: 44691 },
+      public: { mode: 'quick' },
+      upstream: {
+        mode: 'auto',
+        log: null,
+        logs: [
+          join(homeDir, 'logs', 'dsh-web.log'),
+          join(homeDir, '.dsh', 'logs', 'dsh-web.log'),
+          join(homeDir, '.dsh-app-remote', 'web.log'),
+        ],
+        discoverIntervalMs: 3000,
+      },
+      proxy: { appBridge: true, hostRewrite: true },
+      tunnel: { persistAcrossRestart: true },
+    }
+    const tmp = `${this.configPath}.${process.pid}.tmp`
+    await writeFile(tmp, `${JSON.stringify(defaults, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
+    await rename(tmp, this.configPath)
+    return this.configPath
+  }
+
+  async #hasSystemdUserBus() {
+    if (!this.useSystemd || !this.serviceName) return false
+    try {
+      await execFileAsync('systemctl', ['--user', 'show-environment'], { timeout: 3000 })
+      return true
+    } catch {
+      return false
+    }
   }
 
   async #hasSystemdService() {
@@ -132,8 +220,58 @@ export class RemoteGateway {
     }
   }
 
+  /**
+   * Linux + systemd --user 环境下首次启动时自动安装独立的 `dsh-remote.service`，
+   * 让 dsh-remote / cloudflared 脱离 dsh-web.service 的 cgroup，避免 dsh 重启导致隧道断联。
+   */
+  async #ensureSystemdService() {
+    if (await this.#hasSystemdService()) return true
+    if (!(await this.#hasSystemdUserBus())) return false
+    if (!this.bin || !existsSync(this.bin)) return false
+    try {
+      const unitDir = join(homedir(), '.config', 'systemd', 'user')
+      const unitPath = join(unitDir, this.serviceName)
+      const logDir = join(this.home, 'logs')
+      await mkdir(unitDir, { recursive: true })
+      await mkdir(logDir, { recursive: true })
+      const workDir = dirname(dirname(this.bin))
+      const unitBody = [
+        '[Unit]',
+        'Description=dsh-remote — DSH Gateway Remote Tunnel (auto-managed by dsh-botmode)',
+        'After=network-online.target',
+        'Wants=network-online.target',
+        '',
+        '[Service]',
+        'Type=simple',
+        `Environment=HOME=${homedir()}`,
+        'Environment=NODE_ENV=production',
+        `Environment=DSH_REMOTE_HOME=${this.home}`,
+        `WorkingDirectory=${workDir}`,
+        `ExecStart="${process.execPath}" "${this.bin}" up --foreground --config "${this.configPath}"`,
+        'Restart=always',
+        'RestartSec=3',
+        `StandardOutput=append:${join(logDir, 'relay.log')}`,
+        `StandardError=append:${join(logDir, 'relay.log')}`,
+        '',
+        '[Install]',
+        'WantedBy=default.target',
+        '',
+      ].join('\n')
+      await writeFile(unitPath, unitBody, 'utf8')
+      await execFileAsync('systemctl', ['--user', 'daemon-reload'], { timeout: 10_000 })
+      await execFileAsync('systemctl', ['--user', 'enable', this.serviceName], { timeout: 10_000 }).catch(() => {})
+      return true
+    } catch (error) {
+      this.logger?.warn?.(`botmode: auto-install ${this.serviceName} failed, falling back: ${String(error?.message ?? error)}`)
+      return false
+    }
+  }
+
   async #runDetachedUp({ timeoutMs = 120_000 } = {}) {
-    if (await this.#hasSystemdService()) {
+    if (this.useSystemd) {
+      await this.#ensureDefaultConfig().catch(() => {})
+    }
+    if (await this.#ensureSystemdService()) {
       const startedAt = Date.now()
       await execFileAsync('systemctl', ['--user', 'start', this.serviceName], { timeout: 30_000 })
       this.lastAction = { args: ['systemctl', '--user', 'start', this.serviceName], ok: true, at: new Date().toISOString(), ms: Date.now() - startedAt }

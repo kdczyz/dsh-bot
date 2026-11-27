@@ -283,6 +283,7 @@ export class BotApi {
       }
       if (route === 'remote' && req.method === 'GET') {
         try {
+          await this.remote?.recordUpstreamHintFromRequest?.(req)
           sendJson(res, 200, await this.remote.status({ qr: url.searchParams.get('qr') !== '0' }))
         } catch (error) {
           sendJson(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) })
@@ -891,6 +892,9 @@ export class BotApi {
         } catch (_error) {
           sendJson(res, 400, { ok: false, error: 'invalid JSON' })
           return
+        }
+        if (String(payload?.type ?? '').startsWith('remote.')) {
+          await this.remote?.recordUpstreamHintFromRequest?.(req)
         }
         const result = await this.command(payload)
         sendJson(res, 200, { ok: true, state: this.publicState(), result })

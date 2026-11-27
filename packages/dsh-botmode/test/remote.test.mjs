@@ -105,3 +105,33 @@ test('inspectLink 方法可直接给客户端调用', () => {
   assert.equal(result.valid, true)
   assert.equal(result.kind, 'gateway')
 })
+
+test('默认内置 dsh-remote CLI 开箱即用，且 recordUpstreamHintFromRequest 跳过 relay cookie', async () => {
+  const { existsSync, readFileSync } = await import('node:fs')
+  const home = tempHome()
+  try {
+    const gateway = new RemoteGateway({ home: home.dir, logger: noopLogger, useSystemd: false })
+    assert.equal(gateway.bin.endsWith(join('remote', 'bin', 'dsh-remote.mjs')), true)
+    assert.equal(existsSync(gateway.bin), true)
+
+    // 只有 dsh-auth-relay 时应跳过（避免自循环）
+    const skipped = await gateway.recordUpstreamHintFromRequest({
+      socket: { localAddress: '::ffff:10.0.0.140', localPort: 3080 },
+      headers: { cookie: 'dsh-auth-relay=self-loop-token' },
+    })
+    assert.equal(skipped, false)
+
+    // 真实 dsh-auth-* cookie 应写入 upstream-hint.json
+    const saved = await gateway.recordUpstreamHintFromRequest({
+      socket: { localAddress: '::ffff:10.0.0.140', localPort: 3080 },
+      headers: { cookie: 'dsh-auth-relay=ignored; dsh-auth-real=abc123' },
+    })
+    assert.equal(saved, true)
+    const hint = JSON.parse(readFileSync(join(home.dir, 'state', 'upstream-hint.json'), 'utf8'))
+    assert.equal(hint.host, '10.0.0.140')
+    assert.equal(hint.port, 3080)
+    assert.equal(hint.cookie, 'dsh-auth-real=abc123')
+  } finally {
+    home.cleanup()
+  }
+})

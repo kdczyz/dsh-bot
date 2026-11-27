@@ -26,7 +26,7 @@ const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
 const __dirname = dirname(fileURLToPath(import.meta.url))
 // Keep in sync with botscreen/requirements.txt. Checking every runtime import avoids
 // half-bootstrapped environments where the gateway process starts but immediately exits.
-const PY_DEPS_CHECK = 'import fastapi, uvicorn, multipart, PIL, Xlib, websockets, httpx, mss'
+const PY_DEPS_CHECK = 'import fastapi, uvicorn, multipart, pydantic, PIL, Xlib, websockets, httpx'
 const _pyChecked = new Map()
 
 let _lastLocalCpuSample = null

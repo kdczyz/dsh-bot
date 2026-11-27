@@ -16,7 +16,7 @@ sudo apt-get update -qq
 sudo apt-get install -y --no-install-recommends \
   openbox xfwm4 xfdesktop4 xfconf dbus-x11 tint2 picom pcmanfm xterm \
   gvfs gvfs-daemons feh xdotool xclip xauth curl ca-certificates glib-networking \
-  x11vnc novnc websockify \
+  x11vnc novnc websockify xvfb \
   adwaita-icon-theme fonts-noto-color-emoji fonts-noto-cjk \
   python3 python3-venv python3-pip
 

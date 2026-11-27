@@ -1,0 +1,27 @@
+{
+  "name": "dsh-remote",
+  "version": "1.0.0",
+  "private": true,
+  "description": "把本地 DeepSeek Harness 网关经 Cloudflare Tunnel 暴露到公网：自动续期 token + 端到端加密传输",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "dsh-remote": "./bin/dsh-remote.mjs"
+  },
+  "scripts": {
+    "start": "node ./bin/dsh-remote.mjs up --foreground",
+    "test": "node --test --test-reporter=spec test/",
+    "status": "node ./bin/dsh-remote.mjs status",
+    "doctor": "node ./bin/dsh-remote.mjs doctor"
+  },
+  "files": [
+    "bin",
+    "src",
+    "docs",
+    "deploy",
+    "scripts"
+  ],
+  "license": "MIT"
+}

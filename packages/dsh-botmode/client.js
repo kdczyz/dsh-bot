@@ -8369,7 +8369,8 @@ window.__ModuleLoader__.load({
               h('div', { className: 'bm-remote-hint' }, t('remote.appLabel')),
               h('div', { className: 'bm-remote-link' }, data.appLink),
               h('div', { className: 'bm-remote-hint' }, t('remote.appHint')))
-            : h('div', { className: 'bm-remote-empty' }, busy || t('remote.appDisabled'))
+            : h('div', { className: 'bm-remote-empty' },
+              busy || (error ? t('remote.failed') : (data ? t('remote.appDisabled') : t('remote.starting'))))
 
           const dialog = h('div', {
             className: 'bm-modal-backdrop bm-remote-backdrop',
