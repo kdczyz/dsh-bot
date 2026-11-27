@@ -84,7 +84,22 @@ export class Dispatcher {
   }
 
   #queueKey(botId, options = {}) {
-    return options.roomId ? `room:${options.roomId}:${botId}` : `bot:${botId}`
+    if (options.roomId) return `room:${options.roomId}:${botId}`
+    // Isolated Routine runs get their own FIFO so they never wait behind (or block) the Bot's chat.
+    if (this.#isIsolatedRoutine(options)) return `routine:${options.routineId}:${botId}`
+    return `bot:${botId}`
+  }
+
+  /** True for Routine runs that execute in their own Session (`fresh` / `named`), not the primary chat. */
+  #isIsolatedRoutine(options = {}) {
+    return typeof options.routineId === 'string' && options.routineId !== ''
+      && (options.sessionMode === 'fresh' || options.sessionMode === 'named')
+  }
+
+  /** Remember the latest result for the primary-chat preview; isolated Routine runs never overwrite it. */
+  #remember(botId, result, options = {}) {
+    if (this.#isIsolatedRoutine(options)) return
+    this.#last.set(botId, result)
   }
 
   isRunning(botId) {
@@ -148,6 +163,10 @@ export class Dispatcher {
 
   /** Queue one turn on the target Session's FIFO and return its settled result. */
   enqueue(botId, text, options = {}) {
+    // A scheduled run starts a fresh teammate-message chain (same rule as `dispatch`).
+    if (options.source === 'routine') {
+      this.#dmChains.set(botId, { chainId: newId('chain'), hops: 0, lastSenderId: '', seen: new Set() })
+    }
     const key = this.#queueKey(botId, options)
     const previous = this.#chains.get(key) ?? Promise.resolve()
     this.#queue.set(key, (this.#queue.get(key) ?? 0) + 1)
@@ -156,7 +175,7 @@ export class Dispatcher {
       return this.#runTurn(botId, text, options, key)
     }).catch((error) => {
       const result = { ok: false, error: error instanceof Error ? error.message : String(error) }
-      this.#last.set(botId, result)
+      this.#remember(botId, result, options)
       return result
     }).finally(() => {
       if ((this.#queue.get(key) ?? 0) === 0) this.#queue.delete(key)
@@ -205,7 +224,7 @@ export class Dispatcher {
         if (resolved && resolved.agent) {
           const currentCwd = resolved.agent.cwd ?? resolved.agent.session?.header?.cwd ?? desiredCwd
           if (!room?.workDir || currentCwd === desiredCwd) {
-            this.#announce(resolved.agent, bot, { kind: 'room', roomId })
+            await this.#announce(resolved.agent, bot, { kind: 'room', roomId })
             return resolved.agent
           }
         }
@@ -225,16 +244,20 @@ export class Dispatcher {
       })
       const resolved = await controller.resolveAgent(created.sessionId)
       if (resolved && resolved.agent) {
-        this.#announce(resolved.agent, bot, { kind: 'room', roomId })
+        await this.#announce(resolved.agent, bot, { kind: 'room', roomId })
         return resolved.agent
       }
       throw new Error(resolved && resolved.error ? resolved.error.message : 'Room session could not be resumed')
     }
 
+    if (this.#isIsolatedRoutine(options)) {
+      return this.#resolveRoutineAgent(bot, options, controller)
+    }
+
     if (typeof bot.sessionId === 'string' && bot.sessionId !== '') {
       const resolved = await controller.resolveAgent(bot.sessionId)
       if (resolved && resolved.agent) {
-        this.#announce(resolved.agent, bot, { kind: 'primary', roomId: '' })
+        await this.#announce(resolved.agent, bot, { kind: 'primary', roomId: '' })
         return resolved.agent
       }
     }
@@ -251,15 +274,56 @@ export class Dispatcher {
     bot.sessionId = created.sessionId
     const resolved = await controller.resolveAgent(created.sessionId)
     if (resolved && resolved.agent) {
-      this.#announce(resolved.agent, bot, { kind: 'primary', roomId: '' })
+      await this.#announce(resolved.agent, bot, { kind: 'primary', roomId: '' })
       return resolved.agent
     }
     throw new Error(resolved && resolved.error ? resolved.error.message : 'Session could not be resumed')
   }
 
-  #announce(agent, bot, meta) {
+  /** Resolve (or create) the isolated Session of a Routine run: one per run (`fresh`) or per task (`named`). */
+  async #resolveRoutineAgent(bot, options, controller) {
+    const routineId = options.routineId
+    const routine = this.store.routine(routineId)
+    if (!routine) throw new Error('Unknown Routine.')
+    const meta = { kind: 'routine', roomId: '', routineId }
+    await this.store.ensureBotDir(bot)
+    if (options.sessionMode === 'named' && routine.namedSessionId !== '') {
+      const resolved = await controller.resolveAgent(routine.namedSessionId)
+      if (resolved && resolved.agent) {
+        await this.#announce(resolved.agent, bot, meta)
+        return resolved.agent
+      }
+    }
+    const created = await controller.create({ cwd: bot.dir, title: `Routine: ${routine.name}` })
+    if (!created || typeof created.sessionId !== 'string') throw new Error('Routine session creation failed')
+    const keep = this.store.state.settings?.routines?.keepRunSessions ?? 20
+    const forgotten = []
+    await this.store.mutate((state) => {
+      const stored = state.routines.find(item => item.id === routineId)
+      if (!stored) return
+      if (options.sessionMode === 'named') {
+        stored.namedSessionId = created.sessionId
+        return
+      }
+      stored.runSessions.push({ sessionId: created.sessionId, runId: options.runId ?? '', at: new Date().toISOString() })
+      while (stored.runSessions.length > keep) forgotten.push(stored.runSessions.shift().sessionId)
+    })
+    // Old per-run Sessions fall out of the retention window; delete them when the host supports it.
+    for (const sessionId of forgotten) {
+      const remove = controller.remove ?? controller.delete
+      if (typeof remove === 'function') void Promise.resolve(remove.call(controller, sessionId)).catch(() => undefined)
+    }
+    const resolved = await controller.resolveAgent(created.sessionId)
+    if (resolved && resolved.agent) {
+      await this.#announce(resolved.agent, bot, meta)
+      return resolved.agent
+    }
+    throw new Error(resolved && resolved.error ? resolved.error.message : 'Routine session could not be resumed')
+  }
+
+  async #announce(agent, bot, meta) {
     try {
-      this.onAgent?.(agent, bot, meta)
+      await this.onAgent?.(agent, bot, meta)
     } catch (error) {
       this.logger?.warn?.(`botmode: could not configure ${bot?.name ?? 'a Bot'}: ${String(error)}`)
     }
@@ -271,6 +335,7 @@ export class Dispatcher {
     const rawPrompt = String(text ?? '').trim()
     const images = Array.isArray(options.images) ? options.images : []
     if (rawPrompt === '' && images.length === 0) return { ok: false, error: 'empty message' }
+    const isolated = this.#isIsolatedRoutine(options)
 
     this.#runningKeys.add(queueKey)
     if (options.roomId) {
@@ -309,7 +374,7 @@ export class Dispatcher {
       const beforeSeq = (session.ownEvents().at(-1)?.seq ?? -1) + 1
       const message = makeUserMessage(finalPrompt, content)
       agent.followup(message)
-      await this.#waitIdle(agent)
+      await this.#waitIdle(agent, options.timeoutMs)
       try { await this.ctx.sessions.flush(session) } catch (_error) { /* durability is best effort here */ }
       const { reply, allTexts } = this.#replySince(session, beforeSeq)
       const failure = this.#failureSince(session, beforeSeq)
@@ -335,10 +400,10 @@ export class Dispatcher {
           const stored = state.bots.find(item => item.id === botId)
           if (stored) {
             stored.lastTurnAt = new Date().toISOString()
-            stored.lastError = failure
+            if (!isolated) stored.lastError = failure
           }
         }).catch(() => undefined)
-        this.#last.set(botId, result)
+        this.#remember(botId, result, options)
         return result
       }
 
@@ -370,11 +435,11 @@ export class Dispatcher {
         const stored = state.bots.find(item => item.id === bot.id)
         if (!stored) return
         stored.lastTurnAt = new Date().toISOString()
-        // Do not overwrite the primary chat preview with `(pass)` room silence.
-        if (!options.roomId || !isPassReply(reply)) {
+        // Do not overwrite the primary chat preview with `(pass)` room silence or isolated Routine output.
+        if (!isolated && (!options.roomId || !isPassReply(reply))) {
           stored.lastReply = reply.slice(0, 4_000)
         }
-        stored.lastError = ''
+        if (!isolated) stored.lastError = ''
       })
       if (this.onReplyArtifacts && typeof reply === 'string' && reply.includes('<artifact')) {
         void Promise.resolve(this.onReplyArtifacts({
@@ -386,13 +451,13 @@ export class Dispatcher {
           at: new Date().toISOString(),
         })).catch(() => undefined)
       }
-      this.#last.set(botId, result)
+      this.#remember(botId, result, options)
       return result
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       await this.store.mutate((state) => {
         const stored = state.bots.find(item => item.id === bot.id)
-        if (stored) stored.lastError = message
+        if (stored && !isolated) stored.lastError = message
       }).catch(() => undefined)
       const metrics = {
         toolCallCount: 0,
@@ -407,7 +472,7 @@ export class Dispatcher {
         }],
       }
       const result = { ok: false, error: message, metrics, startedAt, source: options.source ?? 'chat' }
-      this.#last.set(botId, result)
+      this.#remember(botId, result, options)
       return result
     } finally {
       this.#runningKeys.delete(queueKey)
@@ -463,13 +528,14 @@ export class Dispatcher {
     return attachments.admitPromptContent(parts)
   }
 
-  async #waitIdle(agent) {
+  async #waitIdle(agent, timeoutMs) {
     let timer
+    const limit = Number.isFinite(timeoutMs) && timeoutMs > 0 ? Math.min(timeoutMs, TURN_TIMEOUT_MS) : TURN_TIMEOUT_MS
     const timeout = new Promise((_resolve, reject) => {
       timer = setTimeout(() => {
+        reject(new Error(limit === TURN_TIMEOUT_MS ? 'turn timed out after 15 minutes' : `turn timed out after ${Math.round(limit / 1000)} seconds`))
         try { agent.cancel?.({ kind: 'timeout' }, { keepInbox: true }) } catch (_error) { /* best effort */ }
-        reject(new Error('turn timed out after 15 minutes'))
-      }, TURN_TIMEOUT_MS)
+      }, limit)
       timer.unref?.()
     })
     try {

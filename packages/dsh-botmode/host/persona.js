@@ -1,162 +1,130 @@
 /**
- * Bot identity files and the prompt block a Bot sees about itself and its team.
+ * Bot identity files, zero-redundancy bootstrap memory, and the structured
+ * system prompt block that links every Bot to its Memory Hub, Skills library,
+ * and MCP library.
  *
- * Every Bot owns one directory:
- *   bot.json    machine-readable record (mirrors the roster document)
- *   SOUL.md     persona, role and standing instructions for people and the model
- *   MEMORY.md   durable notes the Bot writes for itself
- *   TEAM.md     the roster view used by the Bot's chat
- *   .dsh/skills/team/SKILL.md   how to reach teammates with `message_agent`
+ * Orthogonal three-tier architecture (zero duplication across layers):
+ *   L1 · System Prompt (`personaBlock`) — static constitution, routing rules,
+ *        precedence pointers to Skills & MCP libraries, and memory contract.
+ *   L2 · Initial Memory (`MEMORY.md` + Memory Hub bootstrap seed) — physical
+ *        library paths, compact capability dispatch index, and evolving dynamic
+ *        slots (preferences, verified environment facts, lessons, active assets).
+ *   L3 · Skills Library (`builtin-skills/` + `$DSH_HOME/botmode/skills/` +
+ *        `<bot.dir>/.dsh/skills/` + shared normal skills) — detailed SOPs loaded
+ *        on demand via `skill({ name })`.
  */
 import { join } from 'node:path'
 import { readTextFile, writeTextFile } from './store.js'
+import { BUILTIN_SKILLS_ROOT } from './isolation.js'
 
 const oneLine = (value) => String(value ?? '').replace(/\s+/g, ' ').trim()
+
+const LEGACY_MEMORY_MARKER = 'Durable notes this Bot keeps for itself. Edit this file when something must survive'
 
 const sectionLine = (bot, state) => {
   const section = state.sections.find(item => item.id === bot.sectionId)
   return section ? (section.nameZh && section.nameZh !== '' ? section.nameZh : section.name) : 'General'
 }
 
-export const renderSoul = (bot, state) => {
-  const teammates = state.bots.filter(member => member.id !== bot.id)
-  const roster = teammates.length === 0
-    ? '- (no other Bots yet)'
-    : teammates.map(member => `- ${member.name}${member.role ? ` — ${member.role}` : ''} (id: ${member.id})`).join('\n')
-  return [
-    `# ${bot.name}`,
-    '',
-    bot.role ? `Role: ${bot.role}` : '',
-    `Group: ${sectionLine(bot, state)}`,
-    '',
-    '## Standing instructions',
-    '',
-    bot.instructions || '(none yet)',
-    '',
-    '## Team',
-    '',
-    'You are one Bot in a team. Every Bot has its own workspace, its own memory scope',
-    'and its own permanent chat. Talk to teammates with the `message_agent` tool:',
-    '',
-    '- `message_agent` target `<name or id>`, message `...` posts an asynchronous message',
-    '  into that Bot\'s permanent chat. It returns `dispatched` at once; the reply arrives',
-    '  later in your chat when you asked for it with `expectReply`.',
-    '- `bot_team` lists the roster, your own id and the Group Rooms you belong to.',
-    '- `memory_search`, `memory_conversation_search`, `memory_read_scene` and `memory_save`',
-    '  access the team Memory Hub scoped to your own Bot identity.',
-    '',
-    'Rules:',
-    '- Never claim a teammate did something you did not see in your chat.',
-    '- One message per request; do not ping-pong a teammate endlessly (a hop guard applies).',
-    '- Inside a Group Room you run in an isolated room session and cannot use `message_agent`;',
-    '  answer in the room with @Name to hand off, or reply `(pass)` when you have nothing new to add.',
-    '',
-    '## Teammates',
-    '',
-    roster,
-    '',
-  ].filter(line => line !== undefined).join('\n')
-}
+export const renderSoul = (bot, state) => [
+  `# ${bot.name}`,
+  '',
+  bot.role ? `Role: ${bot.role}` : '',
+  `Group: ${sectionLine(bot, state)}`,
+  '',
+  '## Standing instructions',
+  '',
+  bot.instructions || '(none yet)',
+  '',
+].filter(line => line !== undefined).join('\n')
 
 export const renderTeam = (state) => {
   const rows = state.bots.map(bot => `- ${bot.name}${bot.role ? ` — ${bot.role}` : ''} (${sectionLine(bot, state)}, id: ${bot.id})`)
   return ['# Team', '', rows.length === 0 ? '- (no Bots yet)' : rows.join('\n'), ''].join('\n')
 }
 
+/**
+ * Render the structured initial `MEMORY.md` for a Bot.
+ * Stores ONLY runtime anchors, a compact capability dispatch index, and dynamic
+ * operational slots — never duplicating static rules from the system prompt.
+ */
+export const renderInitialMemory = (bot, store) => {
+  const botDir = bot?.dir || '(unassigned)'
+  const sharedSkills = store?.skillsRoot || '$DSH_HOME/botmode/skills'
+  const mcpPath = store?.mcpConfigPath || '$DSH_HOME/botmode/mcp.json'
+  return [
+    `# ${bot.name} — Operational Memory`,
+    '',
+    '## Bootstrap Anchors',
+    `- Bot ID: \`${bot.id}\` | Role: ${bot.role || '(general)'}`,
+    `- Workspace: \`${botDir}\``,
+    `- Skills Library (Bot priority > Shared): \`${botDir}/.dsh/skills\` → \`${sharedSkills}\` → \`${BUILTIN_SKILLS_ROOT}\` → shared DSH/Agents skills`,
+    `- MCP Library (Bot priority > Shared): \`${mcpPath}\` → shared DSH MCP servers`,
+    '',
+    '## Capability Dispatch Index (Load via `skill` or call MCP directly)',
+    '| Domain | Primary Skill / Entry | Key Tools |',
+    '|---|---|---|',
+    '| Browser & Desktop Automation (L1→L4 circuit breaker + takeover) | `browser-desktop-automation` (+ shared `agent-browser` / `webapp-testing`) | `bash`, `screen_*`, `screen_request_help` |',
+    '| Team Comms, Bot CRUD & Multi-Bot Group Rooms | `bot-team-control` | `bot_team`, `message_agent`, `bot_manage`, `room_manage` |',
+    '| Group Room Task-Fit & Formal Completion | `team-collaboration`, `room-completion` | `claim_subtask`, `room_task_progress`, `room_finish_task` |',
+    '| Persistent Automated Schedules | `scheduled-routines` | `scheduled_tasks` |',
+    '| External Integrations (MCP) | Bot MCP library > shared DSH MCP | `mcp__<server>__<tool>`, `list_mcp_resources`, `read_mcp_resource` |',
+    '| Long-Term Memory Recall & Persistence | Memory Hub + this file | `memory_search`, `memory_conversation_search`, `memory_read_scene`, `memory_save` |',
+    '',
+    '## Verified Environment & User Preferences',
+    '- (Record durable user preferences and verified machine facts here; e.g. system Chrome `/usr/bin/google-chrome`, preferred output style.)',
+    '',
+    '## Operational Lessons & Active Assets',
+    '- (Record failure workarounds, active `scheduled_tasks` IDs, and recurring Group Room IDs here. Do NOT copy static system-prompt rules.)',
+    '',
+  ].join('\n')
+}
+
+/**
+ * Idempotently seed the Bot's Memory Hub (`scene: "bot-bootstrap"`) with a compact,
+ * searchable capability & library index so `memory_search` / `memory_read_scene`
+ * immediately connects to the Skills & MCP libraries without duplicating static rules.
+ */
+export const seedInitialMemoryHub = async (memory, store, bot) => {
+  if (!memory || !bot || typeof memory.saveMemoryForBot !== 'function') return { ok: false, skipped: true }
+  try {
+    const existing = typeof memory.readSceneForBot === 'function'
+      ? await memory.readSceneForBot(bot, { sceneId: 'bot-bootstrap' }).catch(() => null)
+      : null
+    if (existing?.ok && typeof existing.text === 'string' && existing.text.includes('bot-bootstrap-v1')) {
+      return { ok: true, skipped: true }
+    }
+    const content = [
+      '[bot-bootstrap-v1]',
+      `Bot=${bot.name}(${bot.id}) Workspace=${bot.dir || ''}.`,
+      `SkillsPriority: ${bot.dir ? `${bot.dir}/.dsh/skills` : '<bot>/.dsh/skills'} > ${store?.skillsRoot || '$DSH_HOME/botmode/skills'} > ${BUILTIN_SKILLS_ROOT} > shared normal skills.`,
+      'BuiltinSkills: browser-desktop-automation (L1 CLI -> L2 agent-browser/OSS -> L3 screen_* -> L4 screen_request_help), bot-team-control (message_agent/bot_manage/room_manage), team-collaboration, room-completion, scheduled-routines (scheduled_tasks).',
+      `MCPPriority: ${store?.mcpConfigPath || '$DSH_HOME/botmode/mcp.json'} > shared DSH MCP (invoke mcp__<server>__<tool> / list_mcp_resources).`,
+    ].join(' ')
+    return await memory.saveMemoryForBot(bot, {
+      content,
+      type: 'workflow',
+      scene: 'bot-bootstrap',
+    })
+  } catch (_error) {
+    return { ok: false, skipped: true }
+  }
+}
+
+const readBuiltinSkill = async (skillName) => readTextFile(join(BUILTIN_SKILLS_ROOT, skillName, 'SKILL.md'), '')
+
 export const renderTeamSkill = () => [
   '---',
   'name: team',
-  'description: Assess task fit against your own role first, collaborate with teammates via @mentions in Group Rooms or message_agent in 1:1 chats, list the roster, and search team memory.',
-  'whenToUse: Before starting any task in a team or Group Room — evaluate whether the request fits your role, and only hand off or pull in another Bot when it belongs to their specialty.',
+  'description: Alias pointer to bot-team-control & team-collaboration for teammate messaging, Bot CRUD, and Group Room coordination.',
+  'whenToUse: When consulting teammates in 1:1 chats or coordinating inside Group Rooms.',
   '---',
   '',
-  '# Team Communication & Task-Fit Skill',
+  '# Team Communication Quick Pointer',
   '',
-  '## 1. Analyze Task Fit Before Acting (Mandatory First Step)',
-  'Before running heavy commands or drafting long plans, compare the user\'s request against your own role (`SOUL.md`) and the team roster (`bot_team`):',
-  '- **Fits your role fully**: Execute and answer cleanly on your own. Do NOT drag unrelated teammates into the thread.',
-  '- **Partially fits your role**: Complete the part inside your domain, then explicitly invoke `@TeammateName` (in Group Rooms) or `message_agent` (in 1:1 chats) to ask the right specialist to analyze or handle the remaining part.',
-  '- **Does NOT fit your role**:',
-  '  - In a Group Room when the user did **not** directly `@mention` you: reply `(pass)` so the right specialist takes over without noise.',
-  '  - In a Group Room when the user **directly `@mentioned` you**: do NOT reply `(pass)`; briefly explain why another Bot is better suited and explicitly `@TeammateName` to collaborate or hand off.',
-  '  - In 1:1 chat: call `message_agent` to consult or delegate to the right specialist with full self-contained context.',
-  '',
-  '## 2. 1:1 Chat Tools (`message_agent` / `bot_team`)',
-  '1. `bot_team` action="roster" — inspect who is on the team and what each Bot owns.',
-  '2. `message_agent` target="<name or id>" message="..." — asynchronous delivery into that Bot\'s permanent chat.',
-  '3. `message_agent` with `expectReply: true` — wait asynchronously for the teammate\'s reply in your chat.',
-  '4. `memory_search` / `memory_save` — recall or store long-term memories scoped to your Bot.',
-  '',
-  '## 3. Group Room `@mention` Discipline (Hermes Bot Mode)',
-  '- Inside a Group Room, **never** call `message_agent`; coordinate directly in the room.',
-  '- Writing `@TeammateName` in normal prose is an **active wake-up signal** that schedules another LLM turn for that Bot.',
-  '- ONLY write bare `@TeammateName` when you genuinely need that teammate to analyze, verify, or execute next.',
-  '- When merely describing role boundaries, ownership tables (`| ... |`), self-introductions, or items waiting for human approval, write plain names or backticked `` `@Name` `` — NEVER bare `@Name`!',
-  '- Match the user\'s scope: for simple questions or self-introductions, answer concisely and let the room settle via `(pass)`.',
-  '',
-].join('\n')
-
-export const renderTeamCollaborationSkill = () => [
-  '---',
-  'name: team-collaboration',
-  'description: Hermes-style Group Room collaboration protocol: evaluate task-fit first, use @mentions strictly for intentional handoffs/joint analysis when a task does not fit your role, and prevent runaway ping-pong loops.',
-  'whenToUse: Every time you receive a message or task inside a Group Room before deciding whether to execute, hand off via @mention, or reply (pass).',
-  '---',
-  '',
-  '# Group Room Task-Fit & `@mention` Collaboration Skill',
-  '',
-  'Follow this 3-step decision flow on every Group Room turn:',
-  '',
-  '## Step 1: Task-Fit Self-Assessment (先评估是否适合自己做)',
-  'Check the user\'s request against your role, permissions, and workspace:',
-  '1. **Core fit (我最合适)**: Execute directly with concise evidence and deliver the answer. Do not wake teammates unnecessarily.',
-  '2. **Cross-domain fit (需要联合分析)**: Complete your own domain\'s facts/checks first, then explicitly write `@SpecialistName` in prose with the exact question or handoff they need to analyze.',
-  '3. **Out of domain (不适合我做)**:',
-  '   - If the user did **not** address you directly: reply with exactly `(pass)` so the right specialist answers cleanly.',
-  '   - If the user **explicitly `@mentioned` you**: explain in 1–2 sentences why it falls outside your domain and immediately `@SpecialistName` to bring the right Bot into the discussion.',
-  '',
-  '## Step 2: Scope Guard (严控问题边界，避免小题大做)',
-  '- If the user asks a simple question, greeting, status recap, or self-introduction (e.g. "介绍一下自己", "你们聊了什么"): answer **only** what was asked.',
-  '- Do **NOT** launch unrequested multi-round audits or create a heavy `room_task_progress` checklist for simple Q&A.',
-  '',
-  '## Step 3: Strict Hermes Opt-In `@mention` Hygiene (防互相 `@` 死循环)',
-  '- In Hermes Bot Mode, Round 1+ is strictly **opt-in**: only Bots explicitly `@mentioned` in prose are woken for the next turn.',
-  '- Never put bare `@TeammateName` inside self-introductions, role-division tables, or "waiting for human approval" summaries unless you actually want that Bot to run another turn right now. Use plain names or `` `@TeammateName` `` for passive references.',
-  '- Once your part is answered and no teammate action is required, end without `@mentions` (or reply `(pass)` on subsequent follow-ups) so the room converges naturally.',
-  '',
-].join('\n')
-
-export const renderRoomCompletionSkill = () => [
-  '---',
-  'name: room-completion',
-  'description: Evaluate Group Room task progress autonomously on multi-step tasks, keep teammates collaborating until verified and merged, and call room_finish_task to terminate the room once done.',
-  'whenToUse: Inside a Group Room on substantive multi-Bot engineering/ops tasks when tracking progress, consolidating deliverables, or deciding whether the group has completed the user goal.',
-  '---',
-  '',
-  '# Group Room Autonomous Progress & Completion Skill',
-  '',
-  'Follow this protocol on **multi-step collaborative tasks** (for simple Q&A or self-introductions, just answer concisely and let the room settle naturally without creating heavy checklists):',
-  '',
-  '## 1. Track Progress on Multi-Step Tasks (`room_task_progress`)',
-  '- On complex multi-Bot tasks, call `room_task_progress({ action: "update", goal, items: [{ id, title, owner, done, note }] })` to maintain a shared checklist of every deliverable required by the user.',
-  '- Call `room_task_progress({ action: "get" })` before closing to confirm zero open items remain.',
-  '',
-  '## 2. Keep Teammates Moving — Never Prematurely `@user`',
-  '- While teammates still have genuine cross-checks, table merges, or unresolved subtasks, **address only the needed specialist with `@TeammateName`** and **do NOT write `@user` in the same message**.',
-  '- Only write `@user` alone (with zero teammate mentions) if the entire team is genuinely blocked on an irreversible decision or missing credential that cannot be resolved internally.',
-  '- If the user asked to "inspect / analyze / compile a plan for my review", delivering the **single merged, deduplicated final plan** IS completing the task — do NOT pause halfway after each Bot posts its separate draft!',
-  '',
-  '## 3. Formal Completion Gate (`room_finish_task`)',
-  'Check these 4 conditions before closing a multi-step task:',
-  '1. Every requirement in the user\'s request has been fulfilled and cross-checked across teammates.',
-  '2. Overlapping or fragmented teammate outputs have been merged into one clear, final summary/deliverable.',
-  '3. All active `room_task_progress` checklist items and `claim_subtask` items are marked done/completed.',
-  '4. No teammate is still actively executing a blocking step.',
-  '',
-  'Once all 4 conditions hold:',
-  '- Post the crisp consolidated final summary (if not already posted), and **immediately call `room_finish_task({ summary, deliverables, verification })`**.',
-  '- Calling `room_finish_task` is the **ONLY** way to formally terminate the Group Room in `completed` state; never rely on writing "task completed" in plain text.',
-  '- If you are not the Lead Bot in a Lead-assigned room, mark your subtask done and `@LeadName` to run final acceptance and invoke `room_finish_task`.',
+  '- For 1:1 messaging (`message_agent`), Bot roster CRUD (`bot_manage`), and creating/driving Group Rooms (`room_manage`), load `skill({ name: "bot-team-control" })`.',
+  '- For Group Room Task-Fit evaluation and `@mention` hygiene, load `skill({ name: "team-collaboration" })`.',
+  '- For multi-step Group Room milestone tracking and formal completion (`room_finish_task`), load `skill({ name: "room-completion" })`.',
   '',
 ].join('\n')
 
@@ -167,18 +135,21 @@ export const syncBotFiles = async (store, bot, state) => {
   await writeTextFile(join(dir, 'SOUL.md'), renderSoul(bot, state))
   const memoryPath = join(dir, 'MEMORY.md')
   const memory = await readTextFile(memoryPath, '')
-  if (memory === '') {
-    await writeTextFile(memoryPath, [
-      `# ${bot.name} — memory`,
-      '',
-      'Durable notes this Bot keeps for itself. Edit this file when something must survive',
-      'the current chat.',
-      '',
-    ].join('\n'))
+  const trimmed = memory.trim()
+  if (trimmed === '' || trimmed.includes(LEGACY_MEMORY_MARKER)) {
+    await writeTextFile(memoryPath, renderInitialMemory(bot, store))
   }
-  await writeTextFile(join(dir, '.dsh', 'skills', 'team', 'SKILL.md'), renderTeamSkill())
-  await writeTextFile(join(dir, '.dsh', 'skills', 'team-collaboration', 'SKILL.md'), renderTeamCollaborationSkill())
-  await writeTextFile(join(dir, '.dsh', 'skills', 'room-completion', 'SKILL.md'), renderRoomCompletionSkill())
+  // Keep local compatibility copies of core room skills synced from the single-source built-in library.
+  const [collabSkill, completionSkill] = await Promise.all([
+    readBuiltinSkill('team-collaboration'),
+    readBuiltinSkill('room-completion'),
+  ])
+  if (collabSkill) {
+    await writeTextFile(join(dir, '.dsh', 'skills', 'team-collaboration', 'SKILL.md'), collabSkill)
+  }
+  if (completionSkill) {
+    await writeTextFile(join(dir, '.dsh', 'skills', 'room-completion', 'SKILL.md'), completionSkill)
+  }
 }
 
 export const syncTeamFiles = async (store, state) => {
@@ -248,50 +219,59 @@ export const personaBlock = async (store, bot, state, options = {}) => {
     : teammates.map(member => `- ${member.name}${member.role ? ` — ${member.role}` : ''} [id: ${member.id}]`).join('\n')
   const isRoomSession = options.kind === 'room'
   const memoryHubBlock = typeof options.memoryPromptBlock === 'string' ? options.memoryPromptBlock.trim() : ''
+  const mcpPromptBlock = typeof options.mcpPromptBlock === 'string' ? options.mcpPromptBlock.trim() : ''
   const formatBlock = renderResponseFormatProtocol(state?.settings)
   const room = isRoomSession && options.roomId ? store.room(options.roomId) : undefined
   const effectiveWorkspace = (room?.workDir && room.workDir.trim() !== '')
     ? room.workDir.trim()
     : (bot.dir || '(unknown)')
+
+  const executionProtocol = [
+    '## Execution Protocol, Skills & Memory Contract',
+    '',
+    '1. **Assess → Recall → Load Skill → Execute → Persist**:',
+    '   - Compare the request against your role and scope before acting.',
+    '   - Check your operational memory (`MEMORY.md` below + `memory_search` / `memory_read_scene`) for prior context, user preferences, verified paths, or known pitfalls.',
+    '   - When a task matches any skill in `<available_skills>` or the Capability Dispatch Index in your memory, call `skill({ name })` FIRST to load the authoritative SOP instead of guessing procedures.',
+    '2. **Skills Library & Mode Precedence**:',
+    `   - Resolution order in Bot Mode: \`${bot.dir ? `${bot.dir}/.dsh/skills` : '<bot>/.dsh/skills'}\` → \`${store?.skillsRoot || '$DSH_HOME/botmode/skills'}\` → \`${BUILTIN_SKILLS_ROOT}\` → shared normal-mode skills (e.g. \`agent-browser\`, \`webapp-testing\`).`,
+    '   - Built-in Bot skills always outrank same-name normal-mode skills: `browser-desktop-automation` (progressive L1→L4 web/GUI automation & human takeover), `bot-team-control` (1:1 comms, Bot CRUD, Group Room creation), `team-collaboration`, `room-completion`, and `scheduled-routines` (persistent schedules via `scheduled_tasks`).',
+    '3. **Memory Hygiene (Zero Redundancy)**:',
+    '   - Persist only high-signal, evolving facts via `memory_save` or `MEMORY.md` (user preferences, verified environment facts, failure lessons, active routine/room IDs).',
+    '   - NEVER copy static system-prompt rules or full `SKILL.md` texts into memory.',
+    '4. **Safety & Human Takeover Boundary**:',
+    '   - Never fabricate tool outputs or claim a teammate completed work without observed evidence.',
+    '   - On hard GUI/web blockers (real CAPTCHA, QR/SMS/MFA login, real payment, irreversible authorization, or 3 consecutive GUI failures), stop guessing and escalate via `screen_request_help` per `browser-desktop-automation`.',
+  ]
+
   const rules = isRoomSession
     ? [
-      `- This is an isolated Group Room session for ${bot.name}. Your active working directory is ${effectiveWorkspace}.`,
-      '- Follow the `team-collaboration` skill (Hermes Bot Mode): before acting, evaluate whether the task fits your role. Handle what fits you; if it belongs to another specialist, hand off or invite joint analysis via `@TeammateName`; if unaddressed and outside your role, reply `(pass)`.',
-      '- Match the user\'s scope: for simple questions or self-introductions, answer concisely without launching unrequested audits or creating heavy progress checklists.',
-      '- Treat bare `@TeammateName` strictly as an action wake-up signal. Never put bare `@Name` in role tables, passive descriptions, or self-introductions — use plain names or `` `@Name` `` instead.',
-      '- Multiple Bots may execute concurrently in this room. Before editing shared files, call `claim_subtask({ taskId, title, paths })` to lock your target paths; mark `status: "completed"` when finished.',
-      '- On multi-step collaborative tasks, follow the `room-completion` skill: track milestones with `room_task_progress`, keep collaborating until merged and verified, avoid casual `@user` during peer handoffs, and call `room_finish_task({ summary, deliverables })` to formally end the room once complete.',
-      '- Never call `message_agent` here; address teammates in the room with `@Name`.',
-      '- Reply with exactly `(pass)` when consensus is reached or you have nothing new to add.',
-      '- Do not leak private 1:1 conversations into the group room.',
-      '- Prefer the tools you were given; if a tool is missing you may not use it.',
+      `- **Isolated Group Room Session**: You are ${bot.name}; active working directory is \`${effectiveWorkspace}\`. Never leak private 1:1 chats here.`,
+      '- **No `message_agent` in Rooms**: Coordinate strictly inside the room. Follow `team-collaboration` (Task-Fit first, match user scope, bare `@Name` ONLY as an intentional wake-up signal, plain name or `` `@Name` `` for passive references, `(pass)` when nothing new to add).',
+      '- **Concurrency & Completion**: Lock shared target paths with `claim_subtask` before concurrent edits (release with `status: "completed"`). On multi-step tasks, follow `room-completion` (`room_task_progress` + `room_finish_task`).',
     ]
     : [
-      `- Your permanent chat is this Session; it never resets. Your workspace is ${bot.dir || '(unknown)'}.`,
-      '- Use `message_agent` for teammate contact. Keep each message self-contained.',
-      '- Inside a Group Room you run in a separate room session and reply there instead of using `message_agent`.',
-      '- Prefer the tools you were given; if a tool is missing you may not use it.',
+      `- **Permanent 1:1 Session**: This chat never resets; your workspace is \`${bot.dir || '(unknown)'}\`.`,
+      '- **Team & Automation**: Use `bot-team-control` (`message_agent` / `bot_manage` / `room_manage`) for delegation, scaling Bots, or creating Group Rooms; use `scheduled-routines` (`scheduled_tasks`) for recurring or delayed jobs.',
+      '- **Virtual Screen**: You own a dedicated 1280×720 Linux virtual desktop (`screen_*`). Load `browser-desktop-automation` before non-trivial web or GUI automation.',
     ]
 
   return [
     soul.trim() || `# ${bot.name}\n\n${bot.role || ''}\n\n${bot.instructions || ''}`,
     '',
-    '## Team roster',
+    '## Team Roster',
     '',
     roster,
     '',
-    '## Working rules',
+    ...executionProtocol,
+    '',
+    ...(mcpPromptBlock !== '' ? [mcpPromptBlock, ''] : []),
+    '## Session Rules',
     '',
     ...rules,
-    '',
-    '## Virtual Screen (Dedicated Linux Desktop)',
-    '',
-    '- You have your own dedicated 1280×720 Linux virtual screen (`screen_screenshot`, `screen_open_app`, `screen_click`, `screen_type`, `screen_key`, `screen_scroll`, `screen_drag`, `screen_windows`). Perform browser, GUI, login, and desktop automation inside your virtual screen.',
-    '- Note: for terminal windows, use `paste_key: "shift+Insert"` with `screen_type`; for browsers/GUI apps, use default `ctrl+v`.',
-    '- **Human Takeover Rule**: Whenever you hit a blocker you cannot solve autonomously (CAPTCHA/slider verification, MFA/SMS/QR login, payment/sensitive authorization, repeated failure, or ambiguous confirmation), do NOT guess blindly. Immediately call `screen_request_help({ category, reason })` — this pops a takeover card for the human operator, waits until they complete it and hand control back, and returns the updated screenshot so you can continue.',
     formatBlock !== '' ? `\n${formatBlock}` : '',
     memoryHubBlock !== '' ? `\n${memoryHubBlock}` : '',
-    memory.trim() !== '' ? `\n## Your memory (MEMORY.md)\n\n${memory.trim()}` : '',
+    memory.trim() !== '' ? `\n## Your Operational Memory (MEMORY.md)\n\n${memory.trim()}` : '',
     '',
   ].join('\n')
 }

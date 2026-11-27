@@ -35,8 +35,9 @@ import {
   readTextFile,
   writeTextFile,
 } from './store.js'
-import { syncBotFiles, syncTeamFiles } from './persona.js'
+import { seedInitialMemoryHub, syncBotFiles, syncTeamFiles } from './persona.js'
 import { nextCronTime } from './cron.js'
+import { normalizeRoutineSettings } from './scheduler/model.js'
 import { botModelCatalog } from './models.js'
 import {
   avatarBundleScript,
@@ -58,6 +59,37 @@ import {
   sanitizeArtifactFilename,
 } from './artifacts.js'
 import { collectLocalHostSystem } from './screen.js'
+import { discoverBotSkills, isNormalModeOnlyTool } from './isolation.js'
+
+const BOT_SCOPED_TOOL_NAMES = [
+  'message_agent',
+  'bot_team',
+  'bot_manage',
+  'room_manage',
+  'scheduled_tasks',
+  'claim_subtask',
+  'room_task_progress',
+  'room_finish_task',
+  'memory_search',
+  'memory_conversation_search',
+  'memory_read_scene',
+  'memory_save',
+  'memory_tencentdb_memory_search',
+  'memory_tencentdb_conversation_search',
+  'memory_tencentdb_read_scene',
+  'screen_screenshot',
+  'screen_click',
+  'screen_type',
+  'screen_key',
+  'screen_scroll',
+  'screen_drag',
+  'screen_open_app',
+  'screen_windows',
+  'screen_request_help',
+  'system_info',
+  'publish_artifact',
+  'skill',
+]
 
 const MAX_BODY_BYTES = 256 * 1024
 const MAX_ARTIFACT_JSON_BYTES = 32 * 1024 * 1024
@@ -121,8 +153,9 @@ export class BotApi {
   }
 
   #systemSnapshot = null
+  #skillsByBot = new Map()
 
-  constructor({ ctx, store, dispatcher, rooms, routines, approvals, memory, screen, logger }) {
+  constructor({ ctx, store, dispatcher, rooms, routines, approvals, memory, mcp, screen, logger }) {
     this.ctx = ctx
     this.store = store
     this.dispatcher = dispatcher
@@ -130,6 +163,7 @@ export class BotApi {
     this.routines = routines
     this.approvals = approvals ?? { list: () => [], decide: async () => ({}) }
     this.memory = memory ?? null
+    this.mcp = mcp ?? null
     this.screen = screen ?? null
     this.logger = logger
   }
@@ -200,7 +234,10 @@ export class BotApi {
       if (route === 'state' && req.method === 'GET') {
         await this.store.load()
         if (this.memory) await this.memory.ensureReady().catch(() => undefined)
-        await this.#refreshScreenSnapshot().catch(() => undefined)
+        await Promise.all([
+          this.#refreshScreenSnapshot().catch(() => undefined),
+          this.#refreshBotSkills().catch(() => undefined),
+        ])
         sendJson(res, 200, { ok: true, state: this.publicState() })
         return
       }
@@ -834,6 +871,7 @@ export class BotApi {
         inRoom: this.dispatcher.inRoom(bot.id),
         roomSpeaking: this.dispatcher.roomSpeaking?.(bot.id) === true,
         activeRoomId: this.dispatcher.activeRoomId?.(bot.id) ?? '',
+        discoveredSkills: this.#skillsByBot.get(bot.id) ?? [],
       })),
       rooms: state.rooms.map((room) => {
         const runtime = this.rooms.state(room.id)
@@ -856,6 +894,7 @@ export class BotApi {
         ...routine,
         botName: this.store.bot(routine.botId)?.name ?? '',
       })),
+      routineNotices: (state.routineNotices ?? []).slice(-50),
       approvals: this.approvals ? this.approvals.list() : [],
       questions: this.approvals && typeof this.approvals.listQuestions === 'function'
         ? this.approvals.listQuestions()
@@ -874,22 +913,58 @@ export class BotApi {
       },
       system: this.#systemSnapshot || (this.#screenSnapshot.host?.cpu ? this.#screenSnapshot.host : null),
       memory: this.memory ? this.memory.publicSummary() : null,
+      mcp: this.mcp
+        ? {
+          configPath: this.mcp.configPath,
+          priority: { botMode: ['bot', 'normal'], normalMode: ['normal', 'bot'] },
+          servers: this.mcp.listForMode('bot'),
+        }
+        : null,
       settings: state.settings ?? defaultSettingsState(),
       usage: this.#usageSummary(state),
       artifacts: this.#artifactsSummary(state),
       tools: (() => {
         try {
           const tools = this.ctx.get('tools')
-          return tools ? tools.definitions().map(tool => tool.name).sort() : []
+          const globalAllowed = tools
+            ? (tools.definitions?.() ?? [])
+              .map(tool => tool.name)
+              .filter(toolName => !isNormalModeOnlyTool(toolName))
+            : []
+          return [...new Set([...globalAllowed, ...BOT_SCOPED_TOOL_NAMES])].sort()
         } catch (_error) {
-          return []
+          return [...BOT_SCOPED_TOOL_NAMES].sort()
         }
       })(),
       runtime: {
         root: this.store.root,
+        botsRoot: this.store.botsRoot,
+        skillsRoot: this.store.skillsRoot,
+        mcpConfigPath: this.store.mcpConfigPath,
         pid: process.pid,
       },
     }
+  }
+
+  async #refreshBotSkills() {
+    const bots = this.store.state?.bots ?? []
+    const hostSkills = this.ctx?.get?.('skills') ?? null
+    const next = new Map()
+    await Promise.all(bots.map(async (bot) => {
+      try {
+        const list = await discoverBotSkills(this.store, bot, { hostSkills })
+        next.set(bot.id, list.map(sk => ({
+          name: sk.name,
+          description: sk.description,
+          source: sk.source,
+          tier: sk.tier || 'bot',
+          path: sk.path,
+        })))
+      } catch (_error) {
+        next.set(bot.id, [])
+      }
+    }))
+    this.#skillsByBot = next
   }
 
   #usageSummary(state) {
@@ -1058,12 +1133,20 @@ export class BotApi {
         botId: stringOr(payload.botId),
         name: payload?.name,
         cron: payload?.cron,
+        schedule: payload?.schedule,
+        tz: payload?.tz,
         prompt: payload?.prompt,
         enabled: payload?.enabled,
+        policy: payload?.policy,
       })
       case 'routine.delete': return this.routines.remove(stringOr(payload.routineId))
       case 'routine.toggle': return this.routines.setEnabled(stringOr(payload.routineId), payload?.enabled === true)
       case 'routine.run': return this.routines.runNow(stringOr(payload.routineId))
+      case 'routine.renew': return this.routines.renew(stringOr(payload.routineId), payload?.days)
+      case 'routine.history': return this.routines.history(stringOr(payload.routineId), payload?.limit)
+      case 'routine.preview': return this.routines.previewSchedule(payload?.schedule ?? payload?.cron, payload?.tz)
+      case 'routine.notices.read': return this.routines.markNoticesRead(payload?.ids)
+      case 'routine.notices.clear': return this.routines.clearNotices()
       case 'approval.decide': return this.approvals.decide(stringOr(payload.approvalId), stringOr(payload.decision))
       case 'question.decide': return this.approvals.decideQuestion(stringOr(payload.questionId), payload.answers)
       case 'screen.help.decide': {
@@ -2032,6 +2115,12 @@ export class BotApi {
         const currentSys = normalizeSystemSettings(state.settings.system, defaultSettingsState().system)
         state.settings.system = normalizeSystemSettings(sys, currentSys)
       }
+      if (patch.routines && typeof patch.routines === 'object') {
+        state.settings.routines = normalizeRoutineSettings({
+          ...state.settings.routines,
+          ...patch.routines,
+        })
+      }
       updated = state.settings
     })
     if (sys && this.screen && updated?.system) {
@@ -2228,6 +2317,7 @@ export class BotApi {
       }
     }
     await this.syncAll()
+    await seedInitialMemoryHub(this.memory, this.store, bot).catch(() => undefined)
     void this.screen?.syncAvatar?.(bot.id, bot.avatar).catch(() => undefined)
     return { botId: bot.id, bot }
   }
@@ -2290,10 +2380,12 @@ export class BotApi {
       if (sid) this.dispatcher.cancelSession?.(sid)
     }
     this.approvals?.cancelForBot?.(botId)
+    await this.routines?.removeForBot?.(botId).catch(() => undefined)
     await this.store.mutate((state) => {
       state.bots = state.bots.filter(item => item.id !== botId)
-      for (const routine of state.routines) {
-        if (routine.botId === botId) routine.enabled = false
+      state.routines = state.routines.filter(routine => routine.botId !== botId)
+      if (Array.isArray(state.routineNotices)) {
+        state.routineNotices = state.routineNotices.filter(item => item.botId !== botId)
       }
       for (const room of state.rooms) {
         room.memberIds = room.memberIds.filter(id => id !== botId)

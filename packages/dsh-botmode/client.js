@@ -1951,15 +1951,26 @@ window.__ModuleLoader__.load({
             unsubPanel?.()
           }
         }, 'botmode: host state polling')
-        // Both spaces share one Host session list and one Workspace registry, and
-        // neither has a filter API. This plugin therefore narrows the snapshots the
-        // Harness sidebar reads: Harness mode shows only non-Bot entries, Bot mode
-        // only Bot entries. The raw snapshots stay private to this plugin, so the Bot
-        // pane always sees everything it owns.
+        // Strict sidebar isolation: Bot sessions (1:1 primary chats, hidden Group Room
+        // sessions, and any legacy Bot directories) NEVER appear in the normal DSH
+        // sidebar or normal workspace lists — regardless of which panel is active.
         const workspaceSvc = ctx.get('workspaces')
         const rawSessionSnapshot = sessions.list.getSnapshot.bind(sessions.list)
         const rawWorkspaceSnapshot = workspaceSvc.list.getSnapshot.bind(workspaceSvc.list)
-        const botDirs = () => roster.getSnapshot().map(bot => bot.dir).filter(dir => typeof dir === 'string' && dir !== '')
+        const normalizePath = (value) => (typeof value === 'string' ? value.trim().replaceAll('\\', '/').replace(/\/+$/, '') : '')
+        const sameOrUnder = (parent, target) => {
+          const p = normalizePath(parent)
+          const t = normalizePath(target)
+          if (!p || !t) return false
+          return t === p || t.startsWith(`${p}/`)
+        }
+        const botDirs = () => {
+          const dirs = roster.getSnapshot().map(bot => bot.dir).filter(dir => typeof dir === 'string' && dir !== '')
+          const rt = hostStore.getSnapshot().state && hostStore.getSnapshot().state.runtime
+          if (rt && typeof rt.root === 'string' && rt.root !== '') dirs.push(rt.root)
+          if (rt && typeof rt.botsRoot === 'string' && rt.botsRoot !== '') dirs.push(rt.botsRoot)
+          return dirs
+        }
         const botSessionIds = () => {
           const ids = new Set(roster.getSnapshot().map(bot => bot.sessionId).filter(Boolean))
           for (const group of groupStore.getSnapshot()) {
@@ -1985,37 +1996,63 @@ window.__ModuleLoader__.load({
           return ids
         }
         const underBotDir = (path) => {
-          if (typeof path !== 'string' || path === '') return false
-          return botDirs().some(dir => path === dir || path.startsWith(`${dir}/`))
+          const norm = normalizePath(path)
+          if (norm === '') return false
+          if (/\/\.dsh\/botmode(\/|$)/.test(norm) || /\/\.dsh\/bot\/DSH-Bots(\/|$)/.test(norm)) return true
+          return botDirs().some(dir => sameOrUnder(dir, norm))
         }
-        let botSpace = false
-        let sessionCache = { source: null, mode: null, value: null }
-        let workspaceCache = { source: null, mode: null, value: null }
+        const isBotEntry = (id, cwd, botIds) => {
+          if (id && botIds.has(id)) return true
+          if (cwd && underBotDir(cwd)) return true
+          return false
+        }
+        let filterVersion = 0
+        let sessionCache = { source: null, version: -1, value: null }
+        let workspaceCache = { source: null, version: -1, value: null }
         const filteredSessionSnapshot = () => {
           const state = rawSessionSnapshot()
-          if (sessionCache.source === state && sessionCache.mode === botSpace) return sessionCache.value
-          const ids = state.ids.filter((id) => {
-            const bot = underBotDir(state.byId[id]?.cwd) || botSessionIds().has(id)
-            return botSpace ? bot : !bot
-          })
+          if (sessionCache.source === state && sessionCache.version === filterVersion) return sessionCache.value
+          const botIds = botSessionIds()
+          const ids = (state.ids || []).filter(id => !isBotEntry(id, state.byId && state.byId[id] && state.byId[id].cwd, botIds))
           let value = state
-          if (ids.length !== state.ids.length) {
+          if (ids.length !== (state.ids || []).length) {
             const byId = {}
             for (const id of ids) byId[id] = state.byId[id]
             value = { ...state, ids, byId }
           }
-          sessionCache = { source: state, mode: botSpace, value }
+          sessionCache = { source: state, version: filterVersion, value }
           return value
         }
         const filteredWorkspaceSnapshot = () => {
           const state = rawWorkspaceSnapshot()
-          if (workspaceCache.source === state && workspaceCache.mode === botSpace) return workspaceCache.value
-          const items = (state.items || []).filter((row) => {
-            const bot = underBotDir(row && row.path)
-            return botSpace ? bot : !bot
-          })
-          const value = items.length === (state.items || []).length ? state : { ...state, items }
-          workspaceCache = { source: state, mode: botSpace, value }
+          if (workspaceCache.source === state && workspaceCache.version === filterVersion) return workspaceCache.value
+          const botIds = botSessionIds()
+          let changed = false
+          const items = []
+          for (const row of (state.items || [])) {
+            if (underBotDir(row && row.path)) {
+              changed = true
+              continue
+            }
+            if (Array.isArray(row && row.sessionIds) && row.sessionIds.some(sid => botIds.has(sid))) {
+              changed = true
+              items.push({ ...row, sessionIds: row.sessionIds.filter(sid => !botIds.has(sid)) })
+            } else {
+              items.push(row)
+            }
+          }
+          let archivedSessionIds = state.archivedSessionIds
+          if (Array.isArray(archivedSessionIds) && archivedSessionIds.some(sid => botIds.has(sid))) {
+            changed = true
+            archivedSessionIds = archivedSessionIds.filter(sid => !botIds.has(sid))
+          }
+          let pinnedSessionIds = state.pinnedSessionIds
+          if (Array.isArray(pinnedSessionIds) && pinnedSessionIds.some(sid => botIds.has(sid))) {
+            changed = true
+            pinnedSessionIds = pinnedSessionIds.filter(sid => !botIds.has(sid))
+          }
+          const value = changed ? { ...state, items, archivedSessionIds, pinnedSessionIds } : state
+          workspaceCache = { source: state, version: filterVersion, value }
           return value
         }
         const sessionListeners = new Set()
@@ -2040,7 +2077,10 @@ window.__ModuleLoader__.load({
             off()
           }
         }
-        const refresh = () => {
+        const invalidateAndRefresh = () => {
+          filterVersion += 1
+          sessionCache = { source: null, version: -1, value: null }
+          workspaceCache = { source: null, version: -1, value: null }
           for (const listener of [...sessionListeners]) {
             try { listener() } catch (_error) { /* one consumer's failure must not stop the rest */ }
           }
@@ -2048,22 +2088,17 @@ window.__ModuleLoader__.load({
             try { listener() } catch (_error) { /* as above */ }
           }
         }
-        const inBotSpace = () => {
-          const panel = ctx.layout.panelInfo.getSnapshot()
-          return Boolean(panel && panel.activePanelId === PANEL_ID)
-        }
         ctx.effect(() => {
-          botSpace = inBotSpace()
-          refresh()
-          return ctx.layout.panelInfo.subscribe(() => {
-            const next = inBotSpace()
-            if (next === botSpace) return
-            botSpace = next
-            sessionCache = { source: null, mode: null, value: null }
-            workspaceCache = { source: null, mode: null, value: null }
-            refresh()
-          })
-        }, 'botmode: space filter')
+          invalidateAndRefresh()
+          const offRoster = roster.subscribe(invalidateAndRefresh)
+          const offGroups = groupStore.subscribe(invalidateAndRefresh)
+          const offHost = hostStore.subscribe(invalidateAndRefresh)
+          return () => {
+            offRoster?.()
+            offGroups?.()
+            offHost?.()
+          }
+        }, 'botmode: sidebar isolation filter')
         ctx.effect(() => () => {
           sessions.list.getSnapshot = rawSessionSnapshot
           sessions.list.subscribe = rawSessionSubscribe
@@ -2995,6 +3030,7 @@ window.__ModuleLoader__.load({
                 botId: props.bot.id,
                 name: name.trim() || `${props.bot.name} routine`,
                 cron: cron.trim(),
+                schedule: cron.trim(),
                 prompt: prompt.trim(),
                 enabled: true,
               })
@@ -3007,9 +3043,10 @@ window.__ModuleLoader__.load({
           }
           const row = (routine) => h('div', { key: routine.id, className: 'bm-routine' },
             h('div', { className: 'bm-routine-text' },
-              h('div', { className: 'bm-routine-name' }, routine.name),
+              h('div', { className: 'bm-routine-name' },
+                `${routine.origin?.kind === 'bot' ? '🤖 ' : ''}${routine.name}`),
               h('div', { className: 'bm-routine-meta' },
-                `${routine.cron}${routine.nextAt ? ` · ${t('routine.next')} ${new Date(routine.nextAt).toLocaleString()}` : ''}`),
+                `${routine.cron}${routine.lastStatus ? ` · ${routine.lastStatus}` : ''}${routine.nextAt ? ` · ${t('routine.next')} ${new Date(routine.nextAt).toLocaleString()}` : ''}${routine.pausedReason ? ` · ${routine.pausedReason}` : ''}`),
               h('div', { className: 'bm-routine-prompt' }, routine.prompt)),
             h('div', { className: 'bm-routine-actions' },
               h('button', {
@@ -6010,14 +6047,27 @@ window.__ModuleLoader__.load({
             }
 
             if (moduleKey === 'skills') {
+              const discovered = Array.isArray(bot.discoveredSkills) ? bot.discoveredSkills : []
+              const sharedDir = props.runtimeInfo && props.runtimeInfo.skillsRoot ? props.runtimeInfo.skillsRoot : ''
               return h('div', { className: 'bm-set-panel' },
                 h('section', { className: 'bm-form' },
                   h('h2', null, `${bot.name} · ${t('settings.skills')}`),
-                  h('p', { className: 'bm-form-hint' }, `${bot.dir ? `${bot.dir}/.dsh/skills/` : ''}`),
+                  h('p', { className: 'bm-form-hint' }, [
+                    bot.dir ? `${bot.dir}/.dsh/skills/` : '',
+                    sharedDir ? ` · ${sharedDir}` : '',
+                  ].filter(Boolean).join('')),
                   h('div', { className: 'bm-picks' },
-                    h('span', { className: 'bm-act-chip' }, 'team (SKILL.md)'),
-                    h('span', { className: 'bm-act-chip' }, 'room-completion (SKILL.md)'),
-                    (bot.skills || []).map(sk => h('span', { key: sk, className: 'bm-act-chip' }, sk)))))
+                    discovered.length > 0
+                      ? discovered.map(sk => h('span', {
+                        key: sk.name,
+                        className: 'bm-act-chip',
+                        title: sk.description || sk.path || '',
+                      }, `${sk.name} (${sk.source || 'bot'})`))
+                      : [
+                        h('span', { key: 'team', className: 'bm-act-chip' }, 'team (SKILL.md)'),
+                        h('span', { key: 'team-collaboration', className: 'bm-act-chip' }, 'team-collaboration (SKILL.md)'),
+                        h('span', { key: 'room-completion', className: 'bm-act-chip' }, 'room-completion (SKILL.md)'),
+                      ])))
             }
 
             if (moduleKey === 'workspace') {
@@ -6106,7 +6156,11 @@ window.__ModuleLoader__.load({
                   : null),
               h('div', { className: 'bm-set-card' },
                 navRow('model', 'model', t('settings.model'), activeModelLabel),
-                navRow('skills', 'skills', t('settings.skills'), String((bot && bot.skills ? bot.skills.length : 0) + 2)),
+                navRow('skills', 'skills', t('settings.skills'), String(
+                  bot && Array.isArray(bot.discoveredSkills) && bot.discoveredSkills.length > 0
+                    ? bot.discoveredSkills.length
+                    : ((bot && bot.skills ? bot.skills.length : 0) + 3),
+                )),
                 navRow('tools', 'tools', t('settings.tools'), toolCountLabel)),
               h('div', { className: 'bm-set-group-label' }, t('settings.groupWork')),
               h('div', { className: 'bm-set-card' },
@@ -6907,6 +6961,7 @@ window.__ModuleLoader__.load({
                 botId: bot.id,
                 name: rName.trim(),
                 cron: rCron.trim() || '*/30 * * * *',
+                schedule: rCron.trim() || '*/30 * * * *',
                 prompt: rPrompt.trim(),
                 enabled: true,
               })
@@ -7105,8 +7160,8 @@ window.__ModuleLoader__.load({
                     : h('div', { className: 'bm-routine-list' },
                       routines.map(rt => h('div', { key: rt.id, className: 'bm-routine' },
                         h('div', { className: 'bm-routine-text' },
-                          h('span', { className: 'bm-routine-name' }, rt.name),
-                          h('span', { className: 'bm-routine-meta' }, `${rt.cron}${rt.enabled ? '' : ' (paused)'}`),
+                          h('span', { className: 'bm-routine-name' }, `${rt.origin?.kind === 'bot' ? '🤖 ' : ''}${rt.name}`),
+                          h('span', { className: 'bm-routine-meta' }, `${rt.cron}${rt.lastStatus ? ` · ${rt.lastStatus}` : ''}${rt.enabled ? '' : ` (${rt.pausedReason || 'paused'})`}`),
                           h('span', { className: 'bm-routine-prompt' }, rt.prompt)),
                         h('div', { className: 'bm-routine-actions' },
                           h('button', { type: 'button', className: 'bm-btn small', onClick: () => void onCommand('routine.run', { routineId: rt.id }) }, t('routine.run')),
@@ -7193,7 +7248,7 @@ window.__ModuleLoader__.load({
 
           const sessionRowsOf = (bot) => {
             const roomSessions = hiddenRoomSessionIds()
-            const rows = list.ids
+            const rows = (list.ids || [])
               .filter(id => !roomSessions.has(id) && (id === bot.sessionId || (bot.dir && list.byId[id] && list.byId[id].cwd === bot.dir && list.byId[id].blank !== true)))
               .map(id => ({
                 id,
@@ -7201,6 +7256,20 @@ window.__ModuleLoader__.load({
                 summary: list.byId[id],
                 primary: id === bot.sessionId,
               }))
+            if (bot.sessionId && !rows.some(row => row.id === bot.sessionId)) {
+              rows.unshift({
+                id: bot.sessionId,
+                title: bot.name || bot.sessionId,
+                summary: {
+                  sessionId: bot.sessionId,
+                  displayTitle: bot.name || bot.sessionId,
+                  cwd: bot.dir || '',
+                  updatedAt: bot.lastTurnAt ? Date.parse(bot.lastTurnAt) || 0 : 0,
+                  running: bot.running === true,
+                },
+                primary: true,
+              })
+            }
             rows.sort((a, b) => (b.primary ? 1 : 0) - (a.primary ? 1 : 0)
               || ((b.summary && b.summary.updatedAt) || 0) - ((a.summary && a.summary.updatedAt) || 0))
             return rows

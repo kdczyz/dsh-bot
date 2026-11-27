@@ -12,6 +12,7 @@ import { readFile, writeFile, appendFile, mkdir, rename, rm, readdir, stat } fro
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { deterministicAvatar, normalizeAvatar } from './avatar.js'
+import { DEFAULT_ROUTINE_SETTINGS, normalizeRoutine, normalizeRoutineSettings } from './scheduler/model.js'
 
 /** True ONLY when `candidatePath` resolves strictly inside `parentDir` (never equal, never sibling/escape). */
 export const isStrictSubpath = (parentDir, candidatePath) => {
@@ -134,6 +135,7 @@ export const defaultSettingsState = () => ({
     pushIntervalSec: 0,     // 0 = 关闭定时主动上报；>0 为秒级周期
     pushToken: '',          // 可选：主动上报鉴权 Token
   },
+  routines: { ...DEFAULT_ROUTINE_SETTINGS },
 })
 
 export const emptyState = () => ({
@@ -206,6 +208,12 @@ export class BotStore {
 
   get memoryDataRoot() { return join(this.root, 'memory-data') }
 
+  /** Bot-Mode shared skills directory (`$DSH_HOME/botmode/skills`), isolated from normal DSH skills. */
+  get skillsRoot() { return join(this.root, 'skills') }
+
+  /** Bot-Mode independent MCP configuration file (`$DSH_HOME/botmode/mcp.json`), isolated from normal DSH MCP. */
+  get mcpConfigPath() { return join(this.root, 'mcp.json') }
+
   roomLogPath(roomId) {
     return join(this.roomsRoot, `${slug(roomId)}.jsonl`)
   }
@@ -219,6 +227,7 @@ export class BotStore {
       await mkdir(this.roomsRoot, { recursive: true })
       await mkdir(this.memoryPluginsRoot, { recursive: true })
       await mkdir(this.memoryDataRoot, { recursive: true })
+      await mkdir(this.skillsRoot, { recursive: true })
       const stored = await readJson(this.statePath)
       if (stored !== undefined && stored !== null) {
         this.#state = this.#normalize(stored)
@@ -304,6 +313,7 @@ export class BotStore {
         showActivityStrip: gc.showActivityStrip === true,
       },
       system: normalizeSystemSettings(settings.system, defaults.system),
+      routines: normalizeRoutineSettings(settings.routines),
     }
   }
 
@@ -536,19 +546,7 @@ export class BotStore {
   }
 
   #normalizeRoutine(routine) {
-    if (!routine || typeof routine.id !== 'string' || typeof routine.botId !== 'string') return undefined
-    return {
-      id: routine.id,
-      botId: routine.botId,
-      name: typeof routine.name === 'string' ? routine.name : 'Routine',
-      prompt: typeof routine.prompt === 'string' ? routine.prompt : '',
-      cron: typeof routine.cron === 'string' ? routine.cron : '0 9 * * *',
-      enabled: routine.enabled !== false,
-      lastRunAt: typeof routine.lastRunAt === 'string' ? routine.lastRunAt : undefined,
-      nextAt: typeof routine.nextAt === 'string' ? routine.nextAt : undefined,
-      lastStatus: typeof routine.lastStatus === 'string' ? routine.lastStatus : '',
-      createdAt: typeof routine.createdAt === 'string' ? routine.createdAt : new Date().toISOString(),
-    }
+    return normalizeRoutine(routine)
   }
 
   /** Run one mutation against the document, then persist the result atomically. */
@@ -594,10 +592,27 @@ export class BotStore {
     const primary = this.botBySession(sessionId)
     if (primary) return { bot: primary, kind: 'primary', roomId: '' }
     const member = this.roomByMemberSession(sessionId)
-    if (!member) return undefined
+    if (!member) {
+      // Isolated Routine sessions (`fresh` per run, or one `named` session per task).
+      const owned = this.routineBySession(sessionId)
+      const owner = owned ? this.bot(owned.routine.botId) : undefined
+      if (!owner) return undefined
+      return { bot: owner, kind: 'routine', roomId: '', routineId: owned.routine.id, runId: owned.runId }
+    }
     const bot = this.bot(member.botId)
     if (!bot) return undefined
     return { bot, kind: 'room', roomId: member.room.id }
+  }
+
+  /** Resolve a Session created for a Routine run (or a Routine's named session). */
+  routineBySession(sessionId) {
+    if (typeof sessionId !== 'string' || sessionId === '') return undefined
+    for (const routine of this.#state.routines) {
+      if (routine.namedSessionId === sessionId) return { routine, runId: '' }
+      const hit = routine.runSessions?.find(item => item.sessionId === sessionId)
+      if (hit) return { routine, runId: hit.runId }
+    }
+    return undefined
   }
 
   allBotSessionIds() {
@@ -608,6 +623,12 @@ export class BotStore {
     for (const room of this.#state.rooms) {
       for (const sessionId of Object.values(room.memberSessions ?? {})) {
         if (sessionId) ids.add(sessionId)
+      }
+    }
+    for (const routine of this.#state.routines) {
+      if (routine.namedSessionId) ids.add(routine.namedSessionId)
+      for (const item of routine.runSessions ?? []) {
+        if (item.sessionId) ids.add(item.sessionId)
       }
     }
     return ids
