@@ -39,7 +39,10 @@ from pydantic import BaseModel, Field
 
 from .config import (
     CAPTURE_IDLE_HIBERNATE,
+    DESKTOP_SPEC_VERSION,
     GATEWAY_API_VERSION,
+    IDLE_MODE,
+    IDLE_STOP_SECONDS,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     SHARED_XAUTHORITY,
@@ -135,11 +138,11 @@ def registry() -> Registry:
 
 # ---------------------------------------------------------------- 后台守护 ----
 async def idle_reaper(reg: Registry) -> None:
-    """双信号闲置判定：无观看者满 5s 释放抓屏连接；长时间无活动自动冻结进程树。"""
+    """双信号闲置判定：无观看者满 5s 释放抓屏连接；闲置超时自动保存桌面现场并关闭释放内存和 CPU。"""
     while True:
         await asyncio.sleep(2.5)
         now = time.time()
-        for worker in reg.workers.values():
+        for worker in list(reg.workers.values()):
             try:
                 if (
                     worker.streamer.active_subscribers == 0
@@ -147,28 +150,50 @@ async def idle_reaper(reg: Registry) -> None:
                     and (now - worker.driver._last_capture_at) >= CAPTURE_IDLE_HIBERNATE
                 ):
                     await asyncio.to_thread(worker.driver.close_capture)
-                if worker.lock.should_freeze(IDLE_FREEZE_SECONDS):
-                    await worker.freeze()
+                if not worker.healthy():
+                    continue
+                # 若曾处于人工接管但已无任何前端观看连接且长时间无输入（例如浏览器直接关闭），自动归还以便后续闲置释放
+                if (
+                    worker.lock.state is State.HUMAN_TAKEOVER
+                    and worker.lock.viewers == 0
+                    and not worker.lock.help_reason
+                    and worker.lock.idle_seconds() >= max(20.0, CAPTURE_IDLE_HIBERNATE * 4)
+                ):
+                    await worker.lock.release()
+                if IDLE_MODE == "freeze":
+                    if worker.lock.should_freeze(IDLE_FREEZE_SECONDS):
+                        await worker.freeze()
+                else:
+                    if worker.lock.should_idle_stop(IDLE_STOP_SECONDS):
+                        await worker.stop(save_session=True)
+                        worker.auditor.record(
+                            "idle_stop",
+                            {"idle_timeout": IDLE_STOP_SECONDS},
+                            state=worker.lock.state.value,
+                        )
             except Exception:  # noqa: BLE001
                 continue
 
 
 async def watchdog(reg: Registry) -> None:
-    """进程崩溃自动拉起；冻结态与 cgroup 状态对账。"""
+    """仅对活跃虚拟屏执行桌面组件自愈与状态对账；已关闭（STOPPED）的闲置屏绝不自动拉起。"""
     while True:
         await asyncio.sleep(WATCHDOG_INTERVAL)
-        for worker in reg.workers.values():
+        for worker in list(reg.workers.values()):
             lock = worker.lock
             try:
-                if lock.state in (State.AGENT_ACTIVE, State.FROZEN) and not worker.healthy():
+                if lock.state is State.STOPPED:
+                    continue
+                if lock.state is State.FROZEN and IDLE_MODE != "freeze":
+                    await worker.stop(save_session=True)
+                    continue
+                if lock.state is State.AGENT_ACTIVE and not worker.healthy():
                     await worker.start()
                 elif lock.state is State.FROZEN and not worker.cg.is_frozen(worker.bot_id):
                     await worker.freeze()
                 elif lock.state is State.AGENT_ACTIVE and worker.cg.is_frozen(worker.bot_id):
                     await worker.thaw()
                 elif worker.healthy() and lock.state in (State.AGENT_ACTIVE, State.HUMAN_TAKEOVER, State.NEED_HUMAN):
-                    # 桌面组件（xfdesktop/picom/tint2/iconlayer）会被 X 断连静默带走，
-                    # 这里补齐，否则刷新后桌面变黑、图标变蓝方块
                     revived = await asyncio.to_thread(worker.heal_desktop)
                     if revived:
                         worker.auditor.record("desktop_healed", {"revived": revived}, state=lock.state.value)
@@ -181,16 +206,21 @@ async def lifespan(app: FastAPI):
     global REGISTRY
     REGISTRY = Registry(DEFAULT_BOTS)
     try:
-        REGISTRY.workers[next(iter(REGISTRY.workers))].cg.ensure_root()
+        if REGISTRY.workers:
+            REGISTRY.workers[next(iter(REGISTRY.workers))].cg.ensure_root()
     except Exception:  # noqa: BLE001
         pass
-    # Make cgroup availability explicit for readiness probes and stop trying to
-    # reconfigure it for every new screen. Degrade cleanly when not permitted.
     REGISTRY.cgroup_available = bool(REGISTRY.workers and next(iter(REGISTRY.workers.values())).cg.available)
-    # 接管网关重启前仍在运行的屏（进程树留在原 cgroup，窗口状态完整保留）
-    for worker in REGISTRY.workers.values():
+    # 接管既有屏：若存在旧规格桌面或遗留冻结屏，保存现场后立即关闭释放内存与 CPU，等待按需统一拉起
+    for worker in list(REGISTRY.workers.values()):
         try:
-            await asyncio.to_thread(worker.attach)
+            attached = await asyncio.to_thread(worker.attach)
+            if attached and worker.healthy():
+                need_reconcile = worker.spec_mismatch() or (
+                    IDLE_MODE != "freeze" and worker.lock.state is State.FROZEN
+                )
+                if need_reconcile:
+                    await worker.stop(save_session=True)
         except Exception:  # noqa: BLE001
             pass
     tasks = [
@@ -202,14 +232,11 @@ async def lifespan(app: FastAPI):
     finally:
         for task in tasks:
             task.cancel()
-        # 网关重启不应该中断虚拟屏：屏的进程树留在 cgroup 里继续持有窗口状态，
-        # 新实例启动后按 DISPLAY/cgroup 接续（/api/screens 会显示其状态）。
-        # 需要退出即清屏时设 BOTSCREEN_STOP_ON_EXIT=1。
         if os.environ.get("BOTSCREEN_STOP_ON_EXIT", "0") == "1":
             for worker in REGISTRY.workers.values():
                 if worker.healthy():
                     try:
-                        await asyncio.wait_for(worker.stop(), timeout=6)
+                        await asyncio.wait_for(worker.stop(save_session=True), timeout=8)
                     except (asyncio.TimeoutError, Exception):  # noqa: BLE001
                         pass
 
@@ -297,16 +324,12 @@ async def console() -> Response:
 def x_preflight() -> tuple[bool, list[str], str]:
     """Report missing host components that prevent virtual screens from starting."""
     missing: list[str] = []
-    required_bins = (
-        "Xvfb", "x11vnc", "websockify", "xauth", "xdotool", "xclip", "xfwm4",
-        "xterm", "feh",
-    )
+    required_bins = ("Xvfb", "xauth", "xdotool", "xclip")
     for name in required_bins:
         if not shutil.which(name):
             missing.append(f"bin:{name}")
-    novnc_web = os.environ.get("BOTSCREEN_VNC_WEB", "/usr/share/novnc")
-    if not os.path.isfile(os.path.join(novnc_web, "vnc.html")):
-        missing.append(f"web:{novnc_web}/vnc.html")
+    if not (shutil.which("openbox") or shutil.which("xfwm4")):
+        missing.append("bin:openbox")
     if X_BACKEND == "kasmvnc" and not shutil.which("Xvnc"):
         missing.append("bin:Xvnc")
     return not missing, missing, X_BACKEND
@@ -319,7 +342,19 @@ async def healthz() -> dict:
     return {
         "ok": x_ready,
         "api_version": GATEWAY_API_VERSION,
-        "capabilities": ["ensure", "tile_stream", "xtest_input", "ratio_coords", "human_pause"],
+        "desktop_spec_version": DESKTOP_SPEC_VERSION,
+        "idle_mode": IDLE_MODE,
+        "idle_stop_seconds": IDLE_STOP_SECONDS,
+        "capabilities": [
+            "ensure",
+            "tile_stream",
+            "xtest_input",
+            "ratio_coords",
+            "human_pause",
+            "idle_stop",
+            "session_restore",
+            "unified_desktop",
+        ],
         "cgroup": bool(getattr(reg, "cgroup_available", False)),
         "x_backend": backend,
         "missing": missing,
@@ -608,9 +643,9 @@ async def screen_tile_stream_ws(
 
 @app.post("/api/screens/{bot_id}/brake", dependencies=[Depends(require_admin)])
 async def screen_brake(bot_id: str) -> dict:
-    """单屏紧急制动：冻结进程 + 吊销 Agent Token + 吊销人类 Token。"""
+    """单屏紧急制动：立即关闭释放进程 + 吊销 Agent Token + 吊销人类 Token。"""
     worker = registry().get(bot_id)
-    await worker.freeze()
+    await worker.stop(save_session=False)
     worker.rotate_token()
     registry().revoke_all_human_tokens()
     worker.auditor.record("brake", {"by": "human"}, state=worker.lock.state.value)
@@ -619,16 +654,16 @@ async def screen_brake(bot_id: str) -> dict:
 
 @app.post("/api/brake", dependencies=[Depends(require_admin)])
 async def global_brake() -> dict:
-    """全局紧急制动：所有屏冻结 + 全部 Token 失效。"""
-    frozen = []
+    """全局紧急制动：所有屏立即关闭释放 + 全部 Token 失效。"""
+    stopped = []
     for worker in registry().workers.values():
         if worker.healthy():
-            await worker.freeze()
+            await worker.stop(save_session=False)
         worker.rotate_token()
         worker.auditor.record("global_brake", {"by": "human"}, state=worker.lock.state.value)
-        frozen.append(worker.bot_id)
+        stopped.append(worker.bot_id)
     registry().revoke_all_human_tokens()
-    return {"frozen": frozen, "tokens_rotated": True}
+    return {"frozen": stopped, "stopped": stopped, "tokens_rotated": True}
 
 
 @app.get("/api/screens/{bot_id}/preview", dependencies=[Depends(require_admin)])
@@ -640,30 +675,33 @@ async def screen_preview(
     """控制台低频静态快照（只读，不改变状态机，不续命闲置计时）。
 
     * `only_cached=1`：若已有缓存帧则直接返回零抓屏开销；仅首次无缓存时抓一帧（5s 后自动释放抓屏器）。
-    * 冻结屏传 `cached=1` 返回冻结前最后一帧缓存。
+    * 停止或冻结屏传 `cached=1` 返回关闭前保存的最后一帧（内存或磁盘 `runtime/last_preview.jpg`）。
     """
     worker = registry().get(bot_id)
-    if not worker.healthy():
-        raise HTTPException(409, "screen not running")
-    if worker.lock.state is State.FROZEN:
-        if cached and worker.last_preview:
-            return Response(
-                worker.last_preview,
-                media_type="image/jpeg",
-                headers={
-                    "Cache-Control": "no-store",
-                    "X-Screen-Frozen": "true",
-                    "X-Screen-Width": str(SCREEN_WIDTH),
-                    "X-Screen-Height": str(SCREEN_HEIGHT),
-                },
-            )
-        raise HTTPException(409, "screen frozen")
+    if not worker.healthy() or worker.lock.state in (State.STOPPED, State.FROZEN):
+        if cached:
+            preview = worker.load_cached_preview()
+            if preview:
+                return Response(
+                    preview,
+                    media_type="image/jpeg",
+                    headers={
+                        "Cache-Control": "no-store",
+                        "X-Screen-Frozen": "true" if worker.lock.state is State.FROZEN else "false",
+                        "X-Screen-Cached": "true",
+                        "X-Screen-State": worker.lock.state.value,
+                        "X-Screen-Width": str(SCREEN_WIDTH),
+                        "X-Screen-Height": str(SCREEN_HEIGHT),
+                    },
+                )
+        raise HTTPException(409, "screen stopped" if not worker.healthy() else "screen frozen")
     if only_cached and worker.last_preview:
         return Response(
             worker.last_preview,
             media_type="image/jpeg",
             headers={
                 "Cache-Control": "no-store",
+                "X-Screen-State": worker.lock.state.value,
                 "X-Screen-Width": str(SCREEN_WIDTH),
                 "X-Screen-Height": str(SCREEN_HEIGHT),
             },
@@ -676,6 +714,7 @@ async def screen_preview(
         media_type=shot.mime,
         headers={
             "Cache-Control": "no-store",
+            "X-Screen-State": worker.lock.state.value,
             "X-Screen-Width": str(shot.width),
             "X-Screen-Height": str(shot.height),
         },

@@ -184,20 +184,13 @@ export class BotStore {
 
   #normalize(stored) {
     const base = emptyState()
-    const sections = Array.isArray(stored.sections) && stored.sections.length > 0
-      ? stored.sections.filter(section => section && typeof section.id === 'string')
-      : base.sections
     const bots = Array.isArray(stored.bots) ? stored.bots.filter(bot => bot && typeof bot.id === 'string') : []
     return {
       ...base,
       ...stored,
       version: STATE_VERSION,
-      sections: sections.map((section, index) => ({
-        id: section.id,
-        name: typeof section.name === 'string' && section.name !== '' ? section.name : section.id,
-        nameZh: typeof section.nameZh === 'string' ? section.nameZh : undefined,
-        order: Number.isFinite(section.order) ? section.order : index,
-      })),
+      // All Bots belong to the single "general" (常规) list; only General & Groups exist.
+      sections: [{ id: 'general', name: 'General', nameZh: '常规', order: 0 }],
       bots: bots.map(bot => this.#normalizeBot(bot)),
       rooms: Array.isArray(stored.rooms) ? stored.rooms.map(room => this.#normalizeRoom(room)).filter(Boolean) : [],
       routines: Array.isArray(stored.routines) ? stored.routines.map(routine => this.#normalizeRoutine(routine)).filter(Boolean) : [],
@@ -268,7 +261,7 @@ export class BotStore {
       role: typeof bot.role === 'string' ? bot.role : '',
       instructions: typeof bot.instructions === 'string' ? bot.instructions : '',
       color: typeof bot.color === 'string' && bot.color !== '' ? bot.color : '#4d6bfe',
-      sectionId: typeof bot.sectionId === 'string' ? bot.sectionId : 'general',
+      sectionId: 'general',
       hidden: bot.hidden === true,
       pinned: bot.pinned === true,
       order: Number.isFinite(bot.order) ? bot.order : 0,

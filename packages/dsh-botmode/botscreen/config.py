@@ -38,7 +38,11 @@ DISPLAY_BASE = int(os.environ.get("BOTSCREEN_DISPLAY_BASE", "100"))
 WS_PORT_BASE = int(os.environ.get("BOTSCREEN_WS_PORT_BASE", "6100"))
 
 #: 网关协议代数（DSH Host 用于校验网关接口兼容性并自动替换旧进程）
-GATEWAY_API_VERSION = 2
+GATEWAY_API_VERSION = 3
+#: 统一虚拟桌面规格代数（用于检测并淘汰旧版/错位桌面进程）
+DESKTOP_SPEC_VERSION = 3
+#: 顶部统一导航栏固定高度（px），Openbox margins 与 iconlayer 共享此常量
+TOPBAR_HEIGHT = 34
 
 # ---- 虚拟屏固定几何（锁死最小够用分辨率，兼顾视觉识别与低带宽/低内存） ----------
 SCREEN_WIDTH = int(os.environ.get("BOTSCREEN_WIDTH", "1280"))
@@ -52,7 +56,10 @@ STREAM_INTERVAL_MS = int(os.environ.get("BOTSCREEN_STREAM_MS", "100"))
 CAPTURE_IDLE_HIBERNATE = float(os.environ.get("BOTSCREEN_CAPTURE_HIBERNATE", "5.0"))
 
 # ---- 生命周期参数 ------------------------------------------------------------
-IDLE_FREEZE_SECONDS = float(os.environ.get("BOTSCREEN_IDLE_FREEZE", "180"))
+#: 默认闲置策略：stop（自动保存桌面会话并彻底关闭进程，释放 100% 内存与 CPU）；可选 freeze
+IDLE_MODE = os.environ.get("BOTSCREEN_IDLE_MODE", "stop").strip().lower()
+IDLE_STOP_SECONDS = float(os.environ.get("BOTSCREEN_IDLE_STOP", "120"))
+IDLE_FREEZE_SECONDS = float(os.environ.get("BOTSCREEN_IDLE_FREEZE", str(int(IDLE_STOP_SECONDS))))
 LONG_FREEZE_SECONDS = float(os.environ.get("BOTSCREEN_LONG_FREEZE", "300"))
 WATCHDOG_INTERVAL = float(os.environ.get("BOTSCREEN_WATCHDOG_INTERVAL", "10"))
 #: 冻结后主动向 swap/zram 换出的内存比例（0 = 关闭）。
@@ -86,10 +93,10 @@ VNC_WEB_DIR = os.environ.get("BOTSCREEN_VNC_WEB", "/usr/share/novnc")
 #: x11vnc 按需 RFB 端口基址（5950 + 序号，仅按需拉起 -once 时使用）
 RFB_PORT_BASE = int(os.environ.get("BOTSCREEN_RFB_PORT_BASE", "5950"))
 
-#: 窗口管理器：默认极简 openbox（<10MB）；单应用全屏可设 none；亦兼容 fluxbox / xfwm4
+#: 窗口管理器：统一轻量 openbox（带完整标题栏与最小化/最大化/关闭按钮 + 顶部 34px 导航栏留白）
 WINDOW_MANAGER = os.environ.get("BOTSCREEN_WM", "openbox").strip().lower()
-#: 默认关闭重型桌面壳（xfdesktop/picom/tint2/gvfs），保持每屏 15~30MB 极致轻量
-DESKTOP_SHELL = os.environ.get("BOTSCREEN_DESKTOP", "0") == "1"
+#: 默认开启统一轻量纯 Python 桌面壳（壁纸 + 桌面图标 + 顶部导航/任务栏，零 tint2/xfdesktop 错位）
+DESKTOP_SHELL = os.environ.get("BOTSCREEN_DESKTOP", "1") == "1"
 
 #: 人类持有时是否连 Agent 截图一并拒绝（Hermes 的 fail-closed 语义：人可能在输密码）。
 SCREENSHOT_FAIL_CLOSED = os.environ.get("BOTSCREEN_SCREENSHOT_FAIL_CLOSED", "1") == "1"
@@ -257,6 +264,21 @@ class BotPaths:
     def lease_file(self) -> str:
         """跨进程可见的控制权租约（落盘 + flock），网关重启后可恢复。"""
         return os.path.join(self.runtime, "lease.json")
+
+    @property
+    def session_file(self) -> str:
+        """关闭前保存的桌面窗口与应用会话状态（重启虚拟屏时自动还原）。"""
+        return os.path.join(self.runtime, "session_state.json")
+
+    @property
+    def preview_file(self) -> str:
+        """关闭前保存的最后桌面预览图（停止状态下零开销展示上次画面）。"""
+        return os.path.join(self.runtime, "last_preview.jpg")
+
+    @property
+    def spec_file(self) -> str:
+        """当前运行虚拟屏的规格版本标记。"""
+        return os.path.join(self.runtime, "desktop_spec.json")
 
     @property
     def actions_log(self) -> str:

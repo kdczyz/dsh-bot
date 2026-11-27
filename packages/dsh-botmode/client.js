@@ -34,8 +34,9 @@ window.__ModuleLoader__.load({
         'page.empty.title': 'No Bots yet',
         'page.empty.body': 'Creating a Bot writes its folder, SOUL.md and MEMORY.md, opens its permanent chat, and registers it on the team roster so the other Bots can message it.',
         'page.empty.cta': 'Create the first Bot',
+        'pane.general': 'General',
         'pane.bots': 'Bots',
-        'pane.groups': 'Group chats',
+        'pane.groups': 'Groups',
         'pane.newGroup': 'New',
         'card.noPreview': 'No messages yet',
         'group.createTitle': 'New group chat',
@@ -339,33 +340,37 @@ window.__ModuleLoader__.load({
         'memory.searchBtn': 'Search',
         'memory.searchEmpty': 'No matching memories.',
         'screen.title': 'Screen',
-        'screen.stopped': 'Screen is off',
-        'screen.offline': 'Gateway offline (click Start to auto-launch)',
+        'screen.stopped': 'Off · RAM/CPU released',
+        'screen.stoppedSaved': 'Off · Desktop saved',
+        'screen.offline': 'Gateway offline (click Take over to auto-launch)',
         'screen.starting': 'Starting screen gateway…',
         'screen.hostOutdated': 'Restart dsh web to load updated Host plugin',
         'screen.refreshHost': 'Re-check',
         'screen.active': 'Running',
-        'screen.frozen': 'Frozen · CPU 0%',
+        'screen.frozen': 'Off · RAM/CPU released',
         'screen.needHuman': 'Needs human help',
         'screen.takeoverState': 'Human in control',
-        'screen.start': 'Start →',
+        'screen.start': 'Start',
+        'screen.stop': 'Shut down',
         'screen.thaw': 'Wake →',
         'screen.freeze': 'Freeze',
         'screen.takeover': 'Take over',
+        'screen.shrinkRelease': 'Shrink & hand back',
         'screen.release': 'Hand back',
         'screen.brake': 'Brake',
         'screen.browser': 'Browser',
         'screen.terminal': 'Terminal',
+        'screen.filesApp': 'Files',
         'screen.files': 'Screen files',
         'screen.filesEmpty': 'No files in screen downloads.',
         'screen.upload': 'Upload',
         'screen.panelToggle': 'Screen & Routines',
         'screen.helpTitle': 'Human takeover needed',
         'screen.helpOpen': 'Take over screen',
-        'screen.helpRelease': 'Done & hand back',
+        'screen.helpRelease': 'Shrink & hand back',
         'screen.helpCancel': 'Cancel',
         'screen.helpNotePlaceholder': 'Optional note for the Bot (e.g. Logged in, continue)…',
-        'screen.modalHint': 'Click, drag/draw, scroll, or type directly on the canvas; or open full VNC.',
+        'screen.modalHint': 'Expanded takeover mode: click, drag, scroll, or type directly. Shrinking immediately hands control back to the Bot.',
         'screen.typePlaceholder': 'Type text / password to send to screen…',
         'screen.typeSend': 'Send',
         'screen.openVnc': 'Open VNC window',
@@ -392,8 +397,9 @@ window.__ModuleLoader__.load({
         'page.empty.title': '还没有 Bot',
         'page.empty.body': '创建 Bot 会生成它的目录、SOUL.md 和 MEMORY.md，打开永久会话，并登记到团队名册，其他 Bot 才能给它发消息。',
         'page.empty.cta': '创建第一个 Bot',
+        'pane.general': '常规',
         'pane.bots': 'Bot',
-        'pane.groups': '群聊',
+        'pane.groups': '群组',
         'pane.newGroup': '新建',
         'card.noPreview': '还没有消息',
         'group.createTitle': '新建群聊',
@@ -697,33 +703,37 @@ window.__ModuleLoader__.load({
         'memory.searchBtn': '检索',
         'memory.searchEmpty': '未检索到匹配记忆。',
         'screen.title': '屏幕',
-        'screen.stopped': '屏幕已关闭',
-        'screen.offline': '虚拟屏服务未启动（点启动将自动拉起）',
+        'screen.stopped': '已关闭 · 释放内存与 CPU',
+        'screen.stoppedSaved': '已关闭 · 桌面状态已保存',
+        'screen.offline': '虚拟屏服务未启动（点接管将自动拉起）',
         'screen.starting': '正在启动虚拟屏服务…',
         'screen.hostOutdated': 'Host 插件未重载（请重启当前 dsh web）',
         'screen.refreshHost': '刷新检测',
         'screen.active': '运行中',
-        'screen.frozen': '已冻结 · CPU 0%',
+        'screen.frozen': '已关闭 · 释放内存与 CPU',
         'screen.needHuman': '等待人工接管',
         'screen.takeoverState': '人工接管中',
-        'screen.start': '启动 →',
+        'screen.start': '启动',
+        'screen.stop': '关闭释放',
         'screen.thaw': '唤醒 →',
         'screen.freeze': '冻结',
         'screen.takeover': '接管',
+        'screen.shrinkRelease': '缩小归还',
         'screen.release': '交还',
         'screen.brake': '制动',
         'screen.browser': '浏览器',
         'screen.terminal': '终端',
+        'screen.filesApp': '文件',
         'screen.files': '屏内文件中转',
         'screen.filesEmpty': '虚拟屏 downloads 目录暂无文件。',
         'screen.upload': '上传文件',
         'screen.panelToggle': '屏幕与任务栏',
         'screen.helpTitle': '遇到阻塞，请求人工接管',
         'screen.helpOpen': '接管屏幕处理',
-        'screen.helpRelease': '处理完成，交还 Bot',
+        'screen.helpRelease': '缩小归还 Bot',
         'screen.helpCancel': '取消',
         'screen.helpNotePlaceholder': '可选备注（如：已完成验证码/登录，请继续）…',
-        'screen.modalHint': '可直接在画布上点击、拖拽绘制、滚轮、键盘或文本输入；本地也可点右上角打开完整 VNC。',
+        'screen.modalHint': '已放大进入人工接管：可直接点击、拖拽、滚轮或输入；点击「缩小归还」或收起窗口即刻归还给 Bot。',
         'screen.typePlaceholder': '输入要发送到屏幕的文本或密码…',
         'screen.typeSend': '发送',
         'screen.openVnc': '新窗口 VNC',
@@ -1427,8 +1437,8 @@ window.__ModuleLoader__.load({
       .bm-screen-card[data-state='FROZEN'] { border-color: color-mix(in srgb, #3b82f6 42%, transparent); }
       .bm-screen-card[data-state='NEED_HUMAN'], .bm-screen-card[data-state='HUMAN_TAKEOVER'] {
         border-color: #f59e0b; box-shadow: 0 0 0 2px color-mix(in srgb, #f59e0b 24%, transparent); }
-      .bm-screen-img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: pointer; }
-      .bm-screen-img[data-frozen='true'] { opacity: 0.48; filter: grayscale(25%); }
+      .bm-screen-img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: default; }
+      .bm-screen-img[data-frozen='true'], .bm-screen-img[data-stopped='true'] { opacity: 0.42; filter: grayscale(35%); }
       .bm-screen-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center;
         color: rgba(255,255,255,0.32); padding-bottom: 24px; }
       .bm-screen-overlay-badge { position: absolute; top: 8px; right: 8px; font-size: 10px; line-height: 14px;
@@ -1488,16 +1498,16 @@ window.__ModuleLoader__.load({
       .bm-help-note { flex: 1; min-width: 180px; font: inherit; font-size: 11.5px; padding: 4px 8px; border-radius: 6px;
         border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); }
 
-      .bm-modal-backdrop { position: fixed; inset: 0; z-index: 9999; background: rgba(6, 10, 16, 0.72);
-        display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
-      .bm-modal { width: min(1020px, 95vw); max-height: 92vh; background: var(--dsw-alias-card-fill);
+      .bm-modal-backdrop { position: fixed; inset: 0; z-index: 9999; background: rgba(6, 10, 16, 0.78);
+        display: flex; align-items: center; justify-content: center; padding: 16px; backdrop-filter: blur(5px); }
+      .bm-modal { width: min(1240px, 95vw); max-height: 94vh; background: var(--dsw-alias-card-fill);
         border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 12px; overflow: hidden;
-        display: flex; flex-direction: column; box-shadow: 0 24px 64px rgba(0,0,0,0.45); }
+        display: flex; flex-direction: column; box-shadow: 0 24px 64px rgba(0,0,0,0.52); }
       .bm-modal-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
         border-bottom: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); }
       .bm-modal-stage { position: relative; background: #05070a; display: flex; align-items: center; justify-content: center;
-        overflow: hidden; max-height: 62vh; }
-      .bm-modal-canvas { width: auto; height: auto; max-width: 100%; max-height: 62vh; display: block;
+        overflow: hidden; max-height: 74vh; }
+      .bm-modal-canvas { width: auto; height: auto; max-width: 100%; max-height: 74vh; display: block;
         cursor: default; touch-action: none; user-select: none; outline: none; }
       .bm-modal-bar { display: flex; align-items: center; gap: 6px; padding: 8px 14px; flex-wrap: wrap;
         border-top: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); }
@@ -2082,20 +2092,12 @@ window.__ModuleLoader__.load({
                 placeholder: t('form.instructionsPlaceholder'),
                 onChange: event => setDraft({ ...draft, instructions: event.target.value }),
               })),
-            h('div', { className: 'bm-row' },
-              h('label', { className: 'bm-label' }, t('form.section'),
-                h('select', {
-                  className: 'bm-input',
-                  value: draft.sectionId || 'general',
-                  onChange: event => setDraft({ ...draft, sectionId: event.target.value }),
-                }, (props.sections && props.sections.length > 0 ? props.sections : [{ id: 'general', name: 'General' }]).map(section => h('option', { key: section.id, value: section.id },
-                  section.nameZh || section.name)))),
-              h('label', { className: 'bm-label' }, t('form.color'),
-                h('div', { className: 'bm-swatches' }, COLORS.map(color => h('button', {
-                  key: color, type: 'button', className: 'bm-swatch', title: color,
-                  style: { background: color }, 'data-active': draft.color === color,
-                  onClick: () => setDraft({ ...draft, color }),
-                }))))),
+            h('label', { className: 'bm-label' }, t('form.color'),
+              h('div', { className: 'bm-swatches' }, COLORS.map(color => h('button', {
+                key: color, type: 'button', className: 'bm-swatch', title: color,
+                style: { background: color }, 'data-active': draft.color === color,
+                onClick: () => setDraft({ ...draft, color }),
+              })))),
             modelBox,
             h('label', { className: 'bm-label' }, t('form.approval'),
               h('select', {
@@ -4935,8 +4937,7 @@ window.__ModuleLoader__.load({
                     h('table', { className: 'bm-table' },
                       h('tbody', null,
                         h('tr', null, h('th', null, 'Bot Directory'), h('td', null, bot.dir || '—')),
-                        h('tr', null, h('th', null, 'Primary Session'), h('td', null, bot.sessionId || '—')),
-                        h('tr', null, h('th', null, 'Section'), h('td', null, bot.sectionId || 'general')))))))
+                        h('tr', null, h('th', null, 'Primary Session'), h('td', null, bot.sessionId || '—')))))))
             }
 
             if (moduleKey === 'routines') {
@@ -4975,15 +4976,11 @@ window.__ModuleLoader__.load({
                     h('input', { className: 'bm-input', value: botName, onChange: e => setBotName(e.target.value) })),
                   h('label', { className: 'bm-label' }, t('form.role'),
                     h('input', { className: 'bm-input', value: botRole, onChange: e => setBotRole(e.target.value) }))),
-                h('div', { className: 'bm-row' },
-                  h('label', { className: 'bm-label' }, t('form.section'),
-                    h('select', { className: 'bm-input', value: botSectionId, onChange: e => setBotSectionId(e.target.value) },
-                      sections.map(s => h('option', { key: s.id, value: s.id }, s.nameZh || s.name)))),
-                  h('div', { className: 'bm-label' }, t('form.color'),
-                    h('div', { className: 'bm-swatches' }, COLORS.map(c => h('button', {
-                      key: c, type: 'button', className: 'bm-swatch', 'data-active': botColor === c,
-                      style: { background: c }, onClick: () => setBotColor(c),
-                    }))))),
+                h('div', { className: 'bm-label' }, t('form.color'),
+                  h('div', { className: 'bm-swatches' }, COLORS.map(c => h('button', {
+                    key: c, type: 'button', className: 'bm-swatch', 'data-active': botColor === c,
+                    style: { background: c }, onClick: () => setBotColor(c),
+                  })))),
                 h('label', { className: 'bm-label' }, t('form.instructions'),
                   h('textarea', { className: 'bm-area', rows: 4, value: botInstructions, onChange: e => setBotInstructions(e.target.value) })),
                 h('label', { className: 'bm-label' }, 'SOUL.md',
@@ -5437,15 +5434,9 @@ window.__ModuleLoader__.load({
             }
           }
 
-          const closeModalAndResume = () => {
-            // 临时人工接管关闭连接时自动解除 PAUSE 锁，恢复 Bot 运行
-            if (!modal.helpId) {
-              void onCommand('screen.release', { botId: modal.botId }).catch(() => undefined)
-            }
-            onClose()
-          }
-
-          const handBack = async () => {
+          // 缩小/收起虚拟屏即属于归还状态：立即释放控制权并交还给 Bot
+          const shrinkAndRelease = async () => {
+            if (busy) return
             setBusy(true)
             setErr('')
             try {
@@ -5470,7 +5461,7 @@ window.__ModuleLoader__.load({
             await sendInput({ kind: 'type', text: val, press_enter: true })
           }
 
-          return h('div', { className: 'bm-modal-backdrop', onClick: (e) => { if (e.target === e.currentTarget) closeModalAndResume() } },
+          return h('div', { className: 'bm-modal-backdrop', onClick: (e) => { if (e.target === e.currentTarget) void shrinkAndRelease() } },
             h('div', { className: 'bm-modal' },
               h('div', { className: 'bm-modal-head' },
                 h('span', { className: 'bm-screen-dot', 'data-state': (screen && screen.state) || 'HUMAN_TAKEOVER' }),
@@ -5493,7 +5484,7 @@ window.__ModuleLoader__.load({
                     style: { textDecoration: 'none' },
                   }, t('screen.openVnc'))
                 })(),
-                h('button', { type: 'button', className: 'bm-btn small', onClick: closeModalAndResume }, t('form.cancel'))),
+                h('button', { type: 'button', className: 'bm-btn small primary', disabled: busy, onClick: () => void shrinkAndRelease() }, `⤡ ${t('screen.shrinkRelease')}`)),
               h('div', { className: 'bm-modal-stage' },
                 h('canvas', {
                   ref: canvasRef,
@@ -5532,7 +5523,8 @@ window.__ModuleLoader__.load({
                   onClick: () => void sendInput({ kind: 'key', combo }),
                 }, combo)),
                 h('button', { type: 'button', className: 'bm-btn small', onClick: () => void sendInput({ kind: 'open_app', app: 'chrome' }) }, t('screen.browser')),
-                h('button', { type: 'button', className: 'bm-btn small', onClick: () => void sendInput({ kind: 'open_app', app: 'terminal' }) }, t('screen.terminal'))),
+                h('button', { type: 'button', className: 'bm-btn small', onClick: () => void sendInput({ kind: 'open_app', app: 'terminal' }) }, t('screen.terminal')),
+                h('button', { type: 'button', className: 'bm-btn small', onClick: () => void sendInput({ kind: 'open_app', app: 'files' }) }, t('screen.filesApp'))),
               err ? h('div', { className: 'bm-error', style: { margin: '0 14px 8px' } }, err) : null,
               h('div', { className: 'bm-modal-foot' },
                 h('span', { className: 'bm-muted', style: { marginRight: 'auto' } }, t('screen.modalHint')),
@@ -5543,7 +5535,7 @@ window.__ModuleLoader__.load({
                   placeholder: t('screen.helpNotePlaceholder'),
                   onChange: e => setNote(e.target.value),
                 }),
-                h('button', { type: 'button', className: 'bm-btn primary', disabled: busy, onClick: handBack }, t('screen.helpRelease')))))
+                h('button', { type: 'button', className: 'bm-btn primary', disabled: busy, onClick: () => void shrinkAndRelease() }, t('screen.helpRelease')))))
         }
 
         function RightScreenPanel(props) {
@@ -5603,9 +5595,26 @@ window.__ModuleLoader__.load({
             }
           }
 
-          const startAndOpen = async () => {
+          const startOnly = async () => {
             await runScreenCmd('screen.start')
           }
+
+          const triggerTakeover = async () => {
+            if (busy) return
+            setBusy(true)
+            setErr('')
+            try {
+              await onOpenTakeover(bot)
+              setShotTick(v => v + 1)
+            } catch (e) {
+              setErr(e && e.message ? e.message : String(e))
+            } finally {
+              setBusy(false)
+            }
+          }
+
+          const hasSavedSession = Boolean(screen && screen.has_saved_session)
+          const hasCachedPreview = Boolean(screen && screen.has_cached_preview)
 
           const stateLabel = !props.hostScreenSupported
             ? t('screen.hostOutdated')
@@ -5614,16 +5623,17 @@ window.__ModuleLoader__.load({
               : !gatewayAvailable
                 ? t('screen.offline')
                 : !isRunning
-                  ? t('screen.stopped')
+                  ? (hasSavedSession ? t('screen.stoppedSaved') : t('screen.stopped'))
                   : screenState === 'FROZEN'
-                    ? t('screen.frozen')
+                    ? t('screen.stopped')
                     : screenState === 'NEED_HUMAN'
                       ? t('screen.needHuman')
                       : screenState === 'HUMAN_TAKEOVER'
                         ? t('screen.takeoverState')
                         : t('screen.active')
 
-          const previewUrl = isRunning
+          const showPreviewImg = isRunning || (gatewayAvailable && hasCachedPreview)
+          const previewUrl = showPreviewImg
             ? `/botmode/api/screen/preview?botId=${encodeURIComponent(bot.id)}&cached=1&onlyCached=1&t=${screenRev}`
             : ''
 
@@ -5675,76 +5685,51 @@ window.__ModuleLoader__.load({
               // Top Screen Card (matching screenshot)
               h('div', null,
                 h('div', { className: 'bm-screen-card', 'data-state': isRunning ? screenState : 'STOPPED' },
-                  isRunning
+                  showPreviewImg
                     ? h('img', {
                       className: 'bm-screen-img',
                       src: previewUrl,
                       alt: bot.name,
                       'data-frozen': screenState === 'FROZEN',
-                      onClick: () => {
-                        if (busy) return
-                        setErr('')
-                        Promise.resolve(onOpenTakeover(bot)).catch(e => setErr(e && e.message ? e.message : String(e)))
-                      },
+                      'data-stopped': !isRunning,
                       onLoad: (e) => { e.currentTarget.style.opacity = '' },
                       onError: (e) => { e.currentTarget.style.opacity = '0.15' },
                     })
                     : h('div', { className: 'bm-screen-placeholder' }, h(MonitorGlyph, { size: 28 })),
                   isRunning && screen && screen.display
                     ? h('span', { className: 'bm-screen-overlay-badge' }, `${screen.display} · ${fmtScreenBytes(screen.memory_bytes)}`)
-                    : null,
+                    : (!isRunning && hasSavedSession
+                      ? h('span', { className: 'bm-screen-overlay-badge' }, '0 MB · 状态已保存')
+                      : null),
                   h('div', { className: 'bm-screen-footer' },
                     h('span', { className: 'bm-screen-dot', 'data-state': isRunning ? screenState : 'STOPPED' }),
                     h('div', { className: 'bm-screen-ftext' },
                       h('span', { className: 'bm-screen-ftitle' }, t('screen.title')),
                       h('span', { className: 'bm-screen-fsub' }, stateLabel)),
+                    h('button', {
+                      type: 'button',
+                      className: 'bm-screen-cta',
+                      'data-tone': (screenState === 'NEED_HUMAN' || screenState === 'HUMAN_TAKEOVER') ? 'warn' : undefined,
+                      disabled: busy || !props.hostScreenSupported || (!gatewayAvailable && !autoStartable),
+                      onClick: () => void triggerTakeover(),
+                    }, t('screen.takeover')))),
+                props.hostScreenSupported && (gatewayAvailable || autoStartable)
+                  ? h('div', { className: 'bm-screen-toolbar' },
                     !isRunning
                       ? h('button', {
-                        type: 'button',
-                        className: 'bm-screen-cta',
-                        disabled: busy || !props.hostScreenSupported || (!gatewayAvailable && !autoStartable),
-                        onClick: startAndOpen,
+                        type: 'button', className: 'bm-btn xs', disabled: busy,
+                        onClick: () => void startOnly(),
                       }, t('screen.start'))
-                      : screenState === 'FROZEN'
-                        ? h('button', {
-                          type: 'button', className: 'bm-screen-cta', disabled: busy,
-                          onClick: () => void runScreenCmd('screen.thaw'),
-                        }, t('screen.thaw'))
-                        : (screenState === 'NEED_HUMAN' || screenState === 'HUMAN_TAKEOVER')
-                          ? h('button', {
-                            type: 'button', className: 'bm-screen-cta', 'data-tone': 'warn', disabled: busy,
-                            onClick: () => {
-                              setErr('')
-                              Promise.resolve(onOpenTakeover(bot)).catch(e => setErr(e && e.message ? e.message : String(e)))
-                            },
-                          }, t('screen.takeover'))
-                          : h('button', {
-                            type: 'button', className: 'bm-screen-cta', disabled: busy,
-                            onClick: () => {
-                              setErr('')
-                              Promise.resolve(onOpenTakeover(bot)).catch(e => setErr(e && e.message ? e.message : String(e)))
-                            },
-                          }, t('screen.takeover')))),
-                isRunning
-                  ? h('div', { className: 'bm-screen-toolbar' },
-                    h('button', {
-                      type: 'button', className: 'bm-btn xs', disabled: busy,
-                      onClick: () => void runScreenCmd('screen.human_input', { input: { kind: 'open_app', app: 'chrome' } }),
-                    }, t('screen.browser')),
-                    h('button', {
-                      type: 'button', className: 'bm-btn xs', disabled: busy,
-                      onClick: () => void runScreenCmd('screen.human_input', { input: { kind: 'open_app', app: 'terminal' } }),
-                    }, t('screen.terminal')),
-                    screenState === 'FROZEN'
-                      ? null
                       : h('button', {
                         type: 'button', className: 'bm-btn xs', disabled: busy,
-                        onClick: () => void runScreenCmd('screen.freeze'),
-                      }, t('screen.freeze')),
-                    h('button', {
-                      type: 'button', className: 'bm-btn xs danger', disabled: busy,
-                      onClick: () => void runScreenCmd('screen.brake'),
-                    }, t('screen.brake')))
+                        onClick: () => void runScreenCmd('screen.stop'),
+                      }, t('screen.stop')),
+                    isRunning
+                      ? h('button', {
+                        type: 'button', className: 'bm-btn xs danger', disabled: busy,
+                        onClick: () => void runScreenCmd('screen.brake'),
+                      }, t('screen.brake'))
+                      : null)
                   : null,
                 err ? h('div', { className: 'bm-error', style: { marginTop: '6px' } }, err) : null,
                 !err && !props.hostScreenSupported && onRefreshHost
@@ -5852,8 +5837,6 @@ window.__ModuleLoader__.load({
           const activeLang = (lang && lang.active) || 'en'
           const [form, setForm] = useState(null)
           const [selection, setSelection] = useState(null)
-          const [addingSection, setAddingSection] = useState(false)
-          const [newSectionName, setNewSectionName] = useState('')
           const [query, setQuery] = useState('')
           const [railOpen, setRailOpen] = useState(true)
           const [takeoverModal, setTakeoverModal] = useState(null)
@@ -5954,10 +5937,6 @@ window.__ModuleLoader__.load({
             setSelection(null)
           }
 
-          const sectionGroups = sections
-            .map(section => ({ section, bots: visibleBots.filter(bot => bot.sectionId === section.id) }))
-            .filter(group => group.bots.length > 0)
-          const orphanBots = visibleBots.filter(bot => !sections.some(section => section.id === bot.sectionId))
           const botRow = (bot) => {
             const summary = sessionOf(list, bot)
             const active = activeBot && activeBot.id === bot.id
@@ -6037,39 +6016,10 @@ window.__ModuleLoader__.load({
             }),
             h('div', { className: 'bm-groups' },
               h('div', { className: 'bm-section' },
-                h('span', null, t('pane.bots')),
-                h('button', {
-                  type: 'button',
-                  className: 'bm-section-add',
-                  onClick: () => { setAddingSection(v => !v); setNewSectionName('') },
-                }, t('section.new'))),
-              addingSection ? h('form', {
-                style: { display: 'flex', gap: '4px', padding: '0 8px 6px' },
-                onSubmit: async (event) => {
-                  event.preventDefault()
-                  const trimmed = newSectionName.trim()
-                  if (trimmed === '') return
-                  await hostCommand('section.save', { name: trimmed }).catch(() => {})
-                  setNewSectionName('')
-                  setAddingSection(false)
-                },
-              },
-                h('input', {
-                  className: 'bm-search',
-                  style: { flex: 1, margin: 0 },
-                  autoFocus: true,
-                  value: newSectionName,
-                  placeholder: t('section.namePrompt'),
-                  onChange: event => setNewSectionName(event.target.value),
-                  onKeyDown: (event) => { if (event.key === 'Escape') { setAddingSection(false); setNewSectionName('') } },
-                }),
-                h('button', { type: 'submit', className: 'bm-btn small primary' }, t('form.save'))) : null,
+                h('span', null, t('pane.general'))),
               visibleBots.length === 0
                 ? h('p', { className: 'bm-muted bm-pane-empty' }, t('pane.empty'))
-                : sectionGroups.map(group => h('div', { key: group.section.id, className: 'bm-bot-group' },
-                  h('div', { className: 'bm-group-title' }, activeLang.startsWith('zh') && group.section.nameZh ? group.section.nameZh : group.section.name),
-                  group.bots.map(botRow))),
-              orphanBots.length > 0 ? h('div', { className: 'bm-bot-group' }, orphanBots.map(botRow)) : null,
+                : h('div', { className: 'bm-bot-group' }, visibleBots.map(botRow)),
               h('div', { className: 'bm-section' },
                 h('span', null, t('pane.groups')),
                 h('button', { className: 'bm-section-add', onClick: () => setForm({ mode: 'group' }) }, t('pane.newGroup'))),

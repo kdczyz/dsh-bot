@@ -275,16 +275,22 @@ function renderCard(s) {
   card.append(head);
 
   const screen = el('div', 'screen');
-  if (s.healthy && s.state !== 'STOPPED') {
-    screen.style.cursor = 'pointer';
-    screen.title = '点击进入接管';
-    screen.onclick = () => takeover(s.bot_id).catch(e => toast(e.message, true));
-  }
   const shot = state.shots[s.bot_id];
   if (s.state === 'STOPPED' || !s.healthy) {
-    screen.append(el('div', 'placeholder', s.state === 'STOPPED'
-      ? '未初始化 · 点击「启动」拉起 Xvnc + Openbox'
-      : '进程丢失 · watchdog 将自动拉起'));
+    if (shot) {
+      const img = el('img');
+      img.src = shot;
+      img.style.opacity = '0.4';
+      img.alt = s.bot_id + ' saved screen';
+      screen.append(img);
+      screen.append(el('div', 'overlay', s.has_saved_session
+        ? '已自动关闭 · 内存/CPU 已释放\n桌面窗口与标签页已保存，按需启动后自动恢复'
+        : '已关闭 · 内存/CPU 已释放'));
+    } else {
+      screen.append(el('div', 'placeholder', s.has_saved_session
+        ? '已自动关闭（内存/CPU 0）· 桌面现场已保存\n点击「接管」或「启动」按需恢复'
+        : '已关闭（内存/CPU 0）· 点击「接管」或「启动」按需拉起'));
+    }
   } else if (shot) {
     const img = el('img');
     img.src = shot;
@@ -292,8 +298,6 @@ function renderCard(s) {
     screen.append(img);
     if (s.state === 'HUMAN_TAKEOVER') screen.append(el('div', 'overlay', '人 类 接 管 中\nAgent 键鼠已锁定'));
     if (s.state === 'NEED_HUMAN') screen.append(el('div', 'overlay', 'Agent 请求人工介入'));
-  } else if (s.state === 'FROZEN') {
-    screen.append(el('div', 'placeholder', '已冻结 · 窗口/表单/标签页完整保留\nCPU 0% · 收到 Agent 或人工请求后毫秒级唤醒'));
   } else {
     screen.append(el('div', 'placeholder', '截取中…'));
   }
@@ -315,11 +319,10 @@ function renderCard(s) {
   card.append(meta);
 
   const actions = el('div', 'actions');
-  actions.append(btn('启动', s.state !== 'STOPPED' && s.healthy, () => act(s.bot_id, 'start', '已拉起')));
-  actions.append(btn('冻结', !s.healthy, () => act(s.bot_id, 'freeze', '已冻结，CPU 归零')));
-  actions.append(btn('唤醒', !s.healthy, () => act(s.bot_id, 'thaw', '已唤醒')));
-  actions.append(btn('接管', !s.healthy, () => takeover(s.bot_id), 'warn'));
-  actions.append(btn('交还', false, () => act(s.bot_id, 'release', '已交还 Agent'), 'primary'));
+  actions.append(btn('启动', s.state !== 'STOPPED' && s.healthy, () => act(s.bot_id, 'start', '已按需拉起并恢复现场')));
+  actions.append(btn('关闭释放', !s.healthy, () => act(s.bot_id, 'stop', '已保存现场并关闭释放内存与 CPU')));
+  actions.append(btn('接管', false, () => takeover(s.bot_id), 'warn'));
+  actions.append(btn('缩小归还', false, () => act(s.bot_id, 'release', '已归还 Agent'), 'primary'));
   actions.append(btn('截图', !s.healthy, () => snap(s.bot_id)));
   actions.append(btn('审计', false, () => showAudit(s.bot_id)));
   actions.append(btn('制动', !s.healthy, () => brake(s.bot_id), 'danger'));

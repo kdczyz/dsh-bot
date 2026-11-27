@@ -746,8 +746,8 @@ export class BotApi {
     const botId = stringOr(payload.botId)
     const existing = botId === '' ? undefined : this.store.bot(botId)
     if (botId !== '' && !existing) throw new Error('Unknown Bot.')
-    const sectionId = stringOr(draft.sectionId, existing?.sectionId ?? 'general')
-    if (!this.store.section(sectionId)) throw new Error('Unknown Section.')
+    // All Bots stay flat under the single General (常规) section.
+    const sectionId = 'general'
     const model = {
       provider: stringOr(draft?.model?.provider, existing?.model?.provider ?? '').trim(),
       model: stringOr(draft?.model?.model, existing?.model?.model ?? '').trim(),
@@ -889,27 +889,13 @@ export class BotApi {
     await syncTeamFiles(this.store, this.store.state)
   }
 
-  async saveSection(payload) {
-    const name = stringOr(payload?.name).trim()
-    if (name === '') throw new Error('Give the Section a name.')
-    const sectionId = stringOr(payload.sectionId)
+  async saveSection(_payload) {
+    // Custom bot sections are disabled: all Bots live in the single General (常规) group.
     let saved
     await this.store.mutate((state) => {
-      if (sectionId !== '') {
-        const section = state.sections.find(item => item.id === sectionId)
-        if (!section) throw new Error('Unknown Section.')
-        section.name = name
-        section.nameZh = stringOr(payload.nameZh, section.nameZh ?? '')
-        saved = section
-        return
-      }
-      saved = {
-        id: newId('sec'),
-        name,
-        nameZh: stringOr(payload.nameZh),
-        order: state.sections.length,
-      }
-      state.sections.push(saved)
+      state.sections = [{ id: 'general', name: 'General', nameZh: '常规', order: 0 }]
+      for (const bot of state.bots) bot.sectionId = 'general'
+      saved = state.sections[0]
     })
     return saved
   }

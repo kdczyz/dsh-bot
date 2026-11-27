@@ -111,13 +111,10 @@ function ensureSystemDependencies(logger) {
     return
   }
   const requiredBins = [
-    'Xvfb', 'x11vnc', 'websockify', 'xauth', 'xdotool', 'xclip', 'xfwm4',
-    'xterm', 'feh', 'VNC_WEB_DIR',
+    'Xvfb', 'xauth', 'xdotool', 'xclip', 'openbox',
   ]
   const missingBins = requiredBins.filter(name =>
-    name === 'VNC_WEB_DIR'
-      ? !existsSync(join(process.env.BOTSCREEN_VNC_WEB || '/usr/share/novnc', 'vnc.html'))
-      : !runQuiet('sh', ['-c', `command -v ${name} >/dev/null 2>&1`], { timeout: 10_000 }),
+    !runQuiet('sh', ['-c', `command -v ${name} >/dev/null 2>&1`], { timeout: 10_000 }),
   )
   if (!missingBins.length) return
   if (!runQuiet('sh', ['-c', 'command -v apt-get >/dev/null 2>&1'], { timeout: 10_000 })) {

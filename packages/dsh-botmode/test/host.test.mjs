@@ -1844,6 +1844,28 @@ agents.set('s_ops', fakeAgent('s_ops'))
     assert.equal(recovered.subtasks[0].status, 'released')
     await rm(coldRoot, { recursive: true, force: true })
   }
+
+  // 15k. All Bots live flat under General (常规); legacy custom sections collapse cleanly
+  {
+    const flatRoot = await mkdtemp(join(tmpdir(), 'dsh-botmode-flat-'))
+    await writeFile(join(flatRoot, 'state.json'), JSON.stringify({
+      version: 5,
+      sections: [
+        { id: 'general', name: 'General', nameZh: '常规', order: 0 },
+        { id: 'sec_ops', name: 'Ops', nameZh: '运维', order: 1 },
+      ],
+      bots: [{ id: 'bot_legacy', name: 'LegacyOps', sectionId: 'sec_ops' }],
+      rooms: [],
+      routines: [],
+    }), 'utf8')
+    const sFlat = new BotStore(flatRoot)
+    await sFlat.load()
+    assert.equal(sFlat.state.sections.length, 1)
+    assert.equal(sFlat.state.sections[0].id, 'general')
+    assert.equal(sFlat.state.sections[0].nameZh, '常规')
+    assert.equal(sFlat.bot('bot_legacy').sectionId, 'general')
+    await rm(flatRoot, { recursive: true, force: true })
+  }
 }
 
 await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })

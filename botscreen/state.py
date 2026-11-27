@@ -36,8 +36,8 @@ class State(str, Enum):
     NEED_HUMAN = "NEED_HUMAN"
 
 
-#: Agent 允许操控的状态（FROZEN 会先自动唤醒）
-AGENT_ALLOWED = {State.AGENT_ACTIVE, State.FROZEN}
+#: Agent 允许操控的状态（STOPPED / FROZEN 会按需自动拉起或唤醒）
+AGENT_ALLOWED = {State.STOPPED, State.STARTING, State.AGENT_ACTIVE, State.FROZEN}
 #: 允许推流给人类的状态
 STREAMABLE = {State.AGENT_ACTIVE, State.HUMAN_TAKEOVER, State.NEED_HUMAN}
 
@@ -243,6 +243,7 @@ class ScreenLock:
             self.help_reason = None
             self.released_event.set()
             if self.state in (State.HUMAN_TAKEOVER, State.NEED_HUMAN):
+                self.last_agent_call = time.time()
                 self._to(State.AGENT_ACTIVE, "human release")
 
     def touch_agent(self) -> None:
@@ -264,10 +265,8 @@ class ScreenLock:
 
         * `HUMAN_TAKEOVER`：键鼠和截图**全部**拒绝（fail-closed：人可能正在输密码）。
         * `NEED_HUMAN`：键鼠拒绝，但允许截图（Agent 需要看人是否已处理完）。
-        * `STOPPED`：拒绝。
+        * `STOPPED` / `STARTING` / `FROZEN`：放行，由后续 `ensure_awake()` 按需拉起并恢复现场。
         """
-        if self.state is State.STOPPED or self.state is State.STARTING:
-            raise HumanInControl(self.bot_id, self.state.value, "screen" if screenshot else "control")
         if self.state is State.HUMAN_TAKEOVER:
             raise HumanInControl(self.bot_id, self.state.value, "screenshot" if screenshot else "control")
         if self.state is State.NEED_HUMAN and not screenshot:
@@ -295,6 +294,13 @@ class ScreenLock:
         return time.time() - max(refs) if any(refs) else float("inf")
 
     def should_freeze(self, idle_timeout: float) -> bool:
+        return (
+            self.state is State.AGENT_ACTIVE
+            and self.viewers == 0
+            and self.idle_seconds() >= idle_timeout
+        )
+
+    def should_idle_stop(self, idle_timeout: float) -> bool:
         return (
             self.state is State.AGENT_ACTIVE
             and self.viewers == 0

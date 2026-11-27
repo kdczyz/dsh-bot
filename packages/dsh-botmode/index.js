@@ -924,16 +924,17 @@ export function apply(ctx) {
 
   ctx.effect(() => ctx.tools.register({
     name: 'screen_request_help',
-    description: 'Call this whenever you hit a problem you cannot solve inside your virtual screen (CAPTCHA, login/MFA/QR, payment confirmation, repeated UI failure). Pops a Human Takeover Card in the UI, waits until the human resolves it and hands control back, and returns the updated screen.',
+    description: 'ONLY call this for hard human-only blockers that cannot be solved autonomously (real CAPTCHA/slider verification, QR/SMS/hardware-key login or MFA, real payment confirmation, or explicit irreversible authorization). Do NOT call this for normal UI misses, slow page loads, scrolling, popups, or tasks solvable via retry, shortcuts, or shell commands — exhaust autonomous retries first.',
     parameters: {
       type: 'object',
       properties: {
         category: {
           type: 'string',
           enum: ['captcha', 'login', 'mfa', 'payment', 'confirm', 'manual'],
-          description: 'Type of human intervention needed.',
+          description: 'Type of hard human-only blocker.',
         },
-        reason: { type: 'string', description: 'Clear explanation of what you are stuck on and what the human should do.' },
+        reason: { type: 'string', description: 'Specific human-only blocker and exact action required from the human.' },
+        tried: { type: 'string', description: 'Autonomous steps already attempted before requesting human intervention.' },
       },
       required: ['reason'],
       additionalProperties: false,
@@ -942,9 +943,21 @@ export function apply(ctx) {
     async execute(args, exec) {
       const caller = await resolveCallerBot(exec)
       if (!caller) return { text: JSON.stringify({ ok: false, error: 'This Session is not a Bot.' }) }
+      const reasonText = String(args?.reason || '').trim()
+      const category = String(args?.category || 'manual').trim() || 'manual'
+      if (reasonText.length < 8) {
+        return {
+          text: JSON.stringify({
+            ok: false,
+            error: 'Human intervention rejected: provide a specific hard blocker reason and exhaust autonomous retries first.',
+          }),
+        }
+      }
+      const triedText = String(args?.tried || '').trim()
+      const fullReason = triedText ? `${reasonText}\n（已尝试：${triedText}）` : reasonText
       const res = await screen.requestHelp(caller.bot, {
-        category: String(args?.category || 'manual'),
-        reason: String(args?.reason || 'Need human assistance on virtual screen.'),
+        category,
+        reason: fullReason,
         roomId: caller.roomId || '',
         signal: exec?.signal,
       })

@@ -80,7 +80,7 @@ TOOLS: List[Dict[str, Any]] = [
     },
     {
         "name": "request_human_help",
-        "description": "Agent 主动求助（如验证码）：状态切 NEED_HUMAN，推送通知等人接管。",
+        "description": "仅在遇到必须人类完成的硬性阻塞（如验证码、扫码/短信登录、MFA、支付确认）时才可调用；常规 UI 失败或可重试操作严禁调用。",
         "inputSchema": {
             "type": "object",
             "properties": {"bot_id": {"type": "string"}, "reason": {"type": "string"}},
