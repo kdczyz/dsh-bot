@@ -37,10 +37,10 @@ const normalizeStringRecord = (input) => {
 
 export function normalizeMcpServerEntry(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
-  const enabled = raw.enabled !== false
+  const enabled = raw.disabled !== undefined ? raw.disabled !== true : raw.enabled !== false
   const hasUrl = typeof raw.url === 'string' && raw.url.trim() !== ''
   const hasCmd = typeof raw.command === 'string' && raw.command.trim() !== ''
-  const transport = raw.transport === 'streamable-http' || (!hasCmd && hasUrl)
+  const transport = raw.transport === 'streamable-http' || raw.type === 'streamable-http' || (!hasCmd && hasUrl)
     ? 'streamable-http'
     : 'stdio'
 
@@ -131,6 +131,185 @@ export class BotMcpRegistry {
     await writeTextFile(this.configPath, `${JSON.stringify(this.#config, null, 2)}\n`)
     this.syncToHostManager()
     return this.#config
+  }
+
+  async saveServer(serverName, rawEntry) {
+    const name = String(serverName ?? '').trim()
+    if (!SERVER_NAME_RE.test(name)) {
+      throw new Error(`Invalid MCP server name "${name}" (must match ${String(SERVER_NAME_RE)}).`)
+    }
+    const normalized = normalizeMcpServerEntry(rawEntry)
+    if (!normalized) {
+      throw new Error('Invalid MCP server entry: stdio requires "command", streamable-http requires "url".')
+    }
+    const nextServers = {
+      ...this.#config.servers,
+      [name]: normalized,
+    }
+    await this.save({ ...this.#config, servers: nextServers })
+    return { ok: true, name, entry: normalized }
+  }
+
+  async deleteServer(serverName) {
+    const name = String(serverName ?? '').trim()
+    if (!name) throw new Error('MCP server name is required.')
+    const nextServers = { ...this.#config.servers }
+    delete nextServers[name]
+    await this.save({ ...this.#config, servers: nextServers })
+    return { ok: true, deleted: name }
+  }
+
+  async toggleServer(serverName, enabled) {
+    const name = String(serverName ?? '').trim()
+    const current = this.#config.servers[name]
+    if (!current) throw new Error(`Unknown Bot MCP server "${name}".`)
+    return this.saveServer(name, { ...current, enabled: enabled === true, disabled: enabled !== true })
+  }
+
+  async probeServer(serverName) {
+    const name = String(serverName ?? '').trim()
+    const entry = this.#config.servers[name]
+    const manager = this.ctx?.get?.('mcpManager')
+    if (!entry) {
+      if (manager && typeof manager.probe === 'function') {
+        const result = await manager.probe(name)
+        return { ok: true, tier: 'normal', name, result }
+      }
+      throw new Error(`Unknown MCP server "${name}".`)
+    }
+    if (!this.#shadowedByNormal.has(name) && manager && typeof manager.probe === 'function') {
+      try {
+        const result = await manager.probe(name)
+        return { ok: true, tier: 'bot', name, result }
+      } catch (error) {
+        return { ok: false, tier: 'bot', name, error: error instanceof Error ? error.message : String(error) }
+      }
+    }
+    // Attempt direct McpClient.probeServer if running inside DSH host; fallback to config validation.
+    try {
+      const McpClient = await import('@deepseek-ai/dsh-mcp-client')
+      if (typeof McpClient?.probeServer === 'function' && typeof McpClient?.Config === 'function') {
+        const clientCfg = this.#toClientConfig(McpClient, name, entry)
+        const result = await McpClient.probeServer(this.ctx, clientCfg)
+        return { ok: true, tier: 'bot', name, result }
+      }
+    } catch (error) {
+      if (error && error.code !== 'ERR_MODULE_NOT_FOUND') {
+        return { ok: false, tier: 'bot', name, error: error instanceof Error ? error.message : String(error) }
+      }
+    }
+    return {
+      ok: true,
+      tier: 'bot',
+      name,
+      detail: `Config validated (${entry.transport})`,
+      result: { validated: true, transport: entry.transport, note: 'Config validated (live probe unavailable outside DSH host).' },
+    }
+  }
+
+  #toClientConfig(McpClient, name, entry) {
+    const shared = {
+      serverName: name,
+      failOnStartupError: false,
+      expandTemplates: true,
+      ...(entry.startupTimeoutMs ? { startupTimeoutMs: entry.startupTimeoutMs } : {}),
+      ...(entry.toolCallTimeoutMs ? { toolCallTimeoutMs: entry.toolCallTimeoutMs } : {}),
+    }
+    if (entry.transport === 'stdio') {
+      return McpClient.Config({
+        transport: 'stdio',
+        command: entry.command,
+        args: [...(entry.args ?? [])],
+        env: { ...(entry.env ?? {}) },
+        cwd: entry.cwd ?? '',
+        ...shared,
+      })
+    }
+    return McpClient.Config({
+      transport: 'streamable-http',
+      url: entry.url,
+      headers: { ...(entry.headers ?? {}) },
+      ...shared,
+    })
+  }
+
+  /**
+   * For any enabled Bot MCP server that collides by name with a normal-mode MCP server
+   * (`#shadowedByNormal`), mount a Bot-scoped `dsh-mcp-client` instance directly on
+   * `agentCtx` so Bot Mode genuinely overrides the normal-mode server's tools & prompt section.
+   */
+  async mountBotOverrides(agentCtx, options = {}) {
+    const conflicts = [...this.#shadowedByNormal].filter((name) => {
+      const entry = this.#config.servers[name]
+      return entry && entry.enabled !== false
+    })
+    if (conflicts.length === 0 || !agentCtx || typeof agentCtx.plugin !== 'function') {
+      return { mounted: [], dispose: () => {} }
+    }
+    let McpClient = options.mcpClientModule ?? null
+    if (!McpClient) {
+      try {
+        McpClient = await import('@deepseek-ai/dsh-mcp-client')
+      } catch (_error) {
+        return { mounted: [], dispose: () => {} }
+      }
+    }
+    const handles = []
+    const mounted = []
+    for (const name of conflicts) {
+      const entry = this.#config.servers[name]
+      try {
+        const cfg = typeof McpClient.Config === 'function'
+          ? this.#toClientConfig(McpClient, name, entry)
+          : { serverName: name, ...entry }
+        const handle = agentCtx.plugin(McpClient, cfg)
+        handles.push(handle)
+        mounted.push(name)
+      } catch (error) {
+        this.logger?.warn?.(`botmode: scoped Bot MCP override for "${name}" failed: ${String(error)}`)
+      }
+    }
+    const dispose = () => {
+      for (const h of handles) {
+        try { void h?.dispose?.() } catch (_error) { /* ignore */ }
+      }
+    }
+    if (typeof agentCtx.effect === 'function' && handles.length > 0) {
+      agentCtx.effect(() => dispose, 'botmode: scoped Bot MCP overrides')
+    }
+    return { mounted, dispose }
+  }
+
+  publicConfig() {
+    const manager = this.ctx?.get?.('mcpManager')
+    const hostList = manager && typeof manager.list === 'function' ? manager.list() : []
+    const normalList = hostList.filter(item => item && item.name && !this.#disposers.has(item.name) && item.configured !== false)
+    const normalNames = new Set(normalList.map(item => item.name))
+    const botServers = Object.entries(this.#config.servers).map(([name, entry]) => ({
+      name,
+      transport: entry.transport,
+      command: entry.command || '',
+      args: Array.isArray(entry.args) ? entry.args : [],
+      url: entry.url || '',
+      enabled: entry.enabled !== false,
+      disabled: entry.enabled === false,
+      overridesNormal: normalNames.has(name) || this.#shadowedByNormal.has(name),
+    }))
+    const normalServers = normalList.map(item => ({
+      name: item.name,
+      transport: item.config?.url ? 'streamable-http' : (item.transport || 'stdio'),
+      command: item.config?.command || '',
+      url: item.config?.url || '',
+      overriddenInBotMode: Boolean(this.#config.servers[item.name] && this.#config.servers[item.name].enabled !== false),
+    }))
+    return {
+      configPath: this.configPath,
+      priority: this.#config.priority,
+      serversConfig: this.#config.servers,
+      botServers,
+      normalServers,
+      servers: this.listForMode('bot'),
+    }
   }
 
   /**

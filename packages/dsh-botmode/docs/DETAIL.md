@@ -30,3 +30,29 @@ Bot mode adds a dedicated multi-Bot workspace in DeepSeek Harness alongside Harn
   - `local_sqlite`: Zero-dependency local SQLite FTS5 (trigram tokenizer for Chinese + English) memory store.
   - `builtin`: Lightweight file-only mode using each Bot's `MEMORY.md`.
 - **Download & Swap Plugins**: Install external memory plugins into `$DSH_HOME/botmode/memory-plugins/<id>/` from curated catalog templates (`Mem0`, `Generic HTTP`), `npm:<pkg>`, Git URLs, `.tgz` archives or local plugin directories containing `plugin.json` + ESM `index.js`, and hot-switch at any time from the **Memory Hub** page or `/botmode memory`.
+
+## Remote 入口（v0.7.2）
+
+侧边栏底部新增 **远程 / Remote** 按钮，把本机 DSH 网关通过 Cloudflare 隧道发布到公网，并与桌面 `dsh-remote` 项目联动：
+
+- **一键出链**：点击后调用 `dsh-remote up`（自动发现 `dsh web` 的端口与 launch token、起 `cloudflared`、拿到公网域名），返回完整访问链接 `https://<tunnel>/#k=<访问密钥>`。密钥在 URL fragment 中，Cloudflare 与 CDN 日志都看不到。
+- **只保留安卓 App 入口**：弹窗就是一个 App 连接页——二维码（Host 侧零依赖 QR 编码器渲染成 SVG data URL）+ 完整 `?token=` 链接 + 「复制 App 链接 / 刷新 / 轮换 App 令牌 / 停止映射」。Android 客户端不会做 E2E，只有 `?token=` + cookie + `/api/remote.mux` 这条路，所以这里直接给它可用链接；页内明确标注「不是端到端加密，Cloudflare 能看到 token」。relay 关闭 `proxy.appBridge` 时显示启用提示。
+- 浏览器的端到端加密链接不再在弹窗里展示，需要时用 CLI：`dsh-remote link`（`#k=` 片段链接）。
+- **自动续期**：网关自身的上游 cookie、对外 PSK、隧道 token 由 `dsh-remote` 自动续期；这里额外提供 **轮换密钥**（`dsh-remote rotate`）与 **停止映射**，轮换后在线会话会自动换新密钥，旧链接在宽限期后失效。
+- **运行态可见**：弹窗顶部 chips 显示在线/健康、隧道模式与状态、PSK kid、PID；`/botmode/api/remote` 也可被其他面板复用。
+
+![Remote 弹窗：安卓 App 二维码 + 明文 token 链接 + 运行态](remote-dialog.png)
+
+Host API：
+
+| 方法 | 路径 / 命令 | 说明 |
+|---|---|---|
+| GET | `/botmode/api/remote?qr=0` | 运行态 + 链接 + 二维码（`qr=0` 跳过二维码） |
+| POST | `command` `{type:'remote.status'}` | 同上（客户端用） |
+| POST | `command` `{type:'remote.up'}` | 起网关并等到 `/__dsh/health` 为 200 |
+| POST | `command` `{type:'remote.rotate'}` | 轮换 PSK 并等新链接 |
+| POST | `command` `{type:'remote.rotateApp'}` | 轮换 App 直连 token 并等新链接 |
+| POST | `command` `{type:'remote.down'}` | 停止网关 |
+| POST | `command` `{type:'remote.inspect',link}` | 校验链接（CLI / 其他面板可复用，弹窗 UI 已不再使用） |
+
+依赖环境变量：`DSH_REMOTE_BIN`（默认 `~/Desktop/dsh-remote/bin/dsh-remote.mjs`）、`DSH_REMOTE_HOME`（默认 `~/.dsh-remote`）。网关不在本机时不会启用该按钮。

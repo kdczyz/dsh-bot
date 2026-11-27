@@ -2,6 +2,7 @@ window.__ModuleLoader__.load({
   id: '@local/dsh-botmode',
   factory(require) {
     const React = require('react')
+    const ReactDOM = require('react-dom')
     const h = React.createElement
     const { useState, useMemo, useEffect, useRef, useSyncExternalStore } = React
 
@@ -297,9 +298,32 @@ window.__ModuleLoader__.load({
         'settings.memory': 'Memory',
         'settings.format': 'Response Format',
         'settings.usage': 'Usage',
-        'settings.approval': 'Approval Policy',
+        'settings.approval': 'Approval & Governance',
+        'settings.mcp': 'MCP Servers',
+        'settings.channels': 'Webhooks & Alerts',
         'settings.integrations': 'Plugins & Tools',
         'settings.logs': 'Logs',
+        'settings.mcpDesc': 'Shared with normal mode with reversed precedence: Bot Mode uses Bot MCP > Normal MCP; Normal Mode uses Normal MCP > Bot MCP.',
+        'settings.mcpAdd': 'Add / Edit Bot MCP Server',
+        'settings.mcpTest': 'Test',
+        'settings.mcpOverride': 'Overrides normal MCP in Bot Mode',
+        'settings.skillsAdd': 'New / Edit Custom Skill',
+        'settings.skillsScopeShared': 'Bot Shared Library (all Bots)',
+        'settings.skillsScopeBot': 'This Bot Only (.dsh/skills)',
+        'settings.channelsDesc': 'Receive external Webhook events to wake Bots/Rooms 24×7, and push approvals, takeovers, completions or budget alerts to IM & desktop.',
+        'settings.notifyTitle': 'Outbound Alerts & Desktop Notifications',
+        'settings.notifyTest': 'Send Test Alert',
+        'settings.webhookTitle': 'Inbound Webhook Triggers',
+        'settings.webhookAdd': 'Create Inbound Webhook',
+        'settings.webhookTest': 'Trigger Test',
+        'settings.govTitle': 'Global Security & Governance',
+        'settings.govBotCrud': 'Require human approval for worker Bots calling bot_manage(create/delete) or room_manage(delete)',
+        'settings.govExtWrite': 'Block non-admin Bots from writing files outside their own workspace directory',
+        'settings.govDefaultBudget': 'Default daily Token limit per Bot (0 = unlimited)',
+        'settings.botRole': 'Permission Role',
+        'settings.botRoleWorker': 'Worker (standard; governed by approvals & workspace rules)',
+        'settings.botRoleAdmin': 'Admin (orchestrator; bypasses Bot CRUD approval gate)',
+        'settings.botDailyLimit': 'Daily Token Budget for this Bot (0 = inherit global)',
         'settings.save': 'Save changes',
         'settings.saved': 'Saved.',
         'settings.noBot': 'Create a Bot first to edit Bot-level settings.',
@@ -444,6 +468,51 @@ window.__ModuleLoader__.load({
         'screen.routinesEmptyTitle': 'No scheduled tasks',
         'screen.routinesEmptyDesc': 'Schedule a prompt by cron expression. This Bot will run it in its workspace & screen and report here.',
         'screen.routinesNew': 'New scheduled task',
+        'remote.button': 'Remote',
+        'remote.title': 'Remote access',
+        'remote.subtitle': 'Publish this DSH gateway through a Cloudflare tunnel with end-to-end encryption.',
+        'remote.appSubtitle': 'Publish this DSH gateway through a Cloudflare tunnel; scan the QR below with public-bot to connect.',
+        'remote.starting': 'Starting the gateway…',
+        'remote.rotating': 'Rotating the access key…',
+        'remote.running': 'Online',
+        'remote.stopped': 'Offline',
+        'remote.healthy': 'Healthy',
+        'remote.unhealthy': 'Unhealthy',
+        'remote.tab.qr': 'QR code',
+        'remote.tab.input': 'Enter link',
+        'remote.tab.app': 'Android app',
+        'remote.appLabel': 'Plain-token link for the Android app',
+        'remote.appHint': 'Scan in public-bot › Add host › QR link. This channel is not end-to-end encrypted: Cloudflare can see the token, so rotate it if it leaks.',
+        'remote.appDisabled': 'The app channel is off. Set proxy.appBridge=true in dsh-remote config, then reopen this dialog.',
+        'remote.copyApp': 'Copy app link',
+        'remote.rotateApp': 'Rotate app token',
+        'remote.rotatedApp': 'App token rotated; devices must rescan',
+        'remote.linkLabel': 'Full access link (contains the key)',
+        'remote.inputPlaceholder': 'Paste a full access link, e.g. https://xxx.trycloudflare.com/#k=…',
+        'remote.inputHint': 'Scan the QR with the phone app, or paste the whole link here to validate and open it.',
+        'remote.qrHint': 'Scan with public-bot, or copy the link. The key lives in the URL fragment and never reaches Cloudflare.',
+        'remote.check': 'Validate',
+        'remote.copied': 'Copied',
+        'remote.copyFailed': 'Copy failed',
+        'remote.copy': 'Copy link',
+        'remote.open': 'Open in browser',
+        'remote.refresh': 'Refresh',
+        'remote.rotate': 'Rotate key',
+        'remote.rotated': 'Key rotated, old link expires after the grace window',
+        'remote.stop': 'Stop mapping',
+        'remote.close': 'Close',
+        'remote.notRunning': 'The gateway is not running yet.',
+        'remote.failed': 'Gateway command failed',
+        'remote.valid': 'Link looks valid',
+        'remote.invalid': 'Not a recognised gateway or SSH link',
+        'remote.token': 'Key',
+        'remote.tunnel': 'Tunnel',
+        'remote.psk': 'Key id',
+        'remote.pid': 'PID',
+        'remote.copyLegacy': 'This link uses the legacy plaintext token channel.',
+        'remote.emptyState': 'Start the gateway to get a QR code and a full access link.',
+        'remote.stoppedToast': 'Gateway stopped',
+        'remote.needBin': 'dsh-remote CLI not found. Set DSH_REMOTE_BIN to bin/dsh-remote.mjs.',
       },
       zh: {
         'meta.title': 'Bot 模式',
@@ -727,9 +796,32 @@ window.__ModuleLoader__.load({
         'settings.memory': '记忆',
         'settings.format': '回复格式',
         'settings.usage': '用量',
-        'settings.approval': '审批与权限',
+        'settings.approval': '审批与治理',
+        'settings.mcp': 'MCP 服务',
+        'settings.channels': 'Webhook 与通知',
         'settings.integrations': '插件与集成',
         'settings.logs': '日志',
+        'settings.mcpDesc': '与普通模式互通但优先级相反：Bot 模式下 Bot MCP 优先于普通 MCP（同名自动独立覆写）；普通模式下普通 MCP 优先。',
+        'settings.mcpAdd': '新增 / 编辑 Bot MCP 服务',
+        'settings.mcpTest': '测试连接',
+        'settings.mcpOverride': 'Bot 模式下优先覆写同名普通 MCP',
+        'settings.skillsAdd': '新建 / 编辑自定义技能',
+        'settings.skillsScopeShared': 'Bot 公共技能库（全部 Bot 可见）',
+        'settings.skillsScopeBot': '仅当前 Bot 目录（.dsh/skills）',
+        'settings.channelsDesc': '通过 Inbound Webhook 接收外部事件 7×24 唤醒 Bot/群聊，并将审批、屏幕接管、任务完成和预算告警主动推送到飞书/企微/钉钉/Slack 或桌面。',
+        'settings.notifyTitle': '主动消息推送与桌面提醒',
+        'settings.notifyTest': '发送测试通知',
+        'settings.webhookTitle': '外部事件触发器（Inbound Webhook）',
+        'settings.webhookAdd': '新建 Webhook 触发器',
+        'settings.webhookTest': '触发测试',
+        'settings.govTitle': '全局安全治理与预算护栏',
+        'settings.govBotCrud': '普通成员 Bot 调用 bot_manage(增删) 或 room_manage(删群) 时强制人工审批',
+        'settings.govExtWrite': '禁止非管理员 Bot 在单聊中向自身工作目录外写入文件',
+        'settings.govDefaultBudget': '全局默认单 Bot 每日 Token 熔断上限（0 为不限）',
+        'settings.botRole': '权限角色',
+        'settings.botRoleWorker': '普通成员（worker · 受审批与目录写保护约束）',
+        'settings.botRoleAdmin': '管理员（admin · 可直接编排增删 Bot/群聊）',
+        'settings.botDailyLimit': '当前 Bot 每日 Token 熔断上限（0 = 继承全局）',
         'settings.save': '保存配置',
         'settings.saved': '已保存。',
         'settings.noBot': '请先新建至少一个 Bot，即可编辑 Bot 级配置。',
@@ -874,6 +966,51 @@ window.__ModuleLoader__.load({
         'screen.routinesEmptyTitle': '暂无排程任务',
         'screen.routinesEmptyDesc': '按 cron 表达式排程一个提示词。Bot 会自动在工作区与虚拟屏中运行并汇报结果。',
         'screen.routinesNew': '新建定时任务',
+        'remote.button': '远程',
+        'remote.title': '公网访问',
+        'remote.subtitle': '把本机 DSH 网关通过 Cloudflare 隧道发布出去，链路端到端加密。',
+        'remote.appSubtitle': '把本机 DSH 网关通过 Cloudflare 隧道发布出去；用 public-bot 扫下方二维码即可连接。',
+        'remote.starting': '正在启动网关…',
+        'remote.rotating': '正在轮换访问密钥…',
+        'remote.running': '在线',
+        'remote.stopped': '未启动',
+        'remote.healthy': '健康',
+        'remote.unhealthy': '异常',
+        'remote.tab.qr': '二维码',
+        'remote.tab.input': '输入链接',
+        'remote.tab.app': '安卓 App',
+        'remote.appLabel': 'Android App 用的明文 token 链接',
+        'remote.appHint': '在 public-bot › 添加主机 › 扫码链接 里扫描。此通道不是端到端加密：Cloudflare 能看到 token，泄漏时请点「轮换 App 令牌」。',
+        'remote.appDisabled': 'App 直连通道未启用：在 dsh-remote 配置里打开 proxy.appBridge=true 后重开本弹窗。',
+        'remote.copyApp': '复制 App 链接',
+        'remote.rotateApp': '轮换 App 令牌',
+        'remote.rotatedApp': 'App 令牌已轮换，旧链接失效，需要重新扫码',
+        'remote.linkLabel': '完整访问链接（含访问密钥）',
+        'remote.inputPlaceholder': '粘贴完整访问链接，例如 https://xxx.trycloudflare.com/#k=…',
+        'remote.inputHint': '用手机 App 扫左侧二维码，或在这里粘贴整条链接校验后直接打开。',
+        'remote.qrHint': '用 public-bot 扫码，或复制链接。密钥在 URL 的 # 片段里，不会经过 Cloudflare。',
+        'remote.check': '校验',
+        'remote.copied': '已复制',
+        'remote.copyFailed': '复制失败',
+        'remote.copy': '复制链接',
+        'remote.open': '在浏览器打开',
+        'remote.refresh': '刷新',
+        'remote.rotate': '轮换密钥',
+        'remote.rotated': '密钥已轮换，旧链接在宽限期后失效',
+        'remote.stop': '停止映射',
+        'remote.close': '关闭',
+        'remote.notRunning': '网关尚未启动。',
+        'remote.failed': '网关命令失败',
+        'remote.valid': '链接有效',
+        'remote.invalid': '无法识别的网关链接或 SSH 串',
+        'remote.token': '密钥',
+        'remote.tunnel': '隧道',
+        'remote.psk': '密钥 ID',
+        'remote.pid': '进程',
+        'remote.copyLegacy': '该链接走的是旧版明文 token 通道。',
+        'remote.emptyState': '启动网关后这里会显示二维码与完整访问链接。',
+        'remote.stoppedToast': '网关已停止',
+        'remote.needBin': '找不到 dsh-remote CLI，请用 DSH_REMOTE_BIN 指向 bin/dsh-remote.mjs。',
       },
     }
 
@@ -1005,6 +1142,54 @@ window.__ModuleLoader__.load({
         ? `[你的档案已更新] 你现在是 ${name}。AGENTS.md 已写成最新版本，从现在起按它工作；如果这次改动对外有影响，用一句话说明。`
         : `[Your profile was updated] You are now ${name}. AGENTS.md holds the latest version; work from it from now on. If the change matters to the user, say so in one line.`
     }
+
+    const REMOTE_CSS = `
+.bm-remote-backdrop { position: fixed; inset: 0; z-index: 100000; display: flex; align-items: center;
+  justify-content: center; padding: 16px; background: rgba(6, 10, 16, 0.78); backdrop-filter: blur(5px); }
+.bm-remote-dialog { width: min(620px, 94vw); max-height: 90vh; display: flex; flex-direction: column;
+  background: var(--dsw-alias-card-fill, #17171c); border: 0.5px solid var(--dsw-alias-border-l2, #2a2a31); border-radius: 14px;
+  overflow: hidden; box-shadow: 0 24px 64px rgba(0,0,0,0.5); }
+.bm-remote-head { display: flex; align-items: flex-start; gap: 10px; padding: 14px 16px 10px; }
+.bm-remote-title { font-size: 15px; font-weight: 650; color: var(--dsw-alias-label-primary, #e8e8ec); }
+.bm-remote-sub { margin-top: 3px; font-size: 12px; line-height: 17px; color: var(--dsw-alias-label-secondary, #9b9ba4); }
+.bm-remote-x { margin-left: auto; appearance: none; border: 0; background: transparent; color: var(--dsw-alias-label-secondary, #9b9ba4);
+  font-size: 20px; line-height: 1; cursor: pointer; padding: 2px 6px; border-radius: 8px; }
+.bm-remote-x:hover { background: var(--dsw-alias-interactive-bg-hover, #26262f); color: var(--dsw-alias-label-primary, #e8e8ec); }
+.bm-remote-body { padding: 0 16px 10px; display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+.bm-remote-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.bm-remote-chip { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 0.5px solid var(--dsw-alias-border-l2, #2a2a31);
+  color: var(--dsw-alias-label-secondary, #9b9ba4); background: var(--dsw-alias-bg-layer-1, #1d1d24); }
+.bm-remote-chip[data-ok='true'] { color: #16a34a; border-color: color-mix(in srgb, #16a34a 40%, transparent); }
+.bm-remote-chip[data-ok='false'] { color: #d97706; }
+.bm-remote-tabs { display: inline-flex; gap: 3px; padding: 3px; border-radius: 10px; background: var(--dsw-alias-bg-layer-1, #1d1d24);
+  border: 0.5px solid var(--dsw-alias-border-l2, #2a2a31); align-self: flex-start; }
+.bm-remote-tab { appearance: none; border: 0; background: transparent; color: var(--dsw-alias-label-secondary, #9b9ba4);
+  font-size: 12.5px; padding: 5px 12px; border-radius: 8px; cursor: pointer; }
+.bm-remote-tab[data-active='true'] { background: var(--dsw-alias-interactive-bg-hover, #26262f); color: var(--dsw-alias-label-primary, #e8e8ec); font-weight: 600; }
+.bm-remote-pane { display: flex; flex-direction: column; gap: 10px; }
+.bm-remote-qr-wrap { align-self: center; padding: 8px; border-radius: 14px; background: #fff; border: 0.5px solid var(--dsw-alias-border-l2, #2a2a31); }
+.bm-remote-qr { width: 168px; height: 168px; display: block; image-rendering: pixelated; }
+.bm-remote-link { font-size: 11.5px; line-height: 16px; word-break: break-all; padding: 8px 10px; border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-1, #1d1d24); border: 0.5px solid var(--dsw-alias-border-l2, #2a2a31);
+  color: var(--dsw-alias-label-primary, #e8e8ec); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.bm-remote-hint { font-size: 11.5px; line-height: 16px; color: var(--dsw-alias-label-secondary, #9b9ba4); }
+.bm-remote-input { width: 100%; min-height: 74px; resize: vertical; box-sizing: border-box; font: inherit; font-size: 12.5px;
+  padding: 9px 10px; border-radius: 10px; border: 0.5px solid var(--dsw-alias-border-l2, #2a2a31);
+  background: var(--dsw-alias-bg-layer-1, #1d1d24); color: var(--dsw-alias-label-primary, #e8e8ec); }
+.bm-remote-result { font-size: 12px; color: var(--dsw-alias-label-secondary, #9b9ba4); }
+.bm-remote-error { font-size: 12px; color: #dc2626; line-height: 17px; white-space: pre-wrap; }
+.bm-remote-busy { font-size: 12px; color: var(--dsw-alias-brand-primary, #4d6bfe); }
+.bm-remote-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px 14px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2, #2a2a31); background: var(--dsw-alias-bg-layer-1, #1d1d24); }
+.bm-remote-btn { appearance: none; border: 0.5px solid var(--dsw-alias-border-l2, #2a2a31); background: var(--dsw-alias-card-fill, #17171c);
+  color: var(--dsw-alias-label-primary, #e8e8ec); font-size: 12.5px; padding: 6px 12px; border-radius: 9px; cursor: pointer; }
+.bm-remote-btn:hover { background: var(--dsw-alias-interactive-bg-hover, #26262f); }
+.bm-remote-btn[data-primary='true'] { background: #4d6bfe; border-color: transparent; color: #fff; font-weight: 600; }
+.bm-remote-btn[data-danger='true'] { color: #dc2626; }
+.bm-remote-btn:disabled { opacity: 0.5; cursor: default; }
+.bm-remote-toast { font-size: 11.5px; color: #16a34a; margin-left: auto; }
+.bm-remote-empty { padding: 24px 8px; text-align: center; font-size: 12.5px; color: var(--dsw-alias-label-secondary, #9b9ba4); }
+    `
 
     const CSS = `
       .bm-switch { display: inline-flex; align-items: center; gap: 2px; padding: 2px; box-sizing: border-box;
@@ -1709,6 +1894,7 @@ window.__ModuleLoader__.load({
       .bm-avatar-depth input[type='range'] { width: 110px; }
       .bm-avatar-json-box { border-top: 0.5px solid var(--dsw-alias-border-l3); padding-top: 8px;
         display: flex; flex-direction: column; gap: 6px; }
+      ${REMOTE_CSS}
     `
 
     return {
@@ -4059,6 +4245,21 @@ window.__ModuleLoader__.load({
               setBusy(false)
             }
           }
+          const rotateApp = async () => {
+            setError('')
+            setBusy(t('remote.rotating'))
+            try {
+              const next = await hostCommand('remote.rotateApp')
+              setData(next)
+              if (next && next.rotated) flash(t('remote.rotatedApp'))
+              else if (next && next.error === 'app-bridge-disabled') setError(t('remote.appDisabled'))
+            } catch (failure) {
+              setError(String(failure && failure.message ? failure.message : failure))
+            } finally {
+              setBusy('')
+            }
+          }
+
           const stop = async () => {
             if (session === null) return
             try { await hostCommand('bot.stop', { botId: props.bot.id }) } catch (_failure) { /* the turn may already be settling */ }
@@ -5614,11 +5815,16 @@ window.__ModuleLoader__.load({
           const sections = props.sections || []
           const allTools = props.tools || []
           const artifacts = props.artifacts || []
+          const mcpInfo = props.mcp || { configPath: '', servers: [], botServers: [], normalServers: [] }
+          const webhooksList = props.webhooks || []
+          const notificationLogs = props.notificationLogs || []
           const usage = props.usage || { totalTokens: 0, totalRoomMessages: 0, byRoom: [] }
           const runtimeInfo = props.runtime || {}
           const appSettings = props.settings || {
             responseFormat: { enabled: true, extendedMarkdown: true, diagramsAndMath: true, artifacts: true, structuredCards: true, multimodal: true },
             groupChat: { defaultTokenLimit: 0, defaultIdleRoundLimit: 5, enableSoftLock: true, enableErrorProbe: true, autoProgressReview: true, showActivityStrip: false },
+            governance: { requireApprovalForBotCrud: true, defaultDailyTokenLimit: 0, protectExternalWrites: false },
+            notifications: { enabled: false, desktopNotifications: true, webhookUrl: '', format: 'generic', secret: '', onApproval: true, onScreenHelp: true, onRoomComplete: true, onBudgetExceeded: true, onRoutineError: true },
           }
 
           const [botId, setBotId] = useState(props.initialBotId || (bots[0] && bots[0].id) || '')
@@ -5638,6 +5844,8 @@ window.__ModuleLoader__.load({
           const [botAvatar, setBotAvatar] = useState(bot && bot.avatar ? { ...bot.avatar } : defaultClientAvatar(bot ? bot.color : COLORS[0]))
           const [botSectionId, setBotSectionId] = useState(bot ? (bot.sectionId || 'general') : 'general')
           const [botApproval, setBotApproval] = useState(bot ? (bot.approvalPolicy || 'ask') : 'ask')
+          const [botPermRole, setBotPermRole] = useState(bot ? (bot.permissionRole || 'worker') : 'worker')
+          const [botDailyLimit, setBotDailyLimit] = useState(bot ? (Number(bot.dailyTokenLimit) || 0) : 0)
           const [botToolsAllow, setBotToolsAllow] = useState(bot && bot.tools ? (bot.tools.allow || []).join(', ') : '')
           const [botToolsDeny, setBotToolsDeny] = useState(bot && bot.tools ? (bot.tools.deny || []).join(', ') : '')
           const [botModel, setBotModel] = useState(bot && bot.model ? { ...bot.model } : { ...EMPTY_MODEL })
@@ -5648,6 +5856,27 @@ window.__ModuleLoader__.load({
           // Modular Global Settings state
           const [rf, setRf] = useState(appSettings.responseFormat)
           const [gc, setGc] = useState(appSettings.groupChat)
+          const [gov, setGov] = useState(appSettings.governance || { requireApprovalForBotCrud: true, defaultDailyTokenLimit: 0, protectExternalWrites: false })
+          const [notif, setNotif] = useState(appSettings.notifications || { enabled: false, desktopNotifications: true, webhookUrl: '', format: 'generic', secret: '', onApproval: true, onScreenHelp: true, onRoomComplete: true, onBudgetExceeded: true, onRoutineError: true })
+
+          // MCP form state
+          const [mcpForm, setMcpForm] = useState({ name: '', transport: 'stdio', command: '', argsText: '', url: '', envText: '', disabled: false })
+          const [mcpProbe, setMcpProbe] = useState('')
+
+          // Custom Skill editor state
+          const [skillForm, setSkillForm] = useState({
+            name: '',
+            scope: 'shared',
+            content: '---\nname: my-custom-skill\ndescription: Concise summary of when and how to use this skill.\n---\n\n# My Custom Skill\n\n1. Step one...\n',
+          })
+
+          // Inbound Webhook form state
+          const [hookForm, setHookForm] = useState({
+            name: '',
+            targetKind: 'bot',
+            targetId: (bots[0] && bots[0].id) || '',
+            promptTemplate: '[Webhook {{name}} · {{event}}]\n{{payload}}',
+          })
 
           useEffect(() => {
             if (!bot) return
@@ -5658,6 +5887,8 @@ window.__ModuleLoader__.load({
             setBotAvatar(bot.avatar ? { ...bot.avatar } : defaultClientAvatar(bot.color || COLORS[0]))
             setBotSectionId(bot.sectionId || 'general')
             setBotApproval(bot.approvalPolicy || 'ask')
+            setBotPermRole(bot.permissionRole || 'worker')
+            setBotDailyLimit(Number(bot.dailyTokenLimit) || 0)
             setBotToolsAllow((bot.tools && bot.tools.allow ? bot.tools.allow : []).join(', '))
             setBotToolsDeny((bot.tools && bot.tools.deny ? bot.tools.deny : []).join(', '))
             setBotModel(bot.model ? { ...bot.model } : { ...EMPTY_MODEL })
@@ -5674,6 +5905,8 @@ window.__ModuleLoader__.load({
           useEffect(() => {
             setRf(appSettings.responseFormat)
             setGc(appSettings.groupChat)
+            if (appSettings.governance) setGov(appSettings.governance)
+            if (appSettings.notifications) setNotif(appSettings.notifications)
           }, [appSettings])
 
           const loadLogs = async () => {
@@ -5715,6 +5948,8 @@ window.__ModuleLoader__.load({
                 avatar: botAvatar,
                 sectionId: botSectionId,
                 approvalPolicy: botApproval,
+                permissionRole: botPermRole,
+                dailyTokenLimit: Number(botDailyLimit) || 0,
                 model: botModel,
                 tools: { allow: splitList(botToolsAllow), deny: splitList(botToolsDeny) },
                 ...extraDraft,
@@ -5913,6 +6148,249 @@ window.__ModuleLoader__.load({
               })
             }
 
+            if (moduleKey === 'mcp') {
+              const botServers = Array.isArray(mcpInfo.botServers) ? mcpInfo.botServers : []
+              const normalServers = Array.isArray(mcpInfo.normalServers) ? mcpInfo.normalServers : []
+              const saveMcp = () => runSave(async () => {
+                const name = String(mcpForm.name || '').trim()
+                if (!name) throw new Error('MCP server name is required.')
+                const cfg = { disabled: mcpForm.disabled === true }
+                if (mcpForm.transport === 'streamable-http') {
+                  cfg.type = 'streamable-http'
+                  cfg.url = String(mcpForm.url || '').trim()
+                } else {
+                  cfg.command = String(mcpForm.command || '').trim()
+                  cfg.args = String(mcpForm.argsText || '').trim()
+                    ? String(mcpForm.argsText).trim().split(/\s+/)
+                    : []
+                  const envObj = {}
+                  for (const line of String(mcpForm.envText || '').split('\n')) {
+                    const idx = line.indexOf('=')
+                    if (idx > 0) envObj[line.slice(0, idx).trim()] = line.slice(idx + 1).trim()
+                  }
+                  if (Object.keys(envObj).length > 0) cfg.env = envObj
+                }
+                await props.onCommand('mcp.save', { name, config: cfg })
+                setMcpForm({ name: '', transport: 'stdio', command: '', argsText: '', url: '', envText: '', disabled: false })
+              })
+              const testMcp = async (srvName) => {
+                setMcpProbe('')
+                try {
+                  const res = await props.onCommand('mcp.test', { name: srvName })
+                  setMcpProbe(res && res.ok ? `✓ ${srvName}: ${res.detail || 'OK'}` : `✗ ${srvName}: ${(res && res.detail) || 'Failed'}`)
+                } catch (err) {
+                  setMcpProbe(`✗ ${srvName}: ${err && err.message ? err.message : String(err)}`)
+                }
+              }
+              return h('div', { className: 'bm-set-panel' },
+                h('section', { className: 'bm-form' },
+                  h('h2', null, `${t('settings.mcp')} (${botServers.length} Bot / ${normalServers.length} Shared)`),
+                  h('p', { className: 'bm-form-hint' }, `${t('settings.mcpDesc')}${mcpInfo.configPath ? ` · ${mcpInfo.configPath}` : ''}`),
+                  mcpProbe ? h('div', { className: mcpProbe.startsWith('✓') ? 'bm-ok' : 'bm-error' }, mcpProbe) : null,
+                  botServers.length === 0
+                    ? h('p', { className: 'bm-muted' }, 'No Bot-priority MCP servers configured yet.')
+                    : botServers.map(srv => h('div', { key: srv.name, className: 'bm-routine' },
+                      h('div', { className: 'bm-routine-text' },
+                        h('span', { className: 'bm-routine-name' },
+                          `${srv.name} [${srv.transport}]${srv.disabled ? ' (disabled)' : ''}${srv.overridesNormal ? ` · ★ ${t('settings.mcpOverride')}` : ''}`),
+                        h('span', { className: 'bm-routine-meta' },
+                          srv.url ? srv.url : `${srv.command} ${(srv.args || []).join(' ')}`)),
+                      h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } },
+                        h('button', { type: 'button', className: 'bm-btn small', disabled: busy, onClick: () => { void testMcp(srv.name) } }, t('settings.mcpTest')),
+                        h('button', {
+                          type: 'button', className: 'bm-btn small', disabled: busy,
+                          onClick: () => runSave(() => props.onCommand('mcp.toggle', { name: srv.name, disabled: !srv.disabled })),
+                        }, srv.disabled ? 'Enable' : 'Disable'),
+                        h('button', {
+                          type: 'button', className: 'bm-btn small',
+                          onClick: () => setMcpForm({
+                            name: srv.name,
+                            transport: srv.transport === 'streamable-http' ? 'streamable-http' : 'stdio',
+                            command: srv.command || '',
+                            argsText: Array.isArray(srv.args) ? srv.args.join(' ') : '',
+                            url: srv.url || '',
+                            envText: '',
+                            disabled: srv.disabled === true,
+                          }),
+                        }, t('card.edit')),
+                        h('button', {
+                          type: 'button', className: 'bm-btn small danger', disabled: busy,
+                          onClick: () => runSave(() => props.onCommand('mcp.delete', { name: srv.name })),
+                        }, '×')))),
+                  normalServers.length > 0
+                    ? h('div', { style: { marginTop: '10px' } },
+                      h('p', { className: 'bm-form-hint' }, `Shared Normal-Mode MCP (${normalServers.length}):`),
+                      h('div', { className: 'bm-picks' }, normalServers.map(s => h('span', { key: s.name, className: 'bm-act-chip' }, `${s.name} [shared · ${s.transport}]`))))
+                    : null),
+                h('section', { className: 'bm-form' },
+                  h('h2', null, t('settings.mcpAdd')),
+                  h('div', { className: 'bm-row' },
+                    h('label', { className: 'bm-label' }, 'Name',
+                      h('input', {
+                        className: 'bm-input', placeholder: 'github / postgres / playwright',
+                        value: mcpForm.name, onChange: e => setMcpForm({ ...mcpForm, name: e.target.value }),
+                      })),
+                    h('label', { className: 'bm-label' }, 'Transport',
+                      h('select', {
+                        className: 'bm-input', value: mcpForm.transport,
+                        onChange: e => setMcpForm({ ...mcpForm, transport: e.target.value }),
+                      },
+                        h('option', { value: 'stdio' }, 'stdio (local command)'),
+                        h('option', { value: 'streamable-http' }, 'streamable-http (remote URL)')))),
+                  mcpForm.transport === 'streamable-http'
+                    ? h('label', { className: 'bm-label' }, 'Endpoint URL',
+                      h('input', {
+                        className: 'bm-input', placeholder: 'https://mcp.example.com/sse',
+                        value: mcpForm.url, onChange: e => setMcpForm({ ...mcpForm, url: e.target.value }),
+                      }))
+                    : h('div', null,
+                      h('div', { className: 'bm-row' },
+                        h('label', { className: 'bm-label' }, 'Command',
+                          h('input', {
+                            className: 'bm-input', placeholder: 'npx / uvx / node',
+                            value: mcpForm.command, onChange: e => setMcpForm({ ...mcpForm, command: e.target.value }),
+                          })),
+                        h('label', { className: 'bm-label' }, 'Args (space separated)',
+                          h('input', {
+                            className: 'bm-input', placeholder: '-y @modelcontextprotocol/server-filesystem /path',
+                            value: mcpForm.argsText, onChange: e => setMcpForm({ ...mcpForm, argsText: e.target.value }),
+                          }))),
+                      h('label', { className: 'bm-label' }, 'Env (KEY=VALUE per line, optional)',
+                        h('textarea', {
+                          className: 'bm-area', rows: 2, placeholder: 'GITHUB_TOKEN=ghp_xxx',
+                          value: mcpForm.envText, onChange: e => setMcpForm({ ...mcpForm, envText: e.target.value }),
+                        }))),
+                  h('div', { className: 'bm-form-actions' },
+                    h('button', { type: 'button', className: 'bm-btn primary', disabled: busy, onClick: saveMcp }, t('settings.save')))))
+            }
+
+            if (moduleKey === 'channels') {
+              const origin = typeof window !== 'undefined' && window.location ? window.location.origin : ''
+              const reqDesktopPerm = () => {
+                if (typeof window !== 'undefined' && 'Notification' in window && window.Notification.requestPermission) {
+                  void window.Notification.requestPermission()
+                }
+              }
+              return h('div', { className: 'bm-set-panel' },
+                h('section', { className: 'bm-form' },
+                  h('h2', null, t('settings.notifyTitle')),
+                  h('p', { className: 'bm-form-hint' }, t('settings.channelsDesc')),
+                  h('label', { className: 'bm-toggle-row' },
+                    h('span', null, 'Browser Desktop Notifications (approvals & screen takeover)'),
+                    h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                      h('button', { type: 'button', className: 'bm-btn small', onClick: reqDesktopPerm }, 'Allow'),
+                      h('input', { type: 'checkbox', checked: notif.desktopNotifications !== false, onChange: e => setNotif({ ...notif, desktopNotifications: e.target.checked }) }))),
+                  h('label', { className: 'bm-toggle-row' },
+                    h('span', null, 'Enable Outbound IM / Webhook Push'),
+                    h('input', { type: 'checkbox', checked: notif.enabled === true, onChange: e => setNotif({ ...notif, enabled: e.target.checked }) })),
+                  h('div', { className: 'bm-row' },
+                    h('label', { className: 'bm-label' }, 'Format',
+                      h('select', {
+                        className: 'bm-input', value: notif.webhookFormat || notif.format || 'generic',
+                        onChange: e => setNotif({ ...notif, webhookFormat: e.target.value }),
+                      },
+                        h('option', { value: 'generic' }, 'Generic JSON'),
+                        h('option', { value: 'feishu' }, 'Feishu / Lark (飞书)'),
+                        h('option', { value: 'wecom' }, 'WeCom (企业微信)'),
+                        h('option', { value: 'dingtalk' }, 'DingTalk (钉钉)'),
+                        h('option', { value: 'slack' }, 'Slack'))),
+                    h('label', { className: 'bm-label' }, 'Secret (optional HMAC/token)',
+                      h('input', {
+                        className: 'bm-input', type: 'password', value: notif.webhookSecret || notif.secret || '',
+                        onChange: e => setNotif({ ...notif, webhookSecret: e.target.value }),
+                      }))),
+                  h('label', { className: 'bm-label' }, 'Outbound Webhook URL',
+                    h('input', {
+                      className: 'bm-input', placeholder: 'https://open.feishu.cn/open-apis/bot/v2/hook/...',
+                      value: notif.webhookUrl || '', onChange: e => setNotif({ ...notif, webhookUrl: e.target.value }),
+                    })),
+                  h('div', { className: 'bm-picks', style: { marginTop: '6px' } },
+                    [
+                      ['onApproval', 'Approvals'],
+                      ['onScreenHelp', 'Screen Takeover'],
+                      ['onRoomComplete', 'Room Complete'],
+                      ['onBudgetExceeded', 'Budget Exceeded'],
+                      ['onRoutineError', 'Routine Error'],
+                    ].map(([k, lbl]) => h('button', {
+                      key: k, type: 'button', className: 'bm-pick', 'data-on': notif[k] !== false,
+                      onClick: () => setNotif({ ...notif, [k]: notif[k] === false }),
+                    }, lbl))),
+                  h('div', { className: 'bm-form-actions' },
+                    h('button', {
+                      type: 'button', className: 'bm-btn', disabled: busy,
+                      onClick: () => runSave(async () => {
+                        const res = await props.onCommand('notifications.test', { override: notif })
+                        if (res && res.ok === false) throw new Error(res.error || 'Test failed')
+                      }),
+                    }, t('settings.notifyTest')),
+                    h('button', {
+                      type: 'button', className: 'bm-btn primary', disabled: busy,
+                      onClick: () => runSave(() => props.onCommand('settings.save', { notifications: notif })),
+                    }, t('settings.save'))),
+                  notificationLogs.length > 0
+                    ? h('div', { style: { marginTop: '10px' } },
+                      notificationLogs.slice(0, 6).map((lg, i) => h('div', { key: `${lg.at}-${i}`, className: 'bm-routine' },
+                        h('div', { className: 'bm-routine-text' },
+                          h('span', { className: 'bm-routine-name' }, `${lg.ok ? '✓' : '✗'} [${lg.kind}] ${lg.title}`),
+                          h('span', { className: 'bm-routine-meta' }, `${lg.at || ''}${lg.error ? ` · ${lg.error}` : ''}`)))))
+                    : null),
+                h('section', { className: 'bm-form' },
+                  h('h2', null, `${t('settings.webhookTitle')} (${webhooksList.length})`),
+                  webhooksList.length === 0
+                    ? h('p', { className: 'bm-muted' }, 'No Inbound Webhooks yet.')
+                    : webhooksList.map(wh => h('div', { key: wh.id, className: 'bm-routine' },
+                      h('div', { className: 'bm-routine-text' },
+                        h('span', { className: 'bm-routine-name' }, `${wh.name} → ${wh.targetKind}:${wh.targetId} (${wh.triggerCount || 0}×)`),
+                        h('span', { className: 'bm-routine-meta' }, `POST ${origin}/botmode/api/webhook/${wh.id}`),
+                        h('span', { className: 'bm-routine-prompt' }, `Secret: ${wh.secret}`)),
+                      h('div', { style: { display: 'flex', gap: '6px' } },
+                        h('button', {
+                          type: 'button', className: 'bm-btn small', disabled: busy,
+                          onClick: () => runSave(() => props.onCommand('webhook.test', { webhookId: wh.id })),
+                        }, t('settings.webhookTest')),
+                        h('button', {
+                          type: 'button', className: 'bm-btn small danger', disabled: busy,
+                          onClick: () => runSave(() => props.onCommand('webhook.delete', { webhookId: wh.id })),
+                        }, '×')))),
+                  h('h2', { style: { marginTop: '12px' } }, t('settings.webhookAdd')),
+                  h('div', { className: 'bm-row' },
+                    h('label', { className: 'bm-label' }, 'Name',
+                      h('input', {
+                        className: 'bm-input', placeholder: 'GitHub PR Alert / Sentry Hook',
+                        value: hookForm.name, onChange: e => setHookForm({ ...hookForm, name: e.target.value }),
+                      })),
+                    h('label', { className: 'bm-label' }, 'Target Type',
+                      h('select', {
+                        className: 'bm-input', value: hookForm.targetKind,
+                        onChange: e => {
+                          const k = e.target.value
+                          const firstId = k === 'room' ? ((rooms[0] && rooms[0].id) || '') : ((bots[0] && bots[0].id) || '')
+                          setHookForm({ ...hookForm, targetKind: k, targetId: firstId })
+                        },
+                      },
+                        h('option', { value: 'bot' }, 'Bot (1:1)'),
+                        h('option', { value: 'room' }, 'Group Room')))),
+                  h('label', { className: 'bm-label' }, 'Target',
+                    h('select', {
+                      className: 'bm-input', value: hookForm.targetId,
+                      onChange: e => setHookForm({ ...hookForm, targetId: e.target.value }),
+                    },
+                      (hookForm.targetKind === 'room' ? rooms : bots).map(item => h('option', { key: item.id, value: item.id }, item.name)))),
+                  h('label', { className: 'bm-label' }, 'Prompt Template ({{name}}, {{event}}, {{payload}})',
+                    h('textarea', {
+                      className: 'bm-area', rows: 2, value: hookForm.promptTemplate,
+                      onChange: e => setHookForm({ ...hookForm, promptTemplate: e.target.value }),
+                    })),
+                  h('div', { className: 'bm-form-actions' },
+                    h('button', {
+                      type: 'button', className: 'bm-btn primary', disabled: busy,
+                      onClick: () => runSave(async () => {
+                        await props.onCommand('webhook.save', { draft: hookForm })
+                        setHookForm({ ...hookForm, name: '' })
+                      }),
+                    }, t('settings.webhookAdd')))))
+            }
+
             if (moduleKey === 'integrations') {
               return h('div', { className: 'bm-set-panel' },
                 h('section', { className: 'bm-form' },
@@ -6048,26 +6526,84 @@ window.__ModuleLoader__.load({
 
             if (moduleKey === 'skills') {
               const discovered = Array.isArray(bot.discoveredSkills) ? bot.discoveredSkills : []
-              const sharedDir = props.runtimeInfo && props.runtimeInfo.skillsRoot ? props.runtimeInfo.skillsRoot : ''
+              const sharedDir = runtimeInfo && runtimeInfo.skillsRoot ? runtimeInfo.skillsRoot : ''
+              const loadSkillForEdit = async (sk) => {
+                try {
+                  const res = await props.onCommand('skills.read', { botId: bot.id, name: sk.name })
+                  if (res && res.skill) {
+                    setSkillForm({
+                      name: res.skill.name,
+                      scope: res.skill.source === 'bot-local' ? 'bot' : 'shared',
+                      content: res.skill.raw || '',
+                    })
+                  }
+                } catch (err) {
+                  setError(err && err.message ? err.message : String(err))
+                }
+              }
               return h('div', { className: 'bm-set-panel' },
                 h('section', { className: 'bm-form' },
-                  h('h2', null, `${bot.name} · ${t('settings.skills')}`),
+                  h('h2', null, `${bot.name} · ${t('settings.skills')} (${discovered.filter(s => s.enabled !== false).length}/${discovered.length})`),
                   h('p', { className: 'bm-form-hint' }, [
-                    bot.dir ? `${bot.dir}/.dsh/skills/` : '',
+                    'Priority: Bot local > Bot shared > Bot built-in > Shared normal skills',
+                    bot.dir ? ` · ${bot.dir}/.dsh/skills/` : '',
                     sharedDir ? ` · ${sharedDir}` : '',
                   ].filter(Boolean).join('')),
-                  h('div', { className: 'bm-picks' },
-                    discovered.length > 0
-                      ? discovered.map(sk => h('span', {
-                        key: sk.name,
-                        className: 'bm-act-chip',
-                        title: sk.description || sk.path || '',
-                      }, `${sk.name} (${sk.source || 'bot'})`))
-                      : [
-                        h('span', { key: 'team', className: 'bm-act-chip' }, 'team (SKILL.md)'),
-                        h('span', { key: 'team-collaboration', className: 'bm-act-chip' }, 'team-collaboration (SKILL.md)'),
-                        h('span', { key: 'room-completion', className: 'bm-act-chip' }, 'room-completion (SKILL.md)'),
-                      ])))
+                  discovered.length === 0
+                    ? h('p', { className: 'bm-muted' }, 'No skills discovered yet.')
+                    : discovered.map(sk => h('div', { key: sk.name, className: 'bm-routine' },
+                      h('div', { className: 'bm-routine-text' },
+                        h('span', { className: 'bm-routine-name' },
+                          `${sk.name} [${sk.tier === 'bot' ? 'Bot 优先' : '共享'} · ${sk.source || 'bot'}]`),
+                        h('span', { className: 'bm-routine-meta' }, sk.description || sk.path || '')),
+                      h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+                        h('input', {
+                          type: 'checkbox',
+                          title: 'Enable/disable for this Bot',
+                          checked: sk.enabled !== false,
+                          onChange: e => runSave(() => props.onCommand('skills.toggle', { botId: bot.id, name: sk.name, enabled: e.target.checked })),
+                        }),
+                        h('button', { type: 'button', className: 'bm-btn small', onClick: () => { void loadSkillForEdit(sk) } }, t('card.edit')),
+                        sk.editable === true
+                          ? h('button', {
+                            type: 'button', className: 'bm-btn small danger', disabled: busy,
+                            onClick: () => runSave(() => props.onCommand('skills.delete', {
+                              botId: bot.id,
+                              scope: sk.source === 'bot-local' ? 'bot' : 'shared',
+                              name: sk.name,
+                            })),
+                          }, '×')
+                          : null)))),
+                h('section', { className: 'bm-form' },
+                  h('h2', null, t('settings.skillsAdd')),
+                  h('div', { className: 'bm-row' },
+                    h('label', { className: 'bm-label' }, 'Skill Name (kebab-case)',
+                      h('input', {
+                        className: 'bm-input', placeholder: 'my-custom-skill',
+                        value: skillForm.name, onChange: e => setSkillForm({ ...skillForm, name: e.target.value }),
+                      })),
+                    h('label', { className: 'bm-label' }, 'Target Library',
+                      h('select', {
+                        className: 'bm-input', value: skillForm.scope,
+                        onChange: e => setSkillForm({ ...skillForm, scope: e.target.value }),
+                      },
+                        h('option', { value: 'shared' }, t('settings.skillsScopeShared')),
+                        h('option', { value: 'bot' }, t('settings.skillsScopeBot'))))),
+                  h('label', { className: 'bm-label' }, 'SKILL.md',
+                    h('textarea', {
+                      className: 'bm-area', rows: 10, value: skillForm.content,
+                      onChange: e => setSkillForm({ ...skillForm, content: e.target.value }),
+                    })),
+                  h('div', { className: 'bm-form-actions' },
+                    h('button', {
+                      type: 'button', className: 'bm-btn primary', disabled: busy,
+                      onClick: () => runSave(() => props.onCommand('skills.save', {
+                        botId: bot.id,
+                        scope: skillForm.scope,
+                        name: skillForm.name,
+                        content: skillForm.content,
+                      })),
+                    }, t('settings.save')))))
             }
 
             if (moduleKey === 'workspace') {
@@ -6089,6 +6625,8 @@ window.__ModuleLoader__.load({
             }
 
             if (moduleKey === 'approval') {
+              const todayTokens = (bot.tokenUsage && bot.tokenUsage.tokens) ? bot.tokenUsage.tokens : 0
+              const todayDay = (bot.tokenUsage && bot.tokenUsage.day) ? bot.tokenUsage.day : ''
               return h('div', { className: 'bm-set-panel' },
                 h('section', { className: 'bm-form' },
                   h('h2', null, `${bot.name} · ${t('settings.approval')}`),
@@ -6100,10 +6638,54 @@ window.__ModuleLoader__.load({
                       h('option', { value: 'ask' }, t('approval.ask')),
                       h('option', { value: 'always' }, t('approval.allowAlways')),
                       h('option', { value: 'never' }, t('approval.denyAlways')))),
+                  h('div', { className: 'bm-row' },
+                    h('label', { className: 'bm-label' }, t('settings.botRole'),
+                      h('select', {
+                        className: 'bm-input', value: botPermRole,
+                        onChange: e => setBotPermRole(e.target.value),
+                      },
+                        h('option', { value: 'worker' }, t('settings.botRoleWorker')),
+                        h('option', { value: 'admin' }, t('settings.botRoleAdmin')))),
+                    h('label', { className: 'bm-label' }, t('settings.botDailyLimit'),
+                      h('input', {
+                        type: 'number', min: 0, step: 10000, className: 'bm-input',
+                        value: botDailyLimit,
+                        onChange: e => setBotDailyLimit(Number(e.target.value) || 0),
+                      }))),
+                  h('p', { className: 'bm-form-hint' }, `Today usage${todayDay ? ` (${todayDay})` : ''}: ${todayTokens.toLocaleString()} tokens`),
                   h('div', { className: 'bm-form-actions' },
                     h('button', {
                       type: 'button', className: 'bm-btn primary', disabled: busy,
-                      onClick: () => runSave(() => saveBotPatch({ approvalPolicy: botApproval })),
+                      onClick: () => runSave(() => saveBotPatch({
+                        approvalPolicy: botApproval,
+                        permissionRole: botPermRole,
+                        dailyTokenLimit: Number(botDailyLimit) || 0,
+                      })),
+                    }, t('settings.save')))),
+                h('section', { className: 'bm-form' },
+                  h('h2', null, t('settings.govTitle')),
+                  h('label', { className: 'bm-toggle-row' },
+                    h('span', null, t('settings.govBotCrud')),
+                    h('input', {
+                      type: 'checkbox', checked: gov.requireApprovalForBotCrud !== false,
+                      onChange: e => setGov({ ...gov, requireApprovalForBotCrud: e.target.checked }),
+                    })),
+                  h('label', { className: 'bm-toggle-row' },
+                    h('span', null, t('settings.govExtWrite')),
+                    h('input', {
+                      type: 'checkbox', checked: gov.protectExternalWrites === true,
+                      onChange: e => setGov({ ...gov, protectExternalWrites: e.target.checked }),
+                    })),
+                  h('label', { className: 'bm-label' }, t('settings.govDefaultBudget'),
+                    h('input', {
+                      type: 'number', min: 0, step: 50000, className: 'bm-input',
+                      value: gov.defaultDailyTokenLimit ?? 0,
+                      onChange: e => setGov({ ...gov, defaultDailyTokenLimit: Number(e.target.value) || 0 }),
+                    })),
+                  h('div', { className: 'bm-form-actions' },
+                    h('button', {
+                      type: 'button', className: 'bm-btn primary', disabled: busy,
+                      onClick: () => runSave(() => props.onCommand('settings.save', { governance: gov })),
                     }, t('settings.save')))))
             }
 
@@ -6158,9 +6740,10 @@ window.__ModuleLoader__.load({
                 navRow('model', 'model', t('settings.model'), activeModelLabel),
                 navRow('skills', 'skills', t('settings.skills'), String(
                   bot && Array.isArray(bot.discoveredSkills) && bot.discoveredSkills.length > 0
-                    ? bot.discoveredSkills.length
-                    : ((bot && bot.skills ? bot.skills.length : 0) + 3),
+                    ? bot.discoveredSkills.filter(s => s.enabled !== false).length
+                    : ((bot && bot.skills ? bot.skills.length : 0) + 5),
                 )),
+                navRow('mcp', 'integrations', t('settings.mcp'), String((mcpInfo.botServers || []).length)),
                 navRow('tools', 'tools', t('settings.tools'), toolCountLabel)),
               h('div', { className: 'bm-set-group-label' }, t('settings.groupWork')),
               h('div', { className: 'bm-set-card' },
@@ -6182,7 +6765,8 @@ window.__ModuleLoader__.load({
                   h('span', { className: 'bm-set-icon' }, h(SettingsIcon, { kind: 'gear' })),
                   h('span', { className: 'bm-set-row-label' }, t('settings.groupAdvanced')),
                   h('span', { className: 'bm-set-chev' }, advOpen ? '⌄' : '›')),
-                advOpen ? navRow('approval', 'approval', t('settings.approval'), bot ? bot.approvalPolicy : '') : null,
+                advOpen ? navRow('approval', 'approval', t('settings.approval'), bot ? `${bot.permissionRole || 'worker'} · ${bot.approvalPolicy}` : '') : null,
+                advOpen ? navRow('channels', 'routines', t('settings.channels'), String(webhooksList.length)) : null,
                 advOpen ? navRow('system', 'system', t('settings.system'), props.screenGateway && props.screenGateway.available ? 'ON' : '') : null,
                 advOpen ? navRow('integrations', 'integrations', t('settings.integrations'), String(allTools.length)) : null,
                 advOpen ? navRow('logs', 'logs', t('settings.logs'), '') : null)),
@@ -7212,12 +7796,42 @@ window.__ModuleLoader__.load({
           const screensMap = (hostSnapshot.state && hostSnapshot.state.screens) || {}
           const screenGateway = (hostSnapshot.state && hostSnapshot.state.screenGateway) || { available: false }
           const memoryHub = (hostSnapshot.state && hostSnapshot.state.memory) || null
+          const mcpInfo = (hostSnapshot.state && hostSnapshot.state.mcp) || null
+          const webhooksList = (hostSnapshot.state && hostSnapshot.state.webhooks) || []
+          const notificationLogs = (hostSnapshot.state && hostSnapshot.state.notificationLogs) || []
           const appSettings = (hostSnapshot.state && hostSnapshot.state.settings) || null
           const usageSummary = (hostSnapshot.state && hostSnapshot.state.usage) || null
           const artifactsList = (hostSnapshot.state && hostSnapshot.state.artifacts) || []
           const hostTools = (hostSnapshot.state && hostSnapshot.state.tools) || []
           const runtimeInfo = (hostSnapshot.state && hostSnapshot.state.runtime) || {}
           const bots = stored.filter(bot => bot.hidden !== true)
+          const seenAlertIdsRef = useRef(null)
+          useEffect(() => {
+            const desktopOn = !appSettings || !appSettings.notifications || appSettings.notifications.desktopNotifications !== false
+            const currentIds = new Set([
+              ...approvals.map(a => `apr:${a.id}`),
+              ...screenHelps.map(s => `scr:${s.id}`),
+            ])
+            if (seenAlertIdsRef.current === null) {
+              seenAlertIdsRef.current = currentIds
+              return
+            }
+            if (desktopOn && typeof window !== 'undefined' && 'Notification' in window && window.Notification.permission === 'granted') {
+              for (const apr of approvals) {
+                const key = `apr:${apr.id}`
+                if (!seenAlertIdsRef.current.has(key)) {
+                  try { new window.Notification(`Bot Approval: ${apr.botName || 'Bot'}`, { body: apr.reason || apr.toolName || 'Approval required' }) } catch (_e) {}
+                }
+              }
+              for (const sh of screenHelps) {
+                const key = `scr:${sh.id}`
+                if (!seenAlertIdsRef.current.has(key)) {
+                  try { new window.Notification(`Screen Takeover: ${sh.botName || 'Bot'}`, { body: sh.reason || 'Human screen intervention requested' }) } catch (_e) {}
+                }
+              }
+            }
+            seenAlertIdsRef.current = currentIds
+          }, [approvals, screenHelps, appSettings])
           const lang = useLang()
           const activeLang = (lang && lang.active) || 'en'
           const [form, setForm] = useState(null)
@@ -7510,6 +8124,9 @@ window.__ModuleLoader__.load({
                 sections,
                 models,
                 memory: memoryHub,
+                mcp: mcpInfo,
+                webhooks: webhooksList,
+                notificationLogs,
                 settings: appSettings,
                 usage: usageSummary,
                 artifacts: artifactsList,
@@ -7638,6 +8255,177 @@ window.__ModuleLoader__.load({
             h(PanelIcon, { size: 15 }),
             props.wide === false ? null : h('span', null, t(active ? 'foot.back' : 'mode.bot')))
         }
+
+
+        function RemoteIcon({ size = 15 }) {
+          return h('svg', {
+            width: size, height: size, viewBox: '0 0 16 16', 'aria-hidden': 'true',
+            fill: 'none', stroke: 'currentColor', strokeWidth: 1.35, strokeLinecap: 'round', strokeLinejoin: 'round',
+          },
+            h('rect', { x: 2, y: 2, width: 4.6, height: 4.6, rx: 0.9 }),
+            h('rect', { x: 9.4, y: 2, width: 4.6, height: 4.6, rx: 0.9 }),
+            h('rect', { x: 2, y: 9.4, width: 4.6, height: 4.6, rx: 0.9 }),
+            h('path', { d: 'M9.6 9.6h1.6v1.6H9.6zM12.6 12.6h1.2v1.2h-1.2zM12.6 9.6h1.2M9.6 12.9h1.6' }))
+        }
+
+        function RemoteDialog({ onClose }) {
+          const t = useT()
+          const [data, setData] = useState(null)
+          const [busy, setBusy] = useState('')
+          const [error, setError] = useState('')
+          const [toast, setToast] = useState('')
+          const toastTimer = useRef(null)
+
+          const flash = (message) => {
+            setToast(message)
+            if (toastTimer.current) window.clearTimeout(toastTimer.current)
+            toastTimer.current = window.setTimeout(() => setToast(''), 2200)
+          }
+          useEffect(() => () => { if (toastTimer.current) window.clearTimeout(toastTimer.current) }, [])
+
+          const load = async (ensure = false) => {
+            setError('')
+            setBusy(ensure ? t('remote.starting') : '')
+            try {
+              let next = await hostRequest('remote')
+              if (ensure && (!next.running || !next.healthy)) next = await hostCommand('remote.up')
+              setData(next)
+              if (!next.appLink) setError(t('remote.appDisabled'))
+            } catch (failure) {
+              setError(String(failure && failure.message ? failure.message : failure))
+            } finally {
+              setBusy('')
+            }
+          }
+
+          useEffect(() => { void load(true) }, [])
+          useEffect(() => {
+            const onKey = (event) => { if (event.key === 'Escape') onClose() }
+            window.addEventListener('keydown', onKey)
+            return () => window.removeEventListener('keydown', onKey)
+          }, [onClose])
+
+          const rotateApp = async () => {
+            setError('')
+            setBusy(t('remote.rotating'))
+            try {
+              const next = await hostCommand('remote.rotateApp')
+              setData(next)
+              if (next && next.rotated) flash(t('remote.rotatedApp'))
+              else if (next && next.error === 'app-bridge-disabled') setError(t('remote.appDisabled'))
+            } catch (failure) {
+              setError(String(failure && failure.message ? failure.message : failure))
+            } finally {
+              setBusy('')
+            }
+          }
+
+          const stop = async () => {
+            setError('')
+            setBusy(t('remote.stoppedToast'))
+            try {
+              const next = await hostCommand('remote.down')
+              setData(next)
+              flash(t('remote.stoppedToast'))
+            } catch (failure) {
+              setError(String(failure && failure.message ? failure.message : failure))
+            } finally {
+              setBusy('')
+            }
+          }
+
+          const copy = async () => {
+            const value = data && data.appLink
+            if (!value) return
+            try {
+              await navigator.clipboard.writeText(value)
+              flash(t('remote.copied'))
+            } catch {
+              flash(t('remote.copyFailed'))
+            }
+          }
+
+          const chips = []
+          if (data) {
+            chips.push(h('span', { className: 'bm-remote-chip', 'data-ok': data.running ? 'true' : 'false' },
+              data.running ? t('remote.running') : t('remote.stopped')))
+            if (data.running) {
+              chips.push(h('span', { className: 'bm-remote-chip', 'data-ok': data.healthy ? 'true' : 'false' },
+                data.healthy ? t('remote.healthy') : t('remote.unhealthy')))
+            }
+            if (data.tunnel && data.tunnel.mode) {
+              chips.push(h('span', { className: 'bm-remote-chip' }, `${t('remote.tunnel')}: ${data.tunnel.mode} · ${data.tunnel.state || '-'}`))
+            }
+            if (data.pid) chips.push(h('span', { className: 'bm-remote-chip' }, `${t('remote.pid')}: ${data.pid}`))
+          }
+
+          const appPane = data && data.appLink
+            ? h('div', { className: 'bm-remote-pane' },
+              h('div', { className: 'bm-remote-qr-wrap' },
+                data.appQrDataUrl
+                  ? h('img', { className: 'bm-remote-qr', src: data.appQrDataUrl, alt: 'QR' })
+                  : h('div', { className: 'bm-remote-empty' }, data.appQrError || t('remote.failed'))),
+              h('div', { className: 'bm-remote-hint' }, t('remote.appLabel')),
+              h('div', { className: 'bm-remote-link' }, data.appLink),
+              h('div', { className: 'bm-remote-hint' }, t('remote.appHint')))
+            : h('div', { className: 'bm-remote-empty' }, busy || t('remote.appDisabled'))
+
+          const dialog = h('div', {
+            className: 'bm-modal-backdrop bm-remote-backdrop',
+            onClick: (event) => { if (event.target === event.currentTarget) onClose() },
+          },
+            h('div', { className: 'bm-remote-dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': t('remote.title') },
+              h('div', { className: 'bm-remote-head' },
+                h('div', null,
+                  h('div', { className: 'bm-remote-title' }, t('remote.title')),
+                  h('div', { className: 'bm-remote-sub' }, t('remote.appSubtitle'))),
+                h('button', { type: 'button', className: 'bm-remote-x', onClick: onClose, 'aria-label': t('remote.close') }, '×')),
+              h('div', { className: 'bm-remote-body' },
+                chips.length > 0 ? h('div', { className: 'bm-remote-meta' }, ...chips) : null,
+                appPane,
+                busy ? h('div', { className: 'bm-remote-busy' }, busy) : null,
+                error ? h('div', { className: 'bm-remote-error' }, error) : null),
+              h('div', { className: 'bm-remote-foot' },
+                h('button', {
+                  type: 'button', className: 'bm-remote-btn', 'data-primary': 'true',
+                  onClick: copy, disabled: !(data && data.appLink),
+                }, t('remote.copyApp')),
+                h('button', { type: 'button', className: 'bm-remote-btn', onClick: () => load(false), disabled: Boolean(busy) }, t('remote.refresh')),
+                h('button', { type: 'button', className: 'bm-remote-btn', onClick: rotateApp, disabled: Boolean(busy) || !(data && data.appLink) }, t('remote.rotateApp')),
+                h('button', { type: 'button', className: 'bm-remote-btn', 'data-danger': 'true', onClick: stop, disabled: Boolean(busy) || !(data && data.running) }, t('remote.stop')),
+                toast ? h('span', { className: 'bm-remote-toast' }, toast) : null)))
+
+          // 侧边栏存在 transform 祖先，fixed 定位会被拽回；挂到 body 才是真正的全屏浮层
+          return typeof ReactDOM?.createPortal === 'function' && document?.body
+            ? ReactDOM.createPortal(h(React.Fragment, null, h('style', null, REMOTE_CSS), dialog), document.body)
+            : dialog
+        }
+
+        function RemoteFooterButton(props) {
+          const t = useT()
+          const [open, setOpen] = useState(false)
+          return h('div', { style: { display: 'contents' } },
+            h('button', {
+              type: 'button',
+              className: 'bm-foot-toggle bm-remote-trigger',
+              'data-wide': props.wide !== false,
+              title: t('remote.button'),
+              onClick: () => setOpen(true),
+            },
+              h(RemoteIcon, { size: 15 }),
+              props.wide === false ? null : h('span', null, t('remote.button'))),
+            open ? h(RemoteDialog, { onClose: () => setOpen(false) }) : null)
+        }
+
+        ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+          name: 'sidebar.footer.action',
+          id: 'botmode.remote',
+          order: 11,
+          label: () => (typeof locale.getLocale === 'function'
+            ? (String((locale.getLocale() || {}).active || '').startsWith('zh') ? '远程访问' : 'Remote')
+            : 'Remote'),
+          locale: NS,
+        }, RemoteFooterButton))
 
         ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
           name: 'sidebar.footer.action',

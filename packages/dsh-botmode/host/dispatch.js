@@ -34,6 +34,13 @@ const textOfBlocks = (blocks) => {
 
 const oneLine = (value) => String(value ?? '').replace(/\s+/g, ' ').trim()
 
+const localDayKey = (date = new Date()) => {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 const messageFingerprint = (senderId, targetId, message) => {
   const normalized = String(message ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
   return createHash('sha256').update(`${senderId}->${targetId}:${normalized}`).digest('hex').slice(0, 16)
@@ -63,6 +70,7 @@ export class Dispatcher {
     this.onAgent = onAgent
     this.memory = memory
     this.onReplyArtifacts = null
+    this.onBudgetExceeded = null
   }
 
   setMemoryManager(memory) {
@@ -71,6 +79,35 @@ export class Dispatcher {
 
   setArtifactHandler(handler) {
     this.onReplyArtifacts = typeof handler === 'function' ? handler : null
+  }
+
+  setBudgetExceededHandler(handler) {
+    this.onBudgetExceeded = typeof handler === 'function' ? handler : null
+  }
+
+  #effectiveDailyTokenLimit(bot) {
+    const botLimit = Number(bot?.dailyTokenLimit) || 0
+    if (botLimit > 0) return botLimit
+    const globalLimit = Number(this.store.state?.settings?.governance?.defaultDailyTokenLimit) || 0
+    return globalLimit > 0 ? globalLimit : 0
+  }
+
+  #todayTokensUsed(bot, today = localDayKey()) {
+    const usage = bot?.tokenUsage
+    if (!usage || usage.day !== today) return 0
+    return Number(usage.tokens) || 0
+  }
+
+  async #recordTokenUsage(botId, deltaTokens) {
+    const add = Math.max(0, Math.round(Number(deltaTokens) || 0))
+    if (add <= 0) return
+    const today = localDayKey()
+    await this.store.mutate((state) => {
+      const stored = state.bots.find(item => item.id === botId)
+      if (!stored) return
+      const prev = stored.tokenUsage && stored.tokenUsage.day === today ? (Number(stored.tokenUsage.tokens) || 0) : 0
+      stored.tokenUsage = { day: today, tokens: prev + add }
+    }).catch(() => undefined)
   }
 
   /** Called by Rooms when a room starts or stops driving a discussion. */
@@ -337,6 +374,38 @@ export class Dispatcher {
     if (rawPrompt === '' && images.length === 0) return { ok: false, error: 'empty message' }
     const isolated = this.#isIsolatedRoutine(options)
 
+    // Daily per-Bot token budget circuit breaker.
+    const dailyLimit = this.#effectiveDailyTokenLimit(bot)
+    const today = localDayKey()
+    const usedToday = this.#todayTokensUsed(bot, today)
+    if (dailyLimit > 0 && usedToday >= dailyLimit) {
+      const error = `Daily token budget exceeded for ${bot.name} (${usedToday.toLocaleString()} / ${dailyLimit.toLocaleString()} tokens on ${today}). Raise the Bot's dailyTokenLimit in Settings or wait until tomorrow.`
+      await this.store.mutate((state) => {
+        const stored = state.bots.find(item => item.id === botId)
+        if (stored && !isolated) stored.lastError = error
+      }).catch(() => undefined)
+      if (this.onBudgetExceeded) {
+        void Promise.resolve(this.onBudgetExceeded({
+          bot,
+          used: usedToday,
+          limit: dailyLimit,
+          day: today,
+          source: options.source ?? 'chat',
+          roomId: options.roomId ?? '',
+        })).catch(() => undefined)
+      }
+      const result = {
+        ok: false,
+        code: 'budget_exceeded',
+        error,
+        budget: { used: usedToday, limit: dailyLimit, day: today },
+        startedAt: new Date().toISOString(),
+        source: options.source ?? 'chat',
+      }
+      this.#remember(botId, result, options)
+      return result
+    }
+
     this.#runningKeys.add(queueKey)
     if (options.roomId) {
       this.#speakingRoomCounts.set(botId, (this.#speakingRoomCounts.get(botId) ?? 0) + 1)
@@ -396,6 +465,7 @@ export class Dispatcher {
           return this.#runTurn(botId, text, { ...options, _rotatedSession: true }, queueKey)
         }
         const result = { ok: false, error: failure, metrics, sessionId: session.id, startedAt, source: options.source ?? 'chat' }
+        await this.#recordTokenUsage(botId, metrics.tokensUsed)
         await this.store.mutate((state) => {
           const stored = state.bots.find(item => item.id === botId)
           if (stored) {
@@ -431,6 +501,7 @@ export class Dispatcher {
         }
       }
 
+      await this.#recordTokenUsage(bot.id, metrics.tokensUsed)
       await this.store.mutate((state) => {
         const stored = state.bots.find(item => item.id === bot.id)
         if (!stored) return

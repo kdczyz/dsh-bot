@@ -105,11 +105,16 @@ export class Rooms {
     this.logger = logger
     this.approvals = approvals ?? null
     this.onDeliverables = null
+    this.onRoomCompleted = null
     if (this.approvals) this.bindApprovals(this.approvals)
   }
 
   setArtifactHandler(handler) {
     this.onDeliverables = typeof handler === 'function' ? handler : null
+  }
+
+  setCompletionHandler(handler) {
+    this.onRoomCompleted = typeof handler === 'function' ? handler : null
   }
 
   bindApprovals(approvals) {
@@ -910,6 +915,13 @@ export class Rooms {
         deliverables,
         messageId: appendedMsg?.id || '',
         at: completionRecord.at,
+      })).catch(() => undefined)
+    }
+    if (this.onRoomCompleted) {
+      void Promise.resolve(this.onRoomCompleted({
+        room: this.store.room(roomId) || room,
+        bot: callerBot,
+        completion: completionRecord,
       })).catch(() => undefined)
     }
     return { ok: true, status: 'completed', completion: completionRecord }

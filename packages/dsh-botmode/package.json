@@ -1,13 +1,13 @@
 {
   "name": "@local/dsh-botmode",
-  "version": "0.7.1",
+  "version": "0.7.4",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=22.5.0"
   },
   "scripts": {
-    "test": "node test/host.test.mjs && node test/screen.test.mjs && node test/avatar.test.mjs && node test/artifacts.test.mjs && node test/routines.test.mjs"
+    "test": "node test/host.test.mjs && node test/screen.test.mjs && node test/avatar.test.mjs && node test/artifacts.test.mjs && node test/routines.test.mjs && node test/qr.test.mjs && node test/remote.test.mjs"
   },
   "description": "Bot mode for DeepSeek Harness: isolated Bot personas, loop-guarded teammate messaging, Hermes-style Group Rooms, persistent Routines and a pluggable Team Memory Hub (built-in memory_tencentdb).",
   "exports": {

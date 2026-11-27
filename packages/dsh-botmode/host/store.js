@@ -13,6 +13,7 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { deterministicAvatar, normalizeAvatar } from './avatar.js'
 import { DEFAULT_ROUTINE_SETTINGS, normalizeRoutine, normalizeRoutineSettings } from './scheduler/model.js'
+import { defaultNotificationsSettings, normalizeNotificationsSettings } from './channels.js'
 
 /** True ONLY when `candidatePath` resolves strictly inside `parentDir` (never equal, never sibling/escape). */
 export const isStrictSubpath = (parentDir, candidatePath) => {
@@ -136,6 +137,12 @@ export const defaultSettingsState = () => ({
     pushToken: '',          // 可选：主动上报鉴权 Token
   },
   routines: { ...DEFAULT_ROUTINE_SETTINGS },
+  governance: {
+    requireApprovalForBotCrud: true,
+    defaultDailyTokenLimit: 0,
+    protectExternalWrites: false,
+  },
+  notifications: defaultNotificationsSettings(),
 })
 
 export const emptyState = () => ({
@@ -145,6 +152,8 @@ export const emptyState = () => ({
   bots: [],
   rooms: [],
   routines: [],
+  routineNotices: [],
+  webhooks: [],
   artifacts: [],
   memory: defaultMemoryState(),
   settings: defaultSettingsState(),
@@ -254,6 +263,8 @@ export class BotStore {
       bots: bots.map(bot => this.#normalizeBot(bot)),
       rooms: Array.isArray(stored.rooms) ? stored.rooms.map(room => this.#normalizeRoom(room)).filter(Boolean) : [],
       routines: Array.isArray(stored.routines) ? stored.routines.map(routine => this.#normalizeRoutine(routine)).filter(Boolean) : [],
+      routineNotices: Array.isArray(stored.routineNotices) ? stored.routineNotices.slice(-100) : [],
+      webhooks: Array.isArray(stored.webhooks) ? stored.webhooks.map(item => this.#normalizeWebhook(item)).filter(Boolean) : [],
       artifacts: Array.isArray(stored.artifacts)
         ? stored.artifacts.map(item => this.#normalizeArtifact(item)).filter(Boolean).slice(-200)
         : [],
@@ -314,6 +325,33 @@ export class BotStore {
       },
       system: normalizeSystemSettings(settings.system, defaults.system),
       routines: normalizeRoutineSettings(settings.routines),
+      governance: {
+        requireApprovalForBotCrud: settings.governance?.requireApprovalForBotCrud !== false,
+        defaultDailyTokenLimit: clampInt(settings.governance?.defaultDailyTokenLimit, 0, 1_000_000_000, defaults.governance.defaultDailyTokenLimit),
+        protectExternalWrites: settings.governance?.protectExternalWrites === true,
+      },
+      notifications: normalizeNotificationsSettings(settings.notifications, defaults.notifications),
+    }
+  }
+
+  #normalizeWebhook(item) {
+    if (!item || typeof item !== 'object' || typeof item.id !== 'string' || item.id.trim() === '') return undefined
+    const name = typeof item.name === 'string' && item.name.trim() !== '' ? item.name.trim() : item.id
+    const targetKind = item.targetKind === 'room' ? 'room' : 'bot'
+    const targetId = typeof item.targetId === 'string' ? item.targetId.trim() : ''
+    if (!targetId) return undefined
+    return {
+      id: item.id.trim(),
+      name,
+      enabled: item.enabled !== false,
+      secret: typeof item.secret === 'string' ? item.secret : '',
+      targetKind,
+      targetId,
+      promptTemplate: typeof item.promptTemplate === 'string' ? item.promptTemplate : '',
+      triggerCount: clampInt(item.triggerCount, 0, 1_000_000_000, 0),
+      lastTriggeredAt: typeof item.lastTriggeredAt === 'string' ? item.lastTriggeredAt : '',
+      createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date().toISOString(),
+      updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : '',
     }
   }
 
@@ -374,6 +412,14 @@ export class BotStore {
         }
         : { provider: '', model: '', reasoningEffort: '' },
       approvalPolicy: bot.approvalPolicy === 'always' || bot.approvalPolicy === 'never' ? bot.approvalPolicy : 'ask',
+      permissionRole: bot.permissionRole === 'admin' ? 'admin' : 'worker',
+      dailyTokenLimit: clampInt(bot.dailyTokenLimit, 0, 1_000_000_000, 0),
+      tokenUsage: bot.tokenUsage && typeof bot.tokenUsage === 'object'
+        ? {
+          day: typeof bot.tokenUsage.day === 'string' ? bot.tokenUsage.day : '',
+          tokens: clampInt(bot.tokenUsage.tokens, 0, 1_000_000_000, 0),
+        }
+        : { day: '', tokens: 0 },
       tools: bot.tools && typeof bot.tools === 'object'
         ? {
           allow: Array.isArray(bot.tools.allow) ? bot.tools.allow.filter(name => typeof name === 'string') : [],
@@ -381,6 +427,7 @@ export class BotStore {
         }
         : { allow: [], deny: [] },
       skills: Array.isArray(bot.skills) ? bot.skills.filter(name => typeof name === 'string') : [],
+      disabledSkills: Array.isArray(bot.disabledSkills) ? [...new Set(bot.disabledSkills.filter(name => typeof name === 'string' && name.trim() !== ''))] : [],
       createdAt: typeof bot.createdAt === 'string' ? bot.createdAt : new Date().toISOString(),
       updatedAt: typeof bot.updatedAt === 'string' ? bot.updatedAt : undefined,
       lastTurnAt: typeof bot.lastTurnAt === 'string' ? bot.lastTurnAt : undefined,

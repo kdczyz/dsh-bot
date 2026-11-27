@@ -23,7 +23,7 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { createHash } from 'node:crypto'
-import { lstat, readdir, readFile, realpath, stat } from 'node:fs/promises'
+import { lstat, mkdir, readdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -487,18 +487,28 @@ export function botSkillRoots(store, bot, options = {}) {
  *   Bot skills (local > shared > built-in) ALWAYS override same-name normal-mode skills,
  *   while non-conflicting normal-mode skills (filesystem + host `ctx.skills` such as office/dsh-doc)
  *   remain shared and callable at lower priority.
+ *
+ * Per-Bot disabled skills (`bot.disabledSkills`) are excluded by default so the model
+ * never sees or calls them; pass `{ includeDisabled: true }` (e.g. for Settings UI)
+ * to include them with `enabled: false`.
  */
 export async function discoverBotSkills(store, bot, options = {}) {
-  const roots = botSkillRoots(store, bot, options)
+  const latestBot = (bot?.id && store?.bot?.(bot.id)) ? store.bot(bot.id) : bot
+  const disabledSet = new Set(Array.isArray(latestBot?.disabledSkills) ? latestBot.disabledSkills : [])
+  const includeDisabled = options.includeDisabled === true
+  const roots = botSkillRoots(store, latestBot, options)
   const seen = new Map()
   for (const root of roots) {
     const items = await scanBotSkillDir(root.path, root.source)
     for (const item of items) {
       if (!seen.has(item.name)) {
+        const enabled = !disabledSet.has(item.name)
         seen.set(item.name, {
           ...item,
           tier: root.tier,
           rank: root.rank,
+          enabled,
+          editable: root.source === 'bot-local' || root.source === 'botmode-shared',
         })
       }
     }
@@ -508,10 +518,11 @@ export async function discoverBotSkills(store, bot, options = {}) {
   const hostSkills = options.hostSkills
   if (options.includeNormalSkills !== false && hostSkills && typeof hostSkills.list === 'function') {
     try {
-      const listed = await hostSkills.list({ cwd: bot?.dir, scope: options.agent })
+      const listed = await hostSkills.list({ cwd: latestBot?.dir, scope: options.agent })
       for (const summary of listed || []) {
         if (!summary || !summary.name || summary.provider === BOTMODE_NORMAL_SKILL_PROVIDER) continue
         if (seen.has(summary.name)) continue
+        const enabled = !disabledSet.has(summary.name)
         seen.set(summary.name, {
           name: summary.name,
           description: summary.description,
@@ -523,33 +534,142 @@ export async function discoverBotSkills(store, bot, options = {}) {
           ...(summary.path ? { path: summary.path } : {}),
           tier: 'normal',
           rank: 600,
+          enabled,
+          editable: false,
           _fromHostRegistry: true,
         })
       }
     } catch (_error) { /* best effort normal-skill merge */ }
   }
-  return [...seen.values()].sort((a, b) => {
-    const tierDiff = (a.tier === 'bot' ? 0 : 1) - (b.tier === 'bot' ? 0 : 1)
-    if (tierDiff !== 0) return tierDiff
-    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
-  })
+  return [...seen.values()]
+    .filter(item => includeDisabled || item.enabled !== false)
+    .sort((a, b) => {
+      const tierDiff = (a.tier === 'bot' ? 0 : 1) - (b.tier === 'bot' ? 0 : 1)
+      if (tierDiff !== 0) return tierDiff
+      return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
+    })
 }
 
 export async function loadBotSkill(store, bot, skillName, options = {}) {
   if (!SKILL_NAME_RE.test(String(skillName ?? ''))) return undefined
-  const all = await discoverBotSkills(store, bot, options)
+  const latestBot = (bot?.id && store?.bot?.(bot.id)) ? store.bot(bot.id) : bot
+  const disabledSet = new Set(Array.isArray(latestBot?.disabledSkills) ? latestBot.disabledSkills : [])
+  if (options.includeDisabled !== true && disabledSet.has(skillName)) return undefined
+  const all = await discoverBotSkills(store, latestBot, options)
   const found = all.find(item => item.name === skillName)
   if (!found) return undefined
   if (found._fromHostRegistry && options.hostSkills && typeof options.hostSkills.get === 'function') {
-    const loaded = await options.hostSkills.get(skillName, { cwd: bot?.dir, scope: options.agent })
+    const loaded = await options.hostSkills.get(skillName, { cwd: latestBot?.dir, scope: options.agent })
     if (!loaded) return undefined
     return {
       ...loaded,
       tier: 'normal',
       rank: 600,
+      enabled: !disabledSet.has(skillName),
     }
   }
   return found
+}
+
+/**
+ * Read the raw `SKILL.md` file contents (including frontmatter) for Settings UI editing.
+ */
+export async function readBotSkillRaw(store, bot, skillName, options = {}) {
+  const name = String(skillName ?? '').trim()
+  if (!SKILL_NAME_RE.test(name)) return { ok: false, error: `Invalid skill name "${name}"` }
+  const found = await loadBotSkill(store, bot, name, { ...options, includeDisabled: true })
+  if (!found) return { ok: false, error: `Skill "${name}" not found` }
+  let raw = ''
+  if (found.path) {
+    try {
+      raw = await readFile(found.path, 'utf8')
+    } catch (_error) { /* fallback to reconstructed markdown below */ }
+  }
+  if (!raw) {
+    raw = [
+      '---',
+      `name: ${found.name}`,
+      `description: ${found.description || ''}`,
+      ...(found.whenToUse ? [`whenToUse: ${found.whenToUse}`] : []),
+      '---',
+      '',
+      found.content || '',
+      '',
+    ].join('\n')
+  }
+  return {
+    ok: true,
+    skill: {
+      name: found.name,
+      description: found.description,
+      source: found.source,
+      tier: found.tier,
+      enabled: found.enabled !== false,
+      editable: found.editable === true,
+      path: found.path || '',
+      raw,
+    },
+  }
+}
+
+/**
+ * Create or update a custom Bot skill in either:
+ *   - `scope: 'shared'` → `$DSH_HOME/botmode/skills/<name>/SKILL.md`
+ *   - `scope: 'bot'`    → `<bot.dir>/.dsh/skills/<name>/SKILL.md`
+ * Built-in skills inside the package are never mutated.
+ */
+export async function saveBotSkillFile(store, bot, { scope = 'shared', name, content }) {
+  const cleanName = String(name ?? '').trim()
+  if (!SKILL_NAME_RE.test(cleanName)) {
+    return { ok: false, error: 'Skill name must be lowercase kebab-case (e.g. "my-workflow").' }
+  }
+  const raw = String(content ?? '').replace(/\r\n/g, '\n').trim()
+  if (!raw) return { ok: false, error: 'SKILL.md content cannot be empty.' }
+  const parsed = parseSkillFrontmatter(raw)
+  if (!parsed) {
+    return { ok: false, error: 'SKILL.md must begin with valid YAML frontmatter (--- ... ---).' }
+  }
+  const fmName = String(parsed.data.name ?? '').trim()
+  const fmDesc = String(parsed.data.description ?? '').trim()
+  if (fmName !== cleanName) {
+    return { ok: false, error: `Frontmatter name ("${fmName}") must match skill name ("${cleanName}").` }
+  }
+  if (!fmDesc) {
+    return { ok: false, error: 'Frontmatter must include a non-empty description.' }
+  }
+  const baseRoot = scope === 'bot'
+    ? (bot?.dir ? join(bot.dir, '.dsh', 'skills') : '')
+    : (store?.skillsRoot || '')
+  if (!baseRoot) return { ok: false, error: scope === 'bot' ? 'Target Bot workspace is unavailable.' : 'Shared skills directory is unavailable.' }
+  const skillDir = resolve(baseRoot, cleanName)
+  if (!isSameOrSubpath(baseRoot, skillDir) || normPath(skillDir) === normPath(baseRoot) || isSameOrSubpath(BUILTIN_SKILLS_ROOT, skillDir)) {
+    return { ok: false, error: 'Invalid target skill directory.' }
+  }
+  await mkdir(skillDir, { recursive: true })
+  const filePath = join(skillDir, 'SKILL.md')
+  await writeFile(filePath, `${raw}\n`, 'utf8')
+  return { ok: true, name: cleanName, scope, path: filePath }
+}
+
+/**
+ * Delete a custom Bot skill from `$DSH_HOME/botmode/skills/<name>` or `<bot.dir>/.dsh/skills/<name>`.
+ * Built-in packaged skills (`BUILTIN_SKILLS_ROOT`) and normal-mode skills are protected.
+ */
+export async function deleteBotSkillFile(store, bot, { scope = 'shared', name }) {
+  const cleanName = String(name ?? '').trim()
+  if (!SKILL_NAME_RE.test(cleanName)) {
+    return { ok: false, error: 'Invalid skill name.' }
+  }
+  const baseRoot = scope === 'bot'
+    ? (bot?.dir ? join(bot.dir, '.dsh', 'skills') : '')
+    : (store?.skillsRoot || '')
+  if (!baseRoot) return { ok: false, error: 'Skill storage root is unavailable.' }
+  const skillDir = resolve(baseRoot, cleanName)
+  if (!isSameOrSubpath(baseRoot, skillDir) || normPath(skillDir) === normPath(baseRoot) || isSameOrSubpath(BUILTIN_SKILLS_ROOT, skillDir)) {
+    return { ok: false, error: 'Refused to delete protected skill path.' }
+  }
+  await rm(skillDir, { recursive: true, force: true })
+  return { ok: true, name: cleanName, scope }
 }
 
 /**

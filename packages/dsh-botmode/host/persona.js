@@ -68,6 +68,8 @@ export const renderInitialMemory = (bot, store) => {
     '| Team Comms, Bot CRUD & Multi-Bot Group Rooms | `bot-team-control` | `bot_team`, `message_agent`, `bot_manage`, `room_manage` |',
     '| Group Room Task-Fit & Formal Completion | `team-collaboration`, `room-completion` | `claim_subtask`, `room_task_progress`, `room_finish_task` |',
     '| Persistent Automated Schedules | `scheduled-routines` | `scheduled_tasks` |',
+    '| Deliverables, Artifacts & Host Health | `artifact-delivery` | `publish_artifact`, `<artifact>`, `system_info` |',
+    '| Memory Compaction & Scene Hygiene | `memory-hygiene` | `memory_search`, `memory_read_scene`, `memory_save`, `MEMORY.md` |',
     '| External Integrations (MCP) | Bot MCP library > shared DSH MCP | `mcp__<server>__<tool>`, `list_mcp_resources`, `read_mcp_resource` |',
     '| Long-Term Memory Recall & Persistence | Memory Hub + this file | `memory_search`, `memory_conversation_search`, `memory_read_scene`, `memory_save` |',
     '',
@@ -98,7 +100,7 @@ export const seedInitialMemoryHub = async (memory, store, bot) => {
       '[bot-bootstrap-v1]',
       `Bot=${bot.name}(${bot.id}) Workspace=${bot.dir || ''}.`,
       `SkillsPriority: ${bot.dir ? `${bot.dir}/.dsh/skills` : '<bot>/.dsh/skills'} > ${store?.skillsRoot || '$DSH_HOME/botmode/skills'} > ${BUILTIN_SKILLS_ROOT} > shared normal skills.`,
-      'BuiltinSkills: browser-desktop-automation (L1 CLI -> L2 agent-browser/OSS -> L3 screen_* -> L4 screen_request_help), bot-team-control (message_agent/bot_manage/room_manage), team-collaboration, room-completion, scheduled-routines (scheduled_tasks).',
+      'BuiltinSkills: browser-desktop-automation (L1 CLI -> L2 agent-browser/OSS -> L3 screen_* -> L4 screen_request_help), bot-team-control (message_agent/bot_manage/room_manage), team-collaboration, room-completion, scheduled-routines (scheduled_tasks), artifact-delivery (publish_artifact/system_info), memory-hygiene (MEMORY.md & scene compaction).',
       `MCPPriority: ${store?.mcpConfigPath || '$DSH_HOME/botmode/mcp.json'} > shared DSH MCP (invoke mcp__<server>__<tool> / list_mcp_resources).`,
     ].join(' ')
     return await memory.saveMemoryForBot(bot, {
@@ -235,7 +237,7 @@ export const personaBlock = async (store, bot, state, options = {}) => {
     '   - When a task matches any skill in `<available_skills>` or the Capability Dispatch Index in your memory, call `skill({ name })` FIRST to load the authoritative SOP instead of guessing procedures.',
     '2. **Skills Library & Mode Precedence**:',
     `   - Resolution order in Bot Mode: \`${bot.dir ? `${bot.dir}/.dsh/skills` : '<bot>/.dsh/skills'}\` → \`${store?.skillsRoot || '$DSH_HOME/botmode/skills'}\` → \`${BUILTIN_SKILLS_ROOT}\` → shared normal-mode skills (e.g. \`agent-browser\`, \`webapp-testing\`).`,
-    '   - Built-in Bot skills always outrank same-name normal-mode skills: `browser-desktop-automation` (progressive L1→L4 web/GUI automation & human takeover), `bot-team-control` (1:1 comms, Bot CRUD, Group Room creation), `team-collaboration`, `room-completion`, and `scheduled-routines` (persistent schedules via `scheduled_tasks`).',
+    '   - Built-in Bot skills always outrank same-name normal-mode skills: `browser-desktop-automation` (progressive L1→L4 web/GUI automation & human takeover), `bot-team-control` (1:1 comms, Bot CRUD, Group Room creation), `team-collaboration`, `room-completion`, `scheduled-routines` (persistent schedules via `scheduled_tasks`), `artifact-delivery` (deliverable publishing & host health), and `memory-hygiene` (`MEMORY.md` compaction & Memory Hub curation).',
     '3. **Memory Hygiene (Zero Redundancy)**:',
     '   - Persist only high-signal, evolving facts via `memory_save` or `MEMORY.md` (user preferences, verified environment facts, failure lessons, active routine/room IDs).',
     '   - NEVER copy static system-prompt rules or full `SKILL.md` texts into memory.',

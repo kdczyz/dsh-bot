@@ -59,7 +59,15 @@ import {
   sanitizeArtifactFilename,
 } from './artifacts.js'
 import { collectLocalHostSystem } from './screen.js'
-import { discoverBotSkills, isNormalModeOnlyTool } from './isolation.js'
+import {
+  deleteBotSkillFile,
+  discoverBotSkills,
+  isNormalModeOnlyTool,
+  readBotSkillRaw,
+  saveBotSkillFile,
+} from './isolation.js'
+import { normalizeNotificationsSettings } from './channels.js'
+import { RemoteGateway } from './remote.js'
 
 const BOT_SCOPED_TOOL_NAMES = [
   'message_agent',
@@ -155,7 +163,7 @@ export class BotApi {
   #systemSnapshot = null
   #skillsByBot = new Map()
 
-  constructor({ ctx, store, dispatcher, rooms, routines, approvals, memory, mcp, screen, logger }) {
+  constructor({ ctx, store, dispatcher, rooms, routines, approvals, memory, mcp, screen, notifications, webhooks, remote, logger }) {
     this.ctx = ctx
     this.store = store
     this.dispatcher = dispatcher
@@ -165,6 +173,9 @@ export class BotApi {
     this.memory = memory ?? null
     this.mcp = mcp ?? null
     this.screen = screen ?? null
+    this.notifications = notifications ?? null
+    this.webhooks = webhooks ?? null
+    this.remote = remote ?? new RemoteGateway({ logger: logger ?? console })
     this.logger = logger
   }
 
@@ -214,6 +225,35 @@ export class BotApi {
   }
 
   async handle(req, res) {
+    const url = new URL(req.url ?? '/', 'http://localhost')
+    if (url.pathname.startsWith(PREFIX)) {
+      const earlyRoute = url.pathname.slice(PREFIX.length)
+      const webhookMatch = /^webhook\/([^/]+)$/.exec(earlyRoute)
+      if (webhookMatch && req.method === 'POST') {
+        if (!this.webhooks) {
+          sendJson(res, 503, { ok: false, error: 'webhooks unavailable' })
+          return
+        }
+        const raw = await readBody(req)
+        if (raw === undefined) {
+          sendJson(res, 413, { ok: false, error: 'body too large' })
+          return
+        }
+        try {
+          await this.store.load()
+          const webhookId = decodeURIComponent(webhookMatch[1])
+          const result = await this.webhooks.trigger(webhookId, {
+            headers: req.headers ?? {},
+            rawBody: raw,
+          })
+          sendJson(res, result.status || (result.ok ? 202 : 400), result)
+        } catch (error) {
+          sendJson(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) })
+        }
+        return
+      }
+    }
+
     const connection = this.ctx.get('connection')
     if (!connection || typeof connection.requestRejection !== 'function') {
       sendJson(res, 503, { ok: false, error: 'connection auth fence unavailable' })
@@ -224,7 +264,6 @@ export class BotApi {
       sendJson(res, rejection, { ok: false, error: rejection === 401 ? 'sign-in required' : 'request refused' })
       return
     }
-    const url = new URL(req.url ?? '/', 'http://localhost')
     if (!url.pathname.startsWith(PREFIX)) {
       sendJson(res, 404, { ok: false, error: 'not found' })
       return
@@ -239,6 +278,14 @@ export class BotApi {
           this.#refreshBotSkills().catch(() => undefined),
         ])
         sendJson(res, 200, { ok: true, state: this.publicState() })
+        return
+      }
+      if (route === 'remote' && req.method === 'GET') {
+        try {
+          sendJson(res, 200, await this.remote.status({ qr: url.searchParams.get('qr') !== '0' }))
+        } catch (error) {
+          sendJson(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) })
+        }
         return
       }
       if (route === 'screen/status' && req.method === 'GET') {
@@ -913,13 +960,9 @@ export class BotApi {
       },
       system: this.#systemSnapshot || (this.#screenSnapshot.host?.cpu ? this.#screenSnapshot.host : null),
       memory: this.memory ? this.memory.publicSummary() : null,
-      mcp: this.mcp
-        ? {
-          configPath: this.mcp.configPath,
-          priority: { botMode: ['bot', 'normal'], normalMode: ['normal', 'bot'] },
-          servers: this.mcp.listForMode('bot'),
-        }
-        : null,
+      mcp: this.mcp ? this.mcp.publicConfig() : null,
+      webhooks: this.webhooks ? this.webhooks.list() : (state.webhooks ?? []),
+      notificationLogs: this.notifications ? this.notifications.recentLogs(20) : [],
       settings: state.settings ?? defaultSettingsState(),
       usage: this.#usageSummary(state),
       artifacts: this.#artifactsSummary(state),
@@ -952,13 +995,15 @@ export class BotApi {
     const next = new Map()
     await Promise.all(bots.map(async (bot) => {
       try {
-        const list = await discoverBotSkills(this.store, bot, { hostSkills })
+        const list = await discoverBotSkills(this.store, bot, { hostSkills, includeDisabled: true })
         next.set(bot.id, list.map(sk => ({
           name: sk.name,
           description: sk.description,
           source: sk.source,
           tier: sk.tier || 'bot',
           path: sk.path,
+          enabled: sk.enabled !== false,
+          editable: sk.editable === true,
         })))
       } catch (_error) {
         next.set(bot.id, [])
@@ -1149,6 +1194,12 @@ export class BotApi {
       case 'routine.notices.clear': return this.routines.clearNotices()
       case 'approval.decide': return this.approvals.decide(stringOr(payload.approvalId), stringOr(payload.decision))
       case 'question.decide': return this.approvals.decideQuestion(stringOr(payload.questionId), payload.answers)
+      case 'remote.status': return this.remote.status({ qr: payload?.qr !== false })
+      case 'remote.up': return this.remote.up()
+      case 'remote.rotate': return this.remote.rotate()
+      case 'remote.rotateApp': return this.remote.rotateApp()
+      case 'remote.down': return this.remote.down()
+      case 'remote.inspect': return this.remote.inspectLink(payload?.link ?? payload?.text ?? '')
       case 'screen.help.decide': {
         const helpId = stringOr(payload.helpId)
         const decision = stringOr(payload.decision, 'release')
@@ -1246,6 +1297,24 @@ export class BotApi {
         botId: stringOr(payload?.botId || payload?.bot_id).trim(),
       })
       case 'settings.save': return this.saveSettings(payload)
+      case 'mcp.list': return this.#requireMcp().publicConfig()
+      case 'mcp.save': return this.#requireMcp().saveServer(stringOr(payload.name), payload.config ?? payload)
+      case 'mcp.delete': return this.#requireMcp().deleteServer(stringOr(payload.name))
+      case 'mcp.toggle': return this.#requireMcp().toggleServer(
+        stringOr(payload.name),
+        payload.enabled !== undefined ? payload.enabled === true : payload.disabled !== true,
+      )
+      case 'mcp.test': return this.#requireMcp().probeServer(stringOr(payload.name))
+      case 'skills.list': return this.listSkills(payload)
+      case 'skills.read': return this.readSkill(payload)
+      case 'skills.save': return this.saveSkill(payload)
+      case 'skills.delete': return this.deleteSkill(payload)
+      case 'skills.toggle': return this.toggleBotSkill(payload)
+      case 'webhook.list': return { ok: true, webhooks: this.#requireWebhooks().list() }
+      case 'webhook.save': return this.#requireWebhooks().save(stringOr(payload.webhookId), payload.draft ?? payload)
+      case 'webhook.delete': return this.#requireWebhooks().remove(stringOr(payload.webhookId))
+      case 'webhook.test': return this.testWebhook(payload)
+      case 'notifications.test': return this.#requireNotifications().test(payload.override ?? null)
       case 'bot.files.read': return this.readBotFiles(payload)
       case 'bot.files.save': return this.saveBotFiles(payload)
       case 'logs.read': return this.readLogs(payload)
@@ -1261,6 +1330,121 @@ export class BotApi {
   #requireScreen() {
     if (!this.screen) throw new Error('Virtual Screen bridge is unavailable in this Host.')
     return this.screen
+  }
+
+  #requireMcp() {
+    if (!this.mcp) throw new Error('Bot MCP Registry is unavailable in this Host.')
+    return this.mcp
+  }
+
+  #requireWebhooks() {
+    if (!this.webhooks) throw new Error('Webhook Manager is unavailable in this Host.')
+    return this.webhooks
+  }
+
+  #requireNotifications() {
+    if (!this.notifications) throw new Error('Notification Hub is unavailable in this Host.')
+    return this.notifications
+  }
+
+  async listSkills(payload = {}) {
+    await this.#refreshBotSkills()
+    const botId = stringOr(payload.botId).trim()
+    const bot = botId ? this.store.bot(botId) : null
+    const hostSkills = this.ctx?.get?.('skills') ?? null
+    const list = await discoverBotSkills(this.store, bot, { hostSkills, includeDisabled: true })
+    return {
+      ok: true,
+      botId: bot?.id || '',
+      skills: list.map(sk => ({
+        name: sk.name,
+        description: sk.description,
+        source: sk.source,
+        tier: sk.tier || 'bot',
+        path: sk.path,
+        enabled: sk.enabled !== false,
+        editable: sk.editable === true,
+      })),
+    }
+  }
+
+  async readSkill(payload = {}) {
+    const botId = stringOr(payload.botId).trim()
+    const bot = botId ? this.store.bot(botId) : null
+    const hostSkills = this.ctx?.get?.('skills') ?? null
+    const res = await readBotSkillRaw(this.store, bot, stringOr(payload.name), { hostSkills })
+    if (!res.ok) throw new Error(res.error || 'Skill read failed.')
+    return res
+  }
+
+  async saveSkill(payload = {}) {
+    const scope = payload.scope === 'bot' ? 'bot' : 'shared'
+    const botId = stringOr(payload.botId).trim()
+    const bot = scope === 'bot' ? this.store.bot(botId) : null
+    if (scope === 'bot' && !bot) throw new Error('Select a Bot to save a Bot-local skill.')
+    if (bot) await this.store.ensureBotDir(bot)
+    const res = await saveBotSkillFile(this.store, bot, {
+      scope,
+      name: stringOr(payload.name),
+      content: stringOr(payload.content),
+    })
+    if (!res.ok) throw new Error(res.error || 'Skill save failed.')
+    await this.#refreshBotSkills()
+    return res
+  }
+
+  async deleteSkill(payload = {}) {
+    const scope = payload.scope === 'bot' ? 'bot' : 'shared'
+    const botId = stringOr(payload.botId).trim()
+    const bot = scope === 'bot' ? this.store.bot(botId) : null
+    const res = await deleteBotSkillFile(this.store, bot, {
+      scope,
+      name: stringOr(payload.name),
+    })
+    if (!res.ok) throw new Error(res.error || 'Skill delete failed.')
+    await this.#refreshBotSkills()
+    return res
+  }
+
+  async toggleBotSkill(payload = {}) {
+    const botId = stringOr(payload.botId).trim()
+    const skillName = stringOr(payload.name).trim()
+    const enabled = payload.enabled === true
+    if (!botId || !skillName) throw new Error('botId and name are required.')
+    const bot = this.store.bot(botId)
+    if (!bot) throw new Error('Unknown Bot.')
+    let disabledSkills = []
+    await this.store.mutate((state) => {
+      const target = state.bots.find(item => item.id === botId)
+      if (!target) return
+      const set = new Set(Array.isArray(target.disabledSkills) ? target.disabledSkills : [])
+      if (enabled) set.delete(skillName)
+      else set.add(skillName)
+      target.disabledSkills = [...set].sort()
+      target.updatedAt = new Date().toISOString()
+      disabledSkills = target.disabledSkills
+    })
+    await this.#refreshBotSkills()
+    return { ok: true, botId, name: skillName, enabled, disabledSkills }
+  }
+
+  async testWebhook(payload = {}) {
+    const manager = this.#requireWebhooks()
+    const webhookId = stringOr(payload.webhookId).trim()
+    const hook = manager.get(webhookId)
+    if (!hook) throw new Error('Unknown webhook.')
+    const body = JSON.stringify({
+      event: 'webhook.test',
+      message: stringOr(payload.message, 'Test event from DSH Bot Mode Settings'),
+      at: new Date().toISOString(),
+    })
+    return manager.trigger(webhookId, {
+      headers: {
+        authorization: `Bearer ${hook.secret}`,
+        'content-type': 'application/json',
+      },
+      rawBody: body,
+    })
   }
 
   #currentSystemSettings() {
@@ -2121,6 +2305,27 @@ export class BotApi {
           ...patch.routines,
         })
       }
+      if (patch.governance && typeof patch.governance === 'object') {
+        const gov = patch.governance
+        const curGov = state.settings.governance ?? defaultSettingsState().governance
+        state.settings.governance = {
+          requireApprovalForBotCrud: gov.requireApprovalForBotCrud !== undefined
+            ? gov.requireApprovalForBotCrud === true
+            : curGov.requireApprovalForBotCrud !== false,
+          defaultDailyTokenLimit: gov.defaultDailyTokenLimit !== undefined
+            ? clampInt(gov.defaultDailyTokenLimit, 0, 1_000_000_000, 0)
+            : (Number(curGov.defaultDailyTokenLimit) || 0),
+          protectExternalWrites: gov.protectExternalWrites !== undefined
+            ? gov.protectExternalWrites === true
+            : curGov.protectExternalWrites === true,
+        }
+      }
+      if (patch.notifications && typeof patch.notifications === 'object') {
+        state.settings.notifications = normalizeNotificationsSettings(
+          patch.notifications,
+          state.settings.notifications ?? defaultSettingsState().notifications,
+        )
+      }
       updated = state.settings
     })
     if (sys && this.screen && updated?.system) {
@@ -2264,6 +2469,15 @@ export class BotApi {
         existing.approvalPolicy = APPROVAL_POLICIES.includes(draft.approvalPolicy)
           ? draft.approvalPolicy
           : existing.approvalPolicy
+        if (draft.permissionRole === 'admin' || draft.permissionRole === 'worker') {
+          existing.permissionRole = draft.permissionRole
+        }
+        if (draft.dailyTokenLimit !== undefined) {
+          existing.dailyTokenLimit = clampInt(draft.dailyTokenLimit, 0, 1_000_000_000, 0)
+        }
+        if (Array.isArray(draft.disabledSkills)) {
+          existing.disabledSkills = [...new Set(draft.disabledSkills.filter(s => typeof s === 'string' && s.trim() !== '').map(s => s.trim()))].sort()
+        }
         existing.updatedAt = now
         return
       }
@@ -2301,6 +2515,12 @@ export class BotApi {
         model,
         tools,
         approvalPolicy: APPROVAL_POLICIES.includes(draft.approvalPolicy) ? draft.approvalPolicy : 'ask',
+        permissionRole: draft.permissionRole === 'admin' ? 'admin' : 'worker',
+        dailyTokenLimit: clampInt(draft.dailyTokenLimit, 0, 1_000_000_000, 0),
+        tokenUsage: { day: '', tokens: 0 },
+        disabledSkills: Array.isArray(draft.disabledSkills)
+          ? [...new Set(draft.disabledSkills.filter(s => typeof s === 'string' && s.trim() !== '').map(s => s.trim()))].sort()
+          : [],
         skills: [],
         createdAt: now,
       }

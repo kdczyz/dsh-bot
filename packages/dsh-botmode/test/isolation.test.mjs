@@ -463,7 +463,7 @@ try {
     assert.deepEqual(globalRegisteredTools, [], 'Bot tools must NEVER leak into global ctx.tools')
 
     const botsService = services.get('bots')
-    const createdBot = await botsService.create({ name: 'IsoBot', role: 'Orchestrator' })
+    const createdBot = await botsService.create({ name: 'IsoBot', role: 'Orchestrator', permissionRole: 'admin' })
     const botSessionId = 'sess_iso_primary'
     const state = botsService.state()
     state.bots.find(b => b.id === createdBot.id).sessionId = botSessionId

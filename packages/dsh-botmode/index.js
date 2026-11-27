@@ -17,7 +17,7 @@
  *     bot.json  SOUL.md  MEMORY.md  .dsh/skills/team/SKILL.md
  */
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import { BotStore } from './host/store.js'
 import { Dispatcher } from './host/dispatch.js'
 import { Rooms } from './host/rooms.js'
@@ -26,9 +26,10 @@ import { BotApi, PREFIX } from './host/api.js'
 import { Approvals } from './host/approvals.js'
 import { MemoryManager } from './host/memory/manager.js'
 import { BotMcpRegistry } from './host/mcp.js'
+import { NotificationHub, WebhookManager } from './host/channels.js'
 import { personaBlock, seedInitialMemoryHub, syncBotFiles, syncTeamFiles } from './host/persona.js'
 import { botModelCatalog, modelAcceptsImages, resolveBotSelection } from './host/models.js'
-import { checkRoomWriteSoftLock } from './host/room-locks.js'
+import { checkRoomWriteSoftLock, extractMutatedPathsFromTool } from './host/room-locks.js'
 import { ScreenBridge } from './host/screen.js'
 import {
   createBotScopedSkillTool,
@@ -119,9 +120,82 @@ export function apply(ctx) {
   const screen = new ScreenBridge({ approvals, logger, logDir: store.root })
   const rooms = new Rooms(store, dispatcher, logger, approvals)
   const routines = new Routines(ctx, store, dispatcher, logger, { rooms })
-  const api = new BotApi({ ctx, store, dispatcher, rooms, routines, approvals, memory, mcp, screen, logger })
+  const notifications = new NotificationHub({ store, logger })
+  const webhooks = new WebhookManager({ store, dispatcher, rooms, logger })
+  const api = new BotApi({
+    ctx,
+    store,
+    dispatcher,
+    rooms,
+    routines,
+    approvals,
+    memory,
+    mcp,
+    screen,
+    notifications,
+    webhooks,
+    logger,
+  })
   dispatcher.setArtifactHandler(event => api.syncReplyArtifacts(event))
+  dispatcher.setBudgetExceededHandler((info) => {
+    void notifications.notify({
+      kind: 'budget_exceeded',
+      title: `Token budget exceeded: ${info?.bot?.name || info?.bot?.id || 'Bot'}`,
+      summary: `Used ${info?.used ?? 0} / ${info?.limit ?? 0} tokens on ${info?.day || 'today'}.`,
+      botName: info?.bot?.name || '',
+      meta: {
+        botId: info?.bot?.id || '',
+        used: info?.used ?? 0,
+        limit: info?.limit ?? 0,
+        day: info?.day || '',
+      },
+    })
+  })
   rooms.setArtifactHandler(event => api.syncDeliverables(event))
+  rooms.setCompletionHandler((event) => {
+    const room = event?.room
+    const comp = event?.completion
+    void notifications.notify({
+      kind: 'room_complete',
+      title: `Group Room completed: ${room?.name || room?.id || 'Room'}`,
+      summary: comp?.summary || 'Task marked completed.',
+      botName: comp?.finishedByName || event?.bot?.name || '',
+      roomName: room?.name || '',
+      meta: {
+        roomId: room?.id || '',
+        deliverables: Array.isArray(comp?.deliverables) ? comp.deliverables : [],
+      },
+    })
+  })
+  const offApprovalNotify = approvals.onChange((ev) => {
+    if (!ev || typeof ev !== 'object') return
+    if (ev.kind === 'approval_pending' && ev.approval) {
+      void notifications.notify({
+        kind: 'approval',
+        title: `Approval needed: ${ev.approval.botName || 'Bot'} → ${ev.approval.toolName || 'tool'}`,
+        summary: ev.approval.reason || 'Awaiting human approval.',
+        botName: ev.approval.botName || '',
+        meta: { approvalId: ev.approval.id, toolName: ev.approval.toolName },
+      })
+    } else if (ev.kind === 'question_pending' && ev.question) {
+      void notifications.notify({
+        kind: 'question',
+        title: `Question from ${ev.question.botName || 'Bot'}`,
+        summary: ev.question.prompt || 'Awaiting your answer.',
+        botName: ev.question.botName || '',
+        meta: { questionId: ev.question.id },
+      })
+    } else if (ev.kind === 'screen_help_pending' && ev.help) {
+      void notifications.notify({
+        kind: 'screen_help',
+        title: `Human screen takeover requested: ${ev.help.botName || 'Bot'}`,
+        summary: ev.help.reason || 'CAPTCHA / login / manual verification required.',
+        botName: ev.help.botName || '',
+        meta: { helpId: ev.help.id },
+      })
+    }
+  })
+  ctx.effect(() => offApprovalNotify, 'botmode: outbound notification bridge')
 
   const ready = store.load()
     .then(async () => {
@@ -256,10 +330,31 @@ export function apply(ctx) {
     if (!botSession && BOT_SCOPED_TOOL_SET.has(toolName)) {
       return `Tool "${toolName}" is only available inside Bot Mode sessions.`
     }
-    if (store.state?.settings?.groupChat?.enableSoftLock === false) return undefined
     if (!sessionId) return undefined
     const resolved = store.botByAnySession(sessionId)
-    if (!resolved || resolved.kind !== 'room' || !resolved.roomId) return undefined
+    if (!resolved) return undefined
+
+    // Optional workspace write boundary guard for non-admin Bots in 1:1 sessions.
+    if (
+      resolved.kind !== 'room'
+      && store.state?.settings?.governance?.protectExternalWrites === true
+      && resolved.bot?.permissionRole !== 'admin'
+      && resolved.bot?.dir
+    ) {
+      const mutated = extractMutatedPathsFromTool(toolName, exec?.arguments, resolved.bot.dir)
+      const rootDir = resolve(resolved.bot.dir)
+      for (const candidate of mutated) {
+        const target = resolve(candidate)
+        const rel = relative(rootDir, target)
+        const inside = target === rootDir || (rel !== '' && !rel.startsWith('..') && !isAbsolute(rel))
+        if (!inside) {
+          return `Write blocked by Bot workspace boundary (protectExternalWrites): "${candidate}" is outside "${rootDir}". Grant admin role or disable protectExternalWrites to allow external writes.`
+        }
+      }
+    }
+
+    if (store.state?.settings?.groupChat?.enableSoftLock === false) return undefined
+    if (resolved.kind !== 'room' || !resolved.roomId) return undefined
     const room = store.room(resolved.roomId)
     if (!room) return undefined
     return checkRoomWriteSoftLock({
@@ -445,6 +540,14 @@ export function apply(ctx) {
       logger?.warn?.(`botmode: tool policy for ${bot.name} failed: ${String(error)}`)
     }
 
+    // Mount Bot-priority MCP override clients onto this Bot's scoped `agent.ctx`
+    // whenever a Bot MCP server collides by name with a normal-mode MCP server.
+    try {
+      await mcp.mountBotOverrides(agent.ctx)
+    } catch (error) {
+      logger?.warn?.(`botmode: MCP override mount for ${bot.name} failed: ${String(error)}`)
+    }
+
     // Permanent chat compaction with Hermes-style `onPreCompress` memory checkpoint.
     try {
       const commands = agent.ctx.get('commands')
@@ -512,6 +615,23 @@ export function apply(ctx) {
     if (!sessionId) return undefined
     const resolved = store.botByAnySession(sessionId)
     return resolved ? { ...resolved, sessionId } : undefined
+  }
+
+  // Governance approval gate for high-impact Bot/Room lifecycle mutations (`bot_manage`, `room_manage`).
+  const requireGovernanceApproval = async (caller, toolName, reason) => {
+    const gov = store.state?.settings?.governance
+    if (gov?.requireApprovalForBotCrud === false) return { allowed: true }
+    if (caller.bot.permissionRole === 'admin' || caller.bot.approvalPolicy === 'always') {
+      return { allowed: true }
+    }
+    const decision = await approvals.ask(caller.bot, {
+      toolName,
+      reason,
+    }, { roomId: caller.roomId || '', sessionId: caller.sessionId })
+    if (decision === 'allowed-once' || decision === 'allowed-session') {
+      return { allowed: true }
+    }
+    return { allowed: false, decision }
   }
 
   // ---- Per-Bot Virtual Screen helpers (auto-scoped to caller Bot) ----------
@@ -790,6 +910,18 @@ export function apply(ctx) {
               return JSON.stringify({ ok: true, bot: target })
             }
             if (action === 'create') {
+              const gate = await requireGovernanceApproval(
+                caller,
+                'bot_manage',
+                `Create new Bot "${String(args?.name ?? '').trim() || '(unnamed)'}" (role: ${String(args?.role ?? 'general')})`,
+              )
+              if (!gate.allowed) {
+                return JSON.stringify({
+                  ok: false,
+                  code: 'approval_denied',
+                  error: `Creating Bot "${String(args?.name ?? '')}" was denied by human approval (${gate.decision}).`,
+                })
+              }
               const res = await api.command({
                 type: 'bot.save',
                 draft: {
@@ -828,6 +960,18 @@ export function apply(ctx) {
               }
               if (dispatcher.isRunning(target.id)) {
                 return JSON.stringify({ ok: false, code: 'bot_busy', error: `Bot "${target.name}" is currently running; wait for it to finish before deleting.` })
+              }
+              const gate = await requireGovernanceApproval(
+                caller,
+                'bot_manage',
+                `Delete Bot "${target.name}" (${target.id}) and purge its workspace`,
+              )
+              if (!gate.allowed) {
+                return JSON.stringify({
+                  ok: false,
+                  code: 'approval_denied',
+                  error: `Deleting Bot "${target.name}" was denied by human approval (${gate.decision}).`,
+                })
               }
               await api.command({ type: 'bot.delete', botId: target.id })
               return JSON.stringify({ ok: true, deleted: { id: target.id, name: target.name } })
@@ -935,7 +1079,20 @@ export function apply(ctx) {
             }
             if (action === 'delete') {
               const roomId = String(args?.roomId ?? '')
-              if (!store.room(roomId)) return JSON.stringify({ ok: false, error: 'Unknown Group Room.' })
+              const targetRoom = store.room(roomId)
+              if (!targetRoom) return JSON.stringify({ ok: false, error: 'Unknown Group Room.' })
+              const gate = await requireGovernanceApproval(
+                caller,
+                'room_manage',
+                `Delete Group Room "${targetRoom.name}" (${roomId})`,
+              )
+              if (!gate.allowed) {
+                return JSON.stringify({
+                  ok: false,
+                  code: 'approval_denied',
+                  error: `Deleting Group Room "${targetRoom.name}" was denied by human approval (${gate.decision}).`,
+                })
+              }
               await rooms.remove(roomId)
               return JSON.stringify({ ok: true, deleted: roomId })
             }
