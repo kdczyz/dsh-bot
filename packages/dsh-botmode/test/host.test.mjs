@@ -1866,6 +1866,53 @@ agents.set('s_ops', fakeAgent('s_ops'))
     assert.equal(sFlat.bot('bot_legacy').sectionId, 'general')
     await rm(flatRoot, { recursive: true, force: true })
   }
+
+  // 15l. Multi-instance BotStore & BotMcpRegistry sync: concurrent instances see each other's
+  // writes without overwriting Bots, live Rooms/subtasks, or MCP server configs
+  {
+    const { BotMcpRegistry } = await import('../host/mcp.js')
+    const syncRoot = await mkdtemp(join(tmpdir(), 'dsh-botmode-sync-'))
+    const storeA = new BotStore(syncRoot)
+    const storeB = new BotStore(syncRoot)
+    await storeA.load()
+    await storeB.load()
+    await storeA.mutate((state) => {
+      state.bots.push({ id: 'bot_a', name: 'BotA', sectionId: 'general' })
+      state.rooms.push({
+        id: 'room_live',
+        name: 'LiveRoom',
+        memberIds: ['bot_a'],
+        status: 'running',
+        ownerPid: process.pid,
+        subtasks: [{ taskId: 't1', ownerBotId: 'bot_a', ownerName: 'BotA', paths: ['/tmp/x'], status: 'in_progress' }],
+      })
+    })
+    await storeB.load()
+    assert.ok(storeB.bot('bot_a'), 'storeB.load() should pick up BotA written by storeA')
+    assert.equal(storeB.room('room_live').status, 'running', 'hot reload must not downgrade live room to idle')
+    assert.equal(storeB.room('room_live').subtasks[0].status, 'in_progress', 'hot reload must not release live subtask lock')
+
+    await storeB.mutate((state) => {
+      state.bots.push({ id: 'bot_b', name: 'BotB', sectionId: 'general' })
+    })
+    await storeA.load()
+    assert.ok(storeA.bot('bot_a'), 'storeB.mutate() must not overwrite BotA')
+    assert.ok(storeA.bot('bot_b'), 'storeA.load() should see BotB written by storeB')
+    assert.equal(storeA.room('room_live').status, 'running', 'storeB.mutate() must preserve live room status')
+
+    // Multi-instance BotMcpRegistry sync
+    const mcpA = new BotMcpRegistry(null, storeA, logger)
+    const mcpB = new BotMcpRegistry(null, storeB, logger)
+    await mcpA.load()
+    await mcpB.load()
+    await mcpA.saveServer('alpha', { transport: 'stdio', command: 'echo', args: ['a'] })
+    await mcpB.saveServer('beta', { transport: 'stdio', command: 'echo', args: ['b'] })
+    await mcpA.syncIfChanged()
+    assert.ok(mcpA.config.servers.alpha, 'mcpB write must not overwrite alpha')
+    assert.ok(mcpA.config.servers.beta, 'mcpA.syncIfChanged() should pick up beta')
+
+    await rm(syncRoot, { recursive: true, force: true })
+  }
 }
 
 await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })

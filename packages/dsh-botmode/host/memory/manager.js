@@ -58,6 +58,7 @@ export class MemoryManager {
   #aliases = new Map() // alias -> canonical id
   #activeId = ''
   #activeProvider = null
+  #activeConfigSig = ''
   #lastHealth = null
   #lastRecallByBot = new Map()
   #initPromise = null
@@ -132,10 +133,27 @@ export class MemoryManager {
     return this.#aliases.get(key) ?? (this.#registry.has(key) ? key : '')
   }
 
-  /** Ensure discovery and active provider initialization have completed. */
+  #memoryConfigSig(resolvedId) {
+    const mem = this.store.state.memory ?? {}
+    return JSON.stringify({
+      provider: resolvedId,
+      teamId: mem.teamId || 'dsh-botmode',
+      userId: mem.userId || 'default',
+      config: mem.providersConfig?.[resolvedId] ?? {},
+    })
+  }
+
+  /** Ensure discovery and active provider initialization have completed (syncing cross-process config changes). */
   async ensureReady() {
-    if (this.#activeProvider) return this.#activeProvider
     if (this.#initPromise) return this.#initPromise
+    await this.store.load()
+    if (this.#activeProvider) {
+      const desired = this.store.state.memory?.provider || 'memory_tencentdb'
+      const resolved = this.resolveId(desired) || 'memory_tencentdb'
+      if (resolved === this.#activeId && this.#memoryConfigSig(resolved) === this.#activeConfigSig) {
+        return this.#activeProvider
+      }
+    }
     this.#initPromise = (async () => {
       await this.store.load()
       await this.discover()
@@ -180,6 +198,7 @@ export class MemoryManager {
     })
     this.#activeId = descriptor.id
     this.#activeProvider = instance
+    this.#activeConfigSig = this.#memoryConfigSig(descriptor.id)
     this.#lastHealth = await this.#probeHealth(instance)
     return instance
   }

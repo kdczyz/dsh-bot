@@ -4197,11 +4197,11 @@ window.__ModuleLoader__.load({
           const session = binding ? binding.session : null
           const snapshot = useSyncExternalStore(
             listener => (session ? session.subscribe(listener) : () => {}),
-            () => (session ? session.getSnapshot() : { running: false, openState: 'error', hasMore: false }),
+            () => (session ? session.getSnapshot() : ERROR_SESSION_SNAP),
           )
           const events = useSyncExternalStore(
             listener => (binding ? binding.eventSource.subscribe(listener) : () => {}),
-            () => (binding ? binding.eventSource.getSnapshot() : { entries: [], hasMore: false, revision: 0 }),
+            () => (binding ? binding.eventSource.getSnapshot() : EMPTY_EVENT_SNAP),
           )
           const turns = useMemo(() => buildTranscript(events.entries), [events])
           const stickRef = useRef(true)
@@ -4354,6 +4354,7 @@ window.__ModuleLoader__.load({
         }
 
         const IDLE_SESSION_SNAP = Object.freeze({ running: false, openState: 'idle', hasMore: false })
+        const ERROR_SESSION_SNAP = Object.freeze({ running: false, openState: 'error', hasMore: false })
         const EMPTY_EVENT_SNAP = Object.freeze({ entries: Object.freeze([]), hasMore: false, revision: 0 })
 
         function isClientPassToken(raw) {

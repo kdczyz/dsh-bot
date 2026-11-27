@@ -388,6 +388,31 @@ const root = await mkdtemp(join(tmpdir(), 'botmode-routines-test-'))
   await routines.removeForBot('bot_a')
   assert.equal(store.state.routines.filter(r => r.botId === 'bot_a').length, 0)
   routines.executor.dispose()
+
+  // 5j. Multi-instance safety: SchedulerLock detects stolen lock & RunLog skips live other-PID runs
+  {
+    const lockPath = join(root, 'stolen.lock')
+    const lockA = new SchedulerLock(lockPath)
+    assert.equal(await lockA.acquire(), true)
+    // Simulate another live process stealing the lock after pause/timeout
+    await writeFile(lockPath, JSON.stringify({ pid: process.ppid || 1, token: 'other-host-token', at: new Date().toISOString() }), 'utf8')
+    assert.equal(await lockA.acquire(), false, 'previous holder must detect stolen lock token')
+    assert.equal(lockA.held, false)
+
+    const multiRuns = new RunLog(join(root, 'multi-runs'), logger)
+    const otherLivePid = process.ppid && process.ppid !== process.pid ? process.ppid : 1
+    await multiRuns.append('rtn_live', {
+      runId: 'run_other_live',
+      routineId: 'rtn_live',
+      ownerPid: otherLivePid,
+      status: 'running',
+      createdAt: new Date().toISOString(),
+    })
+    const recovered = await multiRuns.recoverInterrupted()
+    assert.equal(recovered.length, 0, 'recoverInterrupted must not interrupt a run owned by another live PID')
+    const latest = await multiRuns.get('rtn_live', 'run_other_live')
+    assert.equal(latest.status, 'running')
+  }
 }
 
 clearInterval(keepAlive)

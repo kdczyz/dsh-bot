@@ -5,8 +5,10 @@
  * which keeps writes cheap and crash-safe. After a Run settles the file is compacted to the most
  * recent `keep` Runs. `state.json` never carries Run history, so it cannot bloat.
  */
+import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { pidAlive, withFileLock } from '../store.js'
 
 const OPEN_STATUSES = new Set(['queued', 'running'])
 export const isOpenStatus = (status) => OPEN_STATUSES.has(status)
@@ -34,12 +36,14 @@ export class RunLog {
     return run
   }
 
+  #lockPath(routineId) { return `${this.#path(routineId)}.lock` }
+
   /** Append the current full snapshot of a Run (a Run record is always written whole). */
   append(routineId, record) {
-    return this.#serial(routineId, async () => {
+    return this.#serial(routineId, () => withFileLock(this.#lockPath(routineId), async () => {
       await mkdir(this.root, { recursive: true })
       await appendFile(this.#path(routineId), `${JSON.stringify(record)}\n`, 'utf8')
-    })
+    }))
   }
 
   async #readAll(routineId) {
@@ -73,25 +77,26 @@ export class RunLog {
 
   /** Rewrite the file with one line per Run, keeping the newest `keep`. */
   compact(routineId, keep = 50) {
-    return this.#serial(routineId, async () => {
+    return this.#serial(routineId, () => withFileLock(this.#lockPath(routineId), async () => {
       const all = await this.#readAll(routineId)
       all.sort((a, b) => Date.parse(a.createdAt ?? a.startedAt ?? 0) - Date.parse(b.createdAt ?? b.startedAt ?? 0))
       const kept = all.slice(-Math.max(1, keep))
-      const temp = `${this.#path(routineId)}.${process.pid}.tmp`
+      const temp = `${this.#path(routineId)}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`
       await writeFile(temp, kept.map(record => JSON.stringify(record)).join('\n') + (kept.length > 0 ? '\n' : ''), 'utf8')
       await rename(temp, this.#path(routineId))
-    })
+    }))
   }
 
   remove(routineId) {
-    return this.#serial(routineId, async () => {
+    return this.#serial(routineId, () => withFileLock(this.#lockPath(routineId), async () => {
       await rm(this.#path(routineId), { force: true })
-    })
+    }))
   }
 
   /**
    * After a crash/restart no Run can still be live: close every `queued`/`running` Run as
-   * `interrupted`. Returns the affected `{ routineId, runId }` pairs.
+   * `interrupted` unless its `ownerPid` is another still-alive Host process.
+   * Returns the affected `{ routineId, runId }` pairs.
    */
   async recoverInterrupted() {
     let names = []
@@ -105,6 +110,8 @@ export class RunLog {
       const routineId = name.slice(0, -'.jsonl'.length)
       const open = (await this.#readAll(routineId)).filter(record => isOpenStatus(record.status))
       for (const record of open) {
+        const ownerPid = Number.isInteger(record.ownerPid) && record.ownerPid > 0 ? record.ownerPid : 0
+        if (ownerPid > 0 && ownerPid !== process.pid && pidAlive(ownerPid)) continue
         await this.append(routineId, {
           ...record,
           status: 'interrupted',

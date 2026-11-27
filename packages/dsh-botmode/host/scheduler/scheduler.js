@@ -15,28 +15,18 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rm, stat, utimes } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { newId } from '../store.js'
+import { newId, pidAlive } from '../store.js'
 import { dayKey } from './model.js'
 import { nextRun } from './schedule.js'
 import { RoutineError } from './service.js'
 
 const ON_TIME_SLACK_MS = 90_000
-const MAX_IDLE_MS = 30_000
+const MAX_IDLE_MS = 5_000
 const MIN_REARM_MS = 1_000
 const WARMUP_MS = 2_000
 const LOCK_STALE_MS = 120_000
 
 const iso = (value = new Date()) => (value instanceof Date ? value : new Date(value)).toISOString()
-
-const pidAlive = (pid) => {
-  if (!Number.isInteger(pid) || pid <= 0) return false
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return error?.code === 'EPERM'
-  }
-}
 
 /** Single-holder lock so two host processes sharing one state root never both fire tasks. */
 export class SchedulerLock {
@@ -61,9 +51,15 @@ export class SchedulerLock {
   async acquire() {
     try {
       if (this.held) {
-        const now = new Date()
-        await utimes(this.path, now, now)
-        return true
+        let info = null
+        try { info = JSON.parse(await readFile(this.path, 'utf8')) } catch (_error) { info = null }
+        if (info && info.token === this.token) {
+          const now = new Date()
+          await utimes(this.path, now, now)
+          return true
+        }
+        // Lock was reclaimed by another live host while we were paused/stalled.
+        this.held = false
       }
       await mkdir(dirname(this.path), { recursive: true })
       try {
@@ -102,6 +98,7 @@ export class Scheduler {
   #timer
   #ticking = false
   #stopped = true
+  #recoveredOnce = false
 
   constructor({ store, runs, executor, service, logger, lockPath }) {
     this.store = store
@@ -114,11 +111,6 @@ export class Scheduler {
 
   start() {
     this.#stopped = false
-    void this.runs.recoverInterrupted()
-      .then((recovered) => {
-        if (recovered.length > 0) this.logger?.warn?.(`botmode: ${recovered.length} routine run(s) were interrupted by a restart`)
-      })
-      .catch(() => undefined)
     this.#arm(WARMUP_MS)
     return () => {
       this.#stopped = true
@@ -156,6 +148,14 @@ export class Scheduler {
     this.#ticking = true
     try {
       if (!(await this.lock.acquire())) return
+      if (!this.#recoveredOnce) {
+        this.#recoveredOnce = true
+        await this.runs.recoverInterrupted()
+          .then((recovered) => {
+            if (recovered.length > 0) this.logger?.warn?.(`botmode: ${recovered.length} routine run(s) were interrupted by a restart`)
+          })
+          .catch(() => undefined)
+      }
       await this.store.load()
       const now = Date.now()
       await this.#expire(now)
@@ -200,6 +200,7 @@ export class Scheduler {
       runId: newId('run'),
       routineId: routine.id,
       botId: routine.botId,
+      ownerPid: process.pid,
       trigger,
       scheduledFor: scheduledFor ?? iso(),
       createdAt: iso(),

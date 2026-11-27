@@ -12,8 +12,8 @@
  * in both configs, normal mode keeps its own configured server while Bot Mode
  * tracks the conflict and marks Bot MCP as preferred.
  */
-import { access, readFile } from 'node:fs/promises'
-import { writeTextFile } from './store.js'
+import { access, readFile, stat } from 'node:fs/promises'
+import { withFileLock, writeTextFile } from './store.js'
 
 const SERVER_NAME_RE = /^[A-Za-z0-9_-]{1,32}$/
 
@@ -90,6 +90,8 @@ export class BotMcpRegistry {
   #config = defaultMcpConfig()
   #disposers = new Map() // serverName -> disposer registered into ctx.mcpManager
   #shadowedByNormal = new Set() // server names where normal mode already configured same name
+  #lastStatKey = null
+  #loaded = false
 
   constructor(ctx, store, logger) {
     this.ctx = ctx
@@ -101,8 +103,21 @@ export class BotMcpRegistry {
     return this.store.mcpConfigPath
   }
 
+  get configLockPath() {
+    return `${this.configPath}.lock`
+  }
+
   get config() {
     return this.#config
+  }
+
+  async #statKey() {
+    try {
+      const st = await stat(this.configPath)
+      return `${st.mtimeMs}:${st.size}:${st.ino}`
+    } catch {
+      return null
+    }
   }
 
   async ensureConfigFile() {
@@ -123,14 +138,41 @@ export class BotMcpRegistry {
       this.logger?.warn?.(`botmode: failed to parse ${this.configPath}, using empty MCP config: ${String(error)}`)
       this.#config = defaultMcpConfig()
     }
+    this.#lastStatKey = await this.#statKey()
+    this.#loaded = true
     return this.#config
   }
 
-  async save(nextConfig) {
-    this.#config = normalizeMcpConfig(nextConfig)
-    await writeTextFile(this.configPath, `${JSON.stringify(this.#config, null, 2)}\n`)
-    this.syncToHostManager()
+  /** Reload `mcp.json` from disk and refresh host registrations if modified by another process. */
+  async syncIfChanged() {
+    if (!this.#loaded) {
+      await this.load()
+      this.syncToHostManager()
+      return this.#config
+    }
+    const key = await this.#statKey()
+    if (key !== null && key !== this.#lastStatKey) {
+      await this.load()
+      this.syncToHostManager()
+    }
     return this.#config
+  }
+
+  async #mutateConfig(mutator) {
+    return withFileLock(this.configLockPath, async () => {
+      await this.load()
+      const next = await mutator(this.#config)
+      this.#config = normalizeMcpConfig(next)
+      await writeTextFile(this.configPath, `${JSON.stringify(this.#config, null, 2)}\n`)
+      this.#lastStatKey = await this.#statKey()
+      this.#loaded = true
+      this.syncToHostManager()
+      return this.#config
+    })
+  }
+
+  async save(nextConfig) {
+    return this.#mutateConfig(() => nextConfig)
   }
 
   async saveServer(serverName, rawEntry) {
@@ -142,31 +184,47 @@ export class BotMcpRegistry {
     if (!normalized) {
       throw new Error('Invalid MCP server entry: stdio requires "command", streamable-http requires "url".')
     }
-    const nextServers = {
-      ...this.#config.servers,
-      [name]: normalized,
-    }
-    await this.save({ ...this.#config, servers: nextServers })
+    await this.#mutateConfig((current) => ({
+      ...current,
+      servers: {
+        ...current.servers,
+        [name]: normalized,
+      },
+    }))
     return { ok: true, name, entry: normalized }
   }
 
   async deleteServer(serverName) {
     const name = String(serverName ?? '').trim()
     if (!name) throw new Error('MCP server name is required.')
-    const nextServers = { ...this.#config.servers }
-    delete nextServers[name]
-    await this.save({ ...this.#config, servers: nextServers })
+    await this.#mutateConfig((current) => {
+      const nextServers = { ...current.servers }
+      delete nextServers[name]
+      return { ...current, servers: nextServers }
+    })
     return { ok: true, deleted: name }
   }
 
   async toggleServer(serverName, enabled) {
     const name = String(serverName ?? '').trim()
-    const current = this.#config.servers[name]
-    if (!current) throw new Error(`Unknown Bot MCP server "${name}".`)
-    return this.saveServer(name, { ...current, enabled: enabled === true, disabled: enabled !== true })
+    let updatedEntry = null
+    await this.#mutateConfig((current) => {
+      const target = current.servers[name]
+      if (!target) throw new Error(`Unknown Bot MCP server "${name}".`)
+      updatedEntry = normalizeMcpServerEntry({ ...target, enabled: enabled === true, disabled: enabled !== true })
+      return {
+        ...current,
+        servers: {
+          ...current.servers,
+          [name]: updatedEntry,
+        },
+      }
+    })
+    return { ok: true, name, entry: updatedEntry }
   }
 
   async probeServer(serverName) {
+    await this.syncIfChanged()
     const name = String(serverName ?? '').trim()
     const entry = this.#config.servers[name]
     const manager = this.ctx?.get?.('mcpManager')
@@ -239,6 +297,7 @@ export class BotMcpRegistry {
    * `agentCtx` so Bot Mode genuinely overrides the normal-mode server's tools & prompt section.
    */
   async mountBotOverrides(agentCtx, options = {}) {
+    await this.syncIfChanged().catch(() => undefined)
     const conflicts = [...this.#shadowedByNormal].filter((name) => {
       const entry = this.#config.servers[name]
       return entry && entry.enabled !== false

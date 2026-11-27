@@ -611,6 +611,7 @@ export function apply(ctx) {
   // Helper to resolve the calling Bot across both primary and hidden room sessions.
   const resolveCallerBot = async (exec) => {
     await ready
+    await store.load()
     const sessionId = sessionIdOf(exec?.agent)
     if (!sessionId) return undefined
     const resolved = store.botByAnySession(sessionId)

@@ -111,13 +111,51 @@ export function inspectLink(text) {
 }
 
 export class RemoteGateway {
-  constructor({ home = DEFAULT_HOME, bin, logger = console } = {}) {
+  constructor({ home = DEFAULT_HOME, bin, logger = console, serviceName = 'dsh-remote.service', useSystemd } = {}) {
     this.home = home
     this.bin = bin || BIN_CANDIDATES.find((candidate) => existsSync(candidate)) || BIN_CANDIDATES[1]
     this.logger = logger
+    this.serviceName = serviceName
+    this.useSystemd = useSystemd ?? (home === DEFAULT_HOME && !bin && process.platform === 'linux')
     this.runtimePath = join(home, 'state', 'runtime.json')
     this.linkPath = join(home, 'link.txt')
     this.lastAction = null
+  }
+
+  async #hasSystemdService() {
+    if (!this.useSystemd || !this.serviceName) return false
+    try {
+      await execFileAsync('systemctl', ['--user', 'cat', this.serviceName], { timeout: 3000 })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async #runDetachedUp({ timeoutMs = 120_000 } = {}) {
+    if (await this.#hasSystemdService()) {
+      const startedAt = Date.now()
+      await execFileAsync('systemctl', ['--user', 'start', this.serviceName], { timeout: 30_000 })
+      this.lastAction = { args: ['systemctl', '--user', 'start', this.serviceName], ok: true, at: new Date().toISOString(), ms: Date.now() - startedAt }
+      return
+    }
+    if (this.useSystemd) {
+      try {
+        const unit = `dsh-remote-detached-${Date.now()}`
+        const env = { ...process.env, DSH_REMOTE_HOME: this.home }
+        const startedAt = Date.now()
+        await execFileAsync(
+          'systemd-run',
+          ['--user', '--scope', `--unit=${unit}`, '--', process.execPath, this.bin, 'up'],
+          { timeout: timeoutMs, env, cwd: dirname(dirname(this.bin)), maxBuffer: 4 * 1024 * 1024 },
+        )
+        this.lastAction = { args: ['systemd-run', 'up'], ok: true, at: new Date().toISOString(), ms: Date.now() - startedAt }
+        return
+      } catch (error) {
+        this.logger?.warn?.(`botmode: systemd-run scope launch failed, falling back to direct up: ${String(error?.message ?? error)}`)
+      }
+    }
+    await this.#run(['up'], { timeoutMs })
   }
 
   async #run(args, { timeoutMs = 90_000 } = {}) {
@@ -199,7 +237,7 @@ export class RemoteGateway {
     if (before.running && before.healthy && before.link) {
       return { ...(await this.status()), started: false, message: '网关已在线' }
     }
-    await this.#run(['up'], { timeoutMs: 120_000 })
+    await this.#runDetachedUp({ timeoutMs: 120_000 })
     return this.#waitFor({ timeoutMs: 90_000, expectPid: null }).then((state) => ({ ...state, started: true }))
   }
 
@@ -248,7 +286,13 @@ export class RemoteGateway {
   async down() {
     const before = await this.status({ qr: false })
     if (!before.running) return { ...before, stopped: false, message: '网关未在运行' }
-    await this.#run(['stop'], { timeoutMs: 30_000 })
+    if (await this.#hasSystemdService()) {
+      const startedAt = Date.now()
+      await execFileAsync('systemctl', ['--user', 'stop', this.serviceName], { timeout: 30_000 })
+      this.lastAction = { args: ['systemctl', '--user', 'stop', this.serviceName], ok: true, at: new Date().toISOString(), ms: Date.now() - startedAt }
+    } else {
+      await this.#run(['stop'], { timeoutMs: 30_000 })
+    }
     await sleep(800)
     return { ...(await this.status()), stopped: true }
   }

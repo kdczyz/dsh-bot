@@ -298,12 +298,13 @@ export class Dispatcher {
         return resolved.agent
       }
     }
-    await this.store.ensureBotDir(bot)
-    const created = await controller.create({ cwd: bot.dir })
+    const dir = await this.store.ensureBotDir(bot)
+    const created = await controller.create({ cwd: dir })
     if (!created || typeof created.sessionId !== 'string') throw new Error('Session creation failed')
     await this.store.mutate((state) => {
       const stored = state.bots.find(item => item.id === bot.id)
       if (stored) {
+        if (!stored.dir) stored.dir = dir
         stored.sessionId = created.sessionId
         stored.updatedAt = new Date().toISOString()
       }
@@ -367,6 +368,7 @@ export class Dispatcher {
   }
 
   async #runTurn(botId, text, options, queueKey) {
+    await this.store.load()
     const bot = this.store.bot(botId)
     if (!bot) return { ok: false, error: 'unknown bot' }
     const rawPrompt = String(text ?? '').trim()
@@ -780,6 +782,7 @@ export class Dispatcher {
 
   /** Deliver one teammate message with Hermes-style hop & dedup loop guards. */
   async messageAgent(senderBotId, targetToken, message, expectReply, callerSessionId = '') {
+    await this.store.load()
     const state = this.store.state
     const sender = state.bots.find(bot => bot.id === senderBotId)
     if (!sender) return { ok: false, code: 'not_a_bot', error: 'this Session is not a Bot' }

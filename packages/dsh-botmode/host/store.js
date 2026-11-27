@@ -8,7 +8,8 @@
  * Writes are serialized and atomic (temp file + rename), so a crash never leaves
  * a half-written state file and two concurrent commands cannot interleave.
  */
-import { readFile, writeFile, appendFile, mkdir, rename, rm, readdir, stat } from 'node:fs/promises'
+import { readFile, writeFile, appendFile, mkdir, rename, rm, readdir, stat, open } from 'node:fs/promises'
+import { setTimeout as delay } from 'node:timers/promises'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { deterministicAvatar, normalizeAvatar } from './avatar.js'
@@ -38,6 +39,65 @@ export const ROOM_STATUSES = new Set([
 ])
 
 export const newId = (prefix) => `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 10)}`
+
+/** True when `pid` refers to a currently alive local process. */
+export const pidAlive = (pid) => {
+  if (!Number.isInteger(pid) || pid <= 0) return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return error?.code === 'EPERM'
+  }
+}
+
+/**
+ * Cross-process cooperative file lock (`O_CREAT | O_EXCL` with owner `{ pid, token }`
+ * verification, immediate dead-PID reclamation, stale fallback, and token-checked release).
+ */
+export const withFileLock = async (lockPath, task, { timeoutMs = 5_000, staleMs = 15_000 } = {}) => {
+  await mkdir(dirname(lockPath), { recursive: true })
+  const token = randomUUID()
+  const deadline = Date.now() + timeoutMs
+  let acquired = false
+  while (!acquired) {
+    try {
+      const handle = await open(lockPath, 'wx')
+      try {
+        await handle.writeFile(JSON.stringify({ pid: process.pid, token, at: Date.now() }), 'utf8')
+      } finally {
+        await handle.close().catch(() => undefined)
+      }
+      acquired = true
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error
+      let info = null
+      try {
+        info = JSON.parse(await readFile(lockPath, 'utf8'))
+      } catch {
+        info = null
+      }
+      const st = await stat(lockPath).catch(() => null)
+      const ownerDead = info && Number.isInteger(info.pid) && info.pid > 0 && !pidAlive(info.pid)
+      const expired = st ? (Date.now() - st.mtimeMs > staleMs) : false
+      if (ownerDead || expired || Date.now() >= deadline) {
+        await rm(lockPath, { force: true }).catch(() => undefined)
+        continue
+      }
+      await delay(15)
+    }
+  }
+  try {
+    return await task()
+  } finally {
+    try {
+      const info = JSON.parse(await readFile(lockPath, 'utf8'))
+      if (info?.token === token) await rm(lockPath, { force: true }).catch(() => undefined)
+    } catch {
+      /* already removed or unreadable */
+    }
+  }
+}
 
 export const normalizeDiskPaths = (value, fallback = ['/']) => {
   const raw = Array.isArray(value)
@@ -200,11 +260,13 @@ export class BotStore {
   #writeChain = Promise.resolve()
   #loaded = false
   #loadPromise = null
+  #lastStatKey = null
 
   /** @param root - `${DSH_HOME}/botmode`, the plugin's own state root. */
   constructor(root) {
     this.root = root
     this.statePath = join(root, 'state.json')
+    this.stateLockPath = join(root, 'state.json.lock')
   }
 
   get state() { return this.#state }
@@ -227,20 +289,35 @@ export class BotStore {
     return join(this.roomsRoot, `${slug(roomId)}.jsonl`)
   }
 
-  /** Read the document once, reconciling a legacy or partial file into current fields. */
-  async load() {
-    if (this.#loaded) return this.#state
+  async #statKey() {
+    try {
+      const st = await stat(this.statePath)
+      return `${st.mtimeMs}:${st.size}:${st.ino}`
+    } catch {
+      return null
+    }
+  }
+
+  /** Unconditionally reload `state.json` from disk (keeps multi-process readers in sync). */
+  async reload({ ensureDirs = false } = {}) {
     if (this.#loadPromise) return this.#loadPromise
     this.#loadPromise = (async () => {
-      await mkdir(this.botsRoot, { recursive: true })
-      await mkdir(this.roomsRoot, { recursive: true })
-      await mkdir(this.memoryPluginsRoot, { recursive: true })
-      await mkdir(this.memoryDataRoot, { recursive: true })
-      await mkdir(this.skillsRoot, { recursive: true })
+      if (ensureDirs) {
+        await mkdir(this.botsRoot, { recursive: true })
+        await mkdir(this.roomsRoot, { recursive: true })
+        await mkdir(this.memoryPluginsRoot, { recursive: true })
+        await mkdir(this.memoryDataRoot, { recursive: true })
+        await mkdir(this.skillsRoot, { recursive: true })
+      }
+      const coldBoot = !this.#loaded
+      const keyBefore = await this.#statKey()
       const stored = await readJson(this.statePath)
       if (stored !== undefined && stored !== null) {
-        this.#state = this.#normalize(stored)
+        this.#state = this.#normalize(stored, { coldBoot })
+      } else if (keyBefore === null && coldBoot) {
+        this.#state = emptyState()
       }
+      this.#lastStatKey = await this.#statKey() ?? keyBefore
       this.#loaded = true
       return this.#state
     })()
@@ -251,7 +328,18 @@ export class BotStore {
     }
   }
 
-  #normalize(stored) {
+  /** Read the document on first access or whenever `state.json` changed on disk. */
+  async load() {
+    if (!this.#loaded) return this.reload({ ensureDirs: true })
+    if (this.#loadPromise) return this.#loadPromise
+    const currentKey = await this.#statKey()
+    if (currentKey !== null && currentKey !== this.#lastStatKey) {
+      return this.reload({ ensureDirs: false })
+    }
+    return this.#state
+  }
+
+  #normalize(stored, { coldBoot = false } = {}) {
     const base = emptyState()
     const bots = Array.isArray(stored.bots) ? stored.bots.filter(bot => bot && typeof bot.id === 'string') : []
     return {
@@ -261,7 +349,7 @@ export class BotStore {
       // All Bots belong to the single "general" (常规) list; only General & Groups exist.
       sections: [{ id: 'general', name: 'General', nameZh: '常规', order: 0 }],
       bots: bots.map(bot => this.#normalizeBot(bot)),
-      rooms: Array.isArray(stored.rooms) ? stored.rooms.map(room => this.#normalizeRoom(room)).filter(Boolean) : [],
+      rooms: Array.isArray(stored.rooms) ? stored.rooms.map(room => this.#normalizeRoom(room, { coldBoot })).filter(Boolean) : [],
       routines: Array.isArray(stored.routines) ? stored.routines.map(routine => this.#normalizeRoutine(routine)).filter(Boolean) : [],
       routineNotices: Array.isArray(stored.routineNotices) ? stored.routineNotices.slice(-100) : [],
       webhooks: Array.isArray(stored.webhooks) ? stored.webhooks.map(item => this.#normalizeWebhook(item)).filter(Boolean) : [],
@@ -436,8 +524,11 @@ export class BotStore {
     }
   }
 
-  #normalizeRoom(room) {
+  #normalizeRoom(room, { coldBoot = false } = {}) {
     if (!room || typeof room.id !== 'string' || typeof room.name !== 'string') return undefined
+    const rawOwnerPid = Number.isInteger(room.ownerPid) && room.ownerPid > 0 ? room.ownerPid : 0
+    const ownedByOtherLiveHost = rawOwnerPid > 0 && rawOwnerPid !== process.pid && pidAlive(rawOwnerPid)
+    const shouldRecoverCold = coldBoot && !ownedByOtherLiveHost
     let seqCursor = 0
     const transcript = Array.isArray(room.transcript)
       ? room.transcript.filter(item => item && typeof item.text === 'string').slice(-500).map((item) => {
@@ -479,11 +570,10 @@ export class BotStore {
           ownerBotId: typeof item.ownerBotId === 'string' ? item.ownerBotId : '',
           ownerName: typeof item.ownerName === 'string' ? item.ownerName : '',
           paths: Array.isArray(item.paths) ? item.paths.filter(p => typeof p === 'string' && p.trim() !== '') : [],
-          // Any `in_progress` subtask loaded from disk belonged to an exited Host process;
-          // release stale file locks on cold boot so teammates are never deadlocked.
+          // Only release `in_progress` subtasks on cold boot when no other live Host owns the room.
           status: item.status === 'completed' || item.status === 'released'
             ? item.status
-            : (!this.#loaded ? 'released' : 'in_progress'),
+            : (shouldRecoverCold ? 'released' : 'in_progress'),
           updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : new Date().toISOString(),
         }))
       : []
@@ -501,17 +591,19 @@ export class BotStore {
       }
       : null
     // A `running` status or an in-memory `waiting_user` (approval/question) loaded from
-    // disk belonged to a prior Host process whose pending Promises were discarded on exit;
-    // recover them cleanly so the UI never gets stuck in an unresumable zombie state.
+    // disk on cold boot (when no other live Host owns it) belonged to an exited Host process;
+    // recover them cleanly without clobbering live rooms owned by another instance.
     const rawStatus = ROOM_STATUSES.has(room.status) ? room.status : 'idle'
     const rawPausedReason = typeof room.pausedReason === 'string' ? room.pausedReason : ''
-    let status = rawStatus === 'running' ? 'idle' : rawStatus
+    let status = (shouldRecoverCold && rawStatus === 'running') ? 'idle' : rawStatus
     let pausedReason = rawPausedReason
     let needsYou = room.needsYou === true
-    if (rawStatus === 'waiting_user' && (rawPausedReason === 'approval' || rawPausedReason === 'question')) {
+    let ownerPid = shouldRecoverCold ? 0 : rawOwnerPid
+    if (shouldRecoverCold && rawStatus === 'waiting_user' && (rawPausedReason === 'approval' || rawPausedReason === 'question')) {
       status = 'stalled'
       pausedReason = 'host_restarted'
       needsYou = true
+      ownerPid = 0
     }
     const tokenLimit = room.budget && typeof room.budget === 'object'
       ? clampInt(room.budget.tokenLimit, 0, 1_000_000_000, 0)
@@ -552,6 +644,7 @@ export class BotStore {
       mode: room.mode === 'everyone' || room.mode === 'lead' || room.mode === 'auto' ? room.mode : 'auto',
       leadBotId: typeof room.leadBotId === 'string' ? room.leadBotId : '',
       status,
+      ownerPid,
       settledReason: typeof room.settledReason === 'string' ? room.settledReason : '',
       needsYou,
       pausedReason,
@@ -596,14 +689,14 @@ export class BotStore {
     return normalizeRoutine(routine)
   }
 
-  /** Run one mutation against the document, then persist the result atomically. */
+  /** Run one mutation against the latest on-disk document under a cross-process lock. */
   async mutate(mutator) {
-    const run = this.#writeChain.then(async () => {
+    const run = this.#writeChain.then(() => withFileLock(this.stateLockPath, async () => {
       await this.load()
       const result = await mutator(this.#state)
       await this.#save()
       return result
-    })
+    }))
     // Keep the chain alive after a rejected mutation.
     this.#writeChain = run.catch(() => undefined)
     return run
@@ -611,9 +704,11 @@ export class BotStore {
 
   async #save() {
     await mkdir(this.root, { recursive: true })
-    const temp = `${this.statePath}.${process.pid}.tmp`
+    const temp = `${this.statePath}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`
     await writeFile(temp, `${JSON.stringify(this.#state, null, 2)}\n`, 'utf8')
     await rename(temp, this.statePath)
+    this.#lastStatKey = await this.#statKey()
+    this.#loaded = true
   }
 
   bot(id) { return this.#state.bots.find(bot => bot.id === id) }
@@ -724,7 +819,9 @@ export const readTextFile = async (path, fallback = '') => {
 
 export const writeTextFile = async (path, text) => {
   await mkdir(dirname(path), { recursive: true })
-  await writeFile(path, text, 'utf8')
+  const temp = `${path}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`
+  await writeFile(temp, text, 'utf8')
+  await rename(temp, path)
 }
 
 export const appendJsonl = async (path, record) => {

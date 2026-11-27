@@ -341,6 +341,7 @@ export class Rooms {
         idleRoundLimit: stored.budget?.idleRoundLimit ?? DEFAULT_IDLE_ROUND_LIMIT,
       }
       stored.status = 'running'
+      stored.ownerPid = process.pid
       stored.settledReason = ''
       stored.needsYou = false
       stored.pausedReason = ''
@@ -432,6 +433,7 @@ export class Rooms {
         const stored = state.rooms.find(item => item.id === roomId)
         if (!stored) return
         stored.status = 'idle'
+        stored.ownerPid = 0
         stored.settledReason = ''
         stored.needsYou = false
         stored.pausedReason = ''
@@ -473,6 +475,7 @@ export class Rooms {
         stored.epoch = Math.max(1, stored.epoch ?? 1)
         epoch = stored.epoch
         stored.status = 'running'
+        stored.ownerPid = process.pid
         stored.settledReason = ''
         stored.needsYou = false
         stored.pausedReason = ''
@@ -871,6 +874,7 @@ export class Rooms {
       }
       stored.completion = completionRecord
       stored.status = 'completed'
+      stored.ownerPid = 0
       stored.settledReason = 'task_completed'
       stored.needsYou = false
       stored.pausedReason = ''
@@ -1095,6 +1099,7 @@ export class Rooms {
           const stored = state.rooms.find(item => item.id === bus.roomId)
           if (!stored || stored.status === 'completed') return
           stored.status = 'waiting_user'
+          stored.ownerPid = process.pid
           stored.needsYou = true
           stored.pausedReason = reason
           stored.updatedAt = new Date().toISOString()
@@ -1105,6 +1110,7 @@ export class Rooms {
         const stored = state.rooms.find(item => item.id === bus.roomId)
         if (!stored || stored.status !== 'waiting_user') return
         stored.status = 'running'
+        stored.ownerPid = process.pid
         stored.needsYou = false
         stored.pausedReason = ''
         stored.updatedAt = new Date().toISOString()
@@ -1841,6 +1847,7 @@ export class Rooms {
       const stored = state.rooms.find(item => item.id === roomId)
       if (!stored || stored.epoch !== epoch || stored.status === 'completed') return
       stored.status = 'settled'
+      stored.ownerPid = 0
       stored.settledReason = reason
       stored.needsYou = false
       stored.pausedReason = ''
@@ -1854,6 +1861,7 @@ export class Rooms {
       const stored = state.rooms.find(item => item.id === roomId)
       if (!stored || stored.epoch !== epoch || stored.status === 'completed') return
       stored.status = 'capped'
+      stored.ownerPid = 0
       stored.settledReason = ''
       stored.needsYou = true
       stored.pausedReason = 'budget'
@@ -1868,6 +1876,7 @@ export class Rooms {
       const stored = state.rooms.find(item => item.id === roomId)
       if (!stored || stored.epoch !== epoch || stored.status === 'completed') return
       stored.status = 'stalled'
+      stored.ownerPid = 0
       stored.settledReason = ''
       stored.needsYou = true
       stored.pausedReason = reason
@@ -1889,6 +1898,7 @@ export class Rooms {
       const stored = state.rooms.find(item => item.id === roomId)
       if (!stored || stored.epoch !== epoch || stored.status === 'completed') return
       stored.status = 'waiting_user'
+      stored.ownerPid = 0
       stored.settledReason = ''
       stored.needsYou = true
       stored.pausedReason = reason

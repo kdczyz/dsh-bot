@@ -17,6 +17,7 @@ import os, { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
+import { withFileLock } from './store.js'
 
 const execFileAsync = promisify(execFile)
 const DEFAULT_GATEWAY = 'http://127.0.0.1:6200'
@@ -670,98 +671,107 @@ export class ScreenBridge {
 
     this.#bootAttempted = true
     const { host, port } = this.#parsedGateway()
-    if (quick.outdated) {
-      this.logger?.info?.(`botmode: replacing outdated local BotScreen gateway (v${quick.foundVersion || 1}) at ${this.gatewayUrl}`)
-      const freed = await this.#evictOutdatedLocalGateway(host || '127.0.0.1', port || 6200, quick.pid || 0)
-      if (!freed) {
-        this.#lastError = `端口 ${port || 6200} 被旧版网关占用且无法自动停止（可能由 root/systemd 启动），请手动重启该服务以加载新版接口`
-        return { available: false, spawned: false, error: this.#lastError }
-      }
-    }
     const logBase = this.#logDir || join(homedir(), '.dsh', 'botmode')
-    let logFd = null
-    const logPath = join(logBase, 'botscreen-gateway.log')
-    try {
-      mkdirSync(logBase, { recursive: true })
-      logFd = openSync(logPath, 'a')
-    } catch (_error) {
-      logFd = null
-    }
-
-    if (runtime.needsBootstrap) {
+    const bootLockPath = join(logBase, `botscreen-boot-${port || 6200}.lock`)
+    return withFileLock(bootLockPath, async () => {
+      // Re-check health after acquiring cross-process boot lock in case another instance just started it.
+      const recheck = await this.health()
+      if (recheck.available) {
+        this.#lastError = ''
+        return { available: true, spawned: false }
+      }
+      if (recheck.outdated) {
+        this.logger?.info?.(`botmode: replacing outdated local BotScreen gateway (v${recheck.foundVersion || 1}) at ${this.gatewayUrl}`)
+        const freed = await this.#evictOutdatedLocalGateway(host || '127.0.0.1', port || 6200, recheck.pid || 0)
+        if (!freed) {
+          this.#lastError = `端口 ${port || 6200} 被旧版网关占用且无法自动停止（可能由 root/systemd 启动），请手动重启该服务以加载新版接口`
+          return { available: false, spawned: false, error: this.#lastError }
+        }
+      }
+      let logFd = null
+      const logPath = join(logBase, 'botscreen-gateway.log')
       try {
-        this.logger?.info?.(`botmode: bootstrapping embedded BotScreen Python venv at ${logBase}`)
-        await bootstrapVenv(runtime, logBase, logPath)
+        mkdirSync(logBase, { recursive: true })
+        logFd = openSync(logPath, 'a')
+      } catch (_error) {
+        logFd = null
+      }
+
+      if (runtime.needsBootstrap) {
+        try {
+          this.logger?.info?.(`botmode: bootstrapping embedded BotScreen Python venv at ${logBase}`)
+          await bootstrapVenv(runtime, logBase, logPath)
+        } catch (err) {
+          if (logFd !== null) {
+            try { closeSync(logFd) } catch (_e) { /* ignore */ }
+          }
+          this.#lastError = `BotScreen Python 依赖初始化失败: ${err instanceof Error ? err.message : String(err)}`
+          return { available: false, spawned: false, error: this.#lastError }
+        }
+      }
+      try {
+        ensureSystemDependencies(this.logger)
       } catch (err) {
         if (logFd !== null) {
           try { closeSync(logFd) } catch (_e) { /* ignore */ }
         }
-        this.#lastError = `BotScreen Python 依赖初始化失败: ${err instanceof Error ? err.message : String(err)}`
+        this.#lastError = `BotScreen 系统依赖初始化失败: ${err instanceof Error ? err.message : String(err)}`
         return { available: false, spawned: false, error: this.#lastError }
       }
-    }
-    try {
-      ensureSystemDependencies(this.logger)
-    } catch (err) {
-      if (logFd !== null) {
-        try { closeSync(logFd) } catch (_e) { /* ignore */ }
-      }
-      this.#lastError = `BotScreen 系统依赖初始化失败: ${err instanceof Error ? err.message : String(err)}`
-      return { available: false, spawned: false, error: this.#lastError }
-    }
 
-    this.logger?.info?.(`botmode: auto-starting BotScreen gateway at ${this.gatewayUrl} from ${runtime.root}`)
-    let exitedCode = null
-    let spawnError = ''
-    try {
-      const child = spawn(runtime.python, ['-m', 'botscreen'], {
-        cwd: runtime.root,
-        env: {
-          ...process.env,
-          PYTHONPATH: process.env.PYTHONPATH ? `${runtime.root}:${process.env.PYTHONPATH}` : runtime.root,
-          BOTSCREEN_HOST: process.env.BOTSCREEN_HOST || host || '127.0.0.1',
-          BOTSCREEN_PORT: process.env.BOTSCREEN_PORT || String(port || 6200),
-          BOTSCREEN_BOTS: process.env.BOTSCREEN_BOTS ?? '',
-          PYTHONUNBUFFERED: '1',
-        },
-        detached: true,
-        stdio: logFd !== null ? ['ignore', logFd, logFd] : 'ignore',
-      })
-      child.on('error', (err) => {
-        spawnError = err instanceof Error ? err.message : String(err)
-      })
-      child.on('exit', (code) => {
-        exitedCode = code
-      })
-      child.unref()
-    } finally {
-      if (logFd !== null) {
-        try { closeSync(logFd) } catch (_e) { /* ignore */ }
+      this.logger?.info?.(`botmode: auto-starting BotScreen gateway at ${this.gatewayUrl} from ${runtime.root}`)
+      let exitedCode = null
+      let spawnError = ''
+      try {
+        const child = spawn(runtime.python, ['-m', 'botscreen'], {
+          cwd: runtime.root,
+          env: {
+            ...process.env,
+            PYTHONPATH: process.env.PYTHONPATH ? `${runtime.root}:${process.env.PYTHONPATH}` : runtime.root,
+            BOTSCREEN_HOST: process.env.BOTSCREEN_HOST || host || '127.0.0.1',
+            BOTSCREEN_PORT: process.env.BOTSCREEN_PORT || String(port || 6200),
+            BOTSCREEN_BOTS: process.env.BOTSCREEN_BOTS ?? '',
+            PYTHONUNBUFFERED: '1',
+          },
+          detached: true,
+          stdio: logFd !== null ? ['ignore', logFd, logFd] : 'ignore',
+        })
+        child.on('error', (err) => {
+          spawnError = err instanceof Error ? err.message : String(err)
+        })
+        child.on('exit', (code) => {
+          exitedCode = code
+        })
+        child.unref()
+      } finally {
+        if (logFd !== null) {
+          try { closeSync(logFd) } catch (_e) { /* ignore */ }
+        }
       }
-    }
 
-    const deadline = Date.now() + timeoutMs
-    while (Date.now() < deadline) {
-      if (spawnError) {
-        this.#lastError = `无法拉起 BotScreen: ${spawnError}`
-        return { available: false, spawned: true, error: this.#lastError }
+      const deadline = Date.now() + timeoutMs
+      while (Date.now() < deadline) {
+        if (spawnError) {
+          this.#lastError = `无法拉起 BotScreen: ${spawnError}`
+          return { available: false, spawned: true, error: this.#lastError }
+        }
+        if (exitedCode !== null) {
+          const tail = readLogTail(logPath)
+          const reason = tail ? tail.split('\n').slice(-4).join(' | ') : `exit code ${exitedCode}`
+          this.#lastError = `BotScreen 启动失败 (${reason})`
+          return { available: false, spawned: true, error: this.#lastError }
+        }
+        const probe = await this.health()
+        if (probe.available) {
+          this.#lastError = ''
+          return { available: true, spawned: true }
+        }
+        await new Promise(resolveDelay => setTimeout(resolveDelay, 250))
       }
-      if (exitedCode !== null) {
-        const tail = readLogTail(logPath)
-        const reason = tail ? tail.split('\n').slice(-4).join(' | ') : `exit code ${exitedCode}`
-        this.#lastError = `BotScreen 启动失败 (${reason})`
-        return { available: false, spawned: true, error: this.#lastError }
-      }
-      const probe = await this.health()
-      if (probe.available) {
-        this.#lastError = ''
-        return { available: true, spawned: true }
-      }
-      await new Promise(resolveDelay => setTimeout(resolveDelay, 250))
-    }
 
-    this.#lastError = `BotScreen 在 ${Math.round(timeoutMs / 1000)}s 内未就绪（日志: ${logPath}）`
-    return { available: false, spawned: true, error: this.#lastError }
+      this.#lastError = `BotScreen 在 ${Math.round(timeoutMs / 1000)}s 内未就绪（日志: ${logPath}）`
+      return { available: false, spawned: true, error: this.#lastError }
+    }, { timeoutMs: Math.max(20_000, timeoutMs + 5_000), staleMs: 60_000 })
   }
 
   async warmUp() {

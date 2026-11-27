@@ -272,6 +272,7 @@ export class BotApi {
     try {
       if (route === 'state' && req.method === 'GET') {
         await this.store.load()
+        if (this.mcp) await this.mcp.syncIfChanged().catch(() => undefined)
         if (this.memory) await this.memory.ensureReady().catch(() => undefined)
         await Promise.all([
           this.#refreshScreenSnapshot().catch(() => undefined),
@@ -1145,6 +1146,7 @@ export class BotApi {
   }
 
   async command(payload) {
+    await this.store.load()
     const type = stringOr(payload?.type)
     switch (type) {
       case 'bot.save': return this.saveBot(payload)
@@ -2527,19 +2529,24 @@ export class BotApi {
       state.bots.push(created)
     })
     const bot = existing ?? created
-    await this.store.ensureBotDir(bot)
-    await this.store.mutate(() => {})
-    if (bot.sessionId === '') {
+    const dir = await this.store.ensureBotDir(bot)
+    await this.store.mutate((state) => {
+      const target = state.bots.find(item => item.id === bot.id)
+      if (target && !target.dir) target.dir = dir
+    })
+    const liveBot = this.store.bot(bot.id) ?? bot
+    if (liveBot.sessionId === '') {
       try {
-        await this.dispatcher.ensureSession(bot)
+        await this.dispatcher.ensureSession(liveBot)
       } catch (error) {
-        this.logger?.warn?.(`botmode: could not open a Session for ${bot.name}: ${String(error)}`)
+        this.logger?.warn?.(`botmode: could not open a Session for ${liveBot.name}: ${String(error)}`)
       }
     }
     await this.syncAll()
-    await seedInitialMemoryHub(this.memory, this.store, bot).catch(() => undefined)
-    void this.screen?.syncAvatar?.(bot.id, bot.avatar).catch(() => undefined)
-    return { botId: bot.id, bot }
+    const finalBot = this.store.bot(bot.id) ?? liveBot
+    await seedInitialMemoryHub(this.memory, this.store, finalBot).catch(() => undefined)
+    void this.screen?.syncAvatar?.(finalBot.id, finalBot.avatar).catch(() => undefined)
+    return { botId: finalBot.id, bot: finalBot }
   }
 
   async saveBotAvatar(payload) {
@@ -2647,6 +2654,7 @@ export class BotApi {
   }
 
   async syncAll() {
+    await this.store.load()
     for (const bot of this.store.state.bots) {
       await syncBotFiles(this.store, bot, this.store.state).catch((error) => {
         this.logger?.warn?.(`botmode: identity files for ${bot.name} failed: ${String(error)}`)
