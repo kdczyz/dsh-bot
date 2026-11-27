@@ -11,22 +11,233 @@
  */
 import { Buffer } from 'node:buffer'
 import { execFile, execFileSync, spawn } from 'node:child_process'
-import { closeSync, existsSync, globSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync, rmSync } from 'node:fs'
+import { closeSync, existsSync, globSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync, rmSync, statfsSync } from 'node:fs'
 import net from 'node:net'
-import { homedir } from 'node:os'
+import os, { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 const DEFAULT_GATEWAY = 'http://127.0.0.1:6200'
-const REQUIRED_GATEWAY_API_VERSION = 2
+const REQUIRED_GATEWAY_API_VERSION = 4
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
 const __dirname = dirname(fileURLToPath(import.meta.url))
 // Keep in sync with botscreen/requirements.txt. Checking every runtime import avoids
 // half-bootstrapped environments where the gateway process starts but immediately exits.
 const PY_DEPS_CHECK = 'import fastapi, uvicorn, multipart, PIL, Xlib, websockets, httpx, mss'
 const _pyChecked = new Map()
+
+let _lastLocalCpuSample = null
+let _lastLocalCpuPct = null
+
+function readProcCpuJiffies() {
+  try {
+    const raw = readFileSync('/proc/stat', 'utf8')
+    const first = raw.split('\n')[0] || ''
+    if (!first.startsWith('cpu ')) return null
+    const parts = first.trim().split(/\s+/).slice(1).map(Number).filter(Number.isFinite)
+    if (parts.length < 4) return null
+    const idle = parts[3] + (parts[4] || 0)
+    const total = parts.reduce((acc, v) => acc + v, 0)
+    return { total, idle }
+  } catch (_error) {
+    return null
+  }
+}
+
+function readLocalMemInfo() {
+  const out = {}
+  try {
+    const raw = readFileSync('/proc/meminfo', 'utf8')
+    for (const line of raw.split('\n')) {
+      const idx = line.indexOf(':')
+      if (idx === -1) continue
+      const key = line.slice(0, idx).trim()
+      const val = Number.parseInt(line.slice(idx + 1).trim().split(/\s+/)[0] || '', 10)
+      if (Number.isFinite(val)) out[key] = val
+    }
+  } catch (_error) { /* non-linux fallback */ }
+  return out
+}
+
+function formatLocalUptime(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0))
+  const days = Math.floor(total / 86400)
+  const hours = Math.floor((total % 86400) / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const secs = total % 60
+  const zh = []
+  const en = []
+  if (days) { zh.push(`${days}天`); en.push(`${days}d`) }
+  if (hours || days) { zh.push(`${hours}小时`); en.push(`${hours}h`) }
+  zh.push(`${minutes}分`)
+  en.push(`${minutes}m`)
+  if (!days && !hours) { zh.push(`${secs}秒`); en.push(`${secs}s`) }
+  return { formatted: zh.join(' '), formatted_en: en.join(' '), days, hours, minutes, secs }
+}
+
+/**
+ * Pure Node.js fallback collector for the local Host machine when the local
+ * BotScreen gateway is unavailable or pinned to an older non-replaceable build.
+ * Never used for remote gateways.
+ */
+export function collectLocalHostSystem(diskPaths = ['/']) {
+  const MIB = 1024 * 1024
+  const GIB = 1024 * 1024 * 1024
+  const nowSec = Date.now() / 1000
+  const cores = Math.max(1, (os.cpus() || []).length || 1)
+  const [l1, l5, l15] = os.loadavg()
+  const loadAvg = {
+    '1m': Math.round(l1 * 100) / 100,
+    '5m': Math.round(l5 * 100) / 100,
+    '15m': Math.round(l15 * 100) / 100,
+  }
+
+  let cpuPct = null
+  let estimated = false
+  const cur = readProcCpuJiffies()
+  const nowMs = Date.now()
+  if (cur) {
+    if (_lastLocalCpuSample && (nowMs - _lastLocalCpuSample.at) < 150 && _lastLocalCpuPct !== null) {
+      cpuPct = _lastLocalCpuPct
+    } else if (_lastLocalCpuSample && cur.total > _lastLocalCpuSample.total) {
+      const totalDiff = cur.total - _lastLocalCpuSample.total
+      const idleDiff = Math.max(0, cur.idle - _lastLocalCpuSample.idle)
+      cpuPct = Math.max(0, Math.min(100, (1 - idleDiff / totalDiff) * 100))
+      _lastLocalCpuSample = { ...cur, at: nowMs }
+      _lastLocalCpuPct = cpuPct
+    } else {
+      _lastLocalCpuSample = { ...cur, at: nowMs }
+    }
+  }
+  if (cpuPct === null) {
+    cpuPct = Math.max(0, Math.min(100, (l1 / cores) * 100))
+    estimated = true
+  }
+
+  const memRaw = readLocalMemInfo()
+  const totalBytes = memRaw.MemTotal ? memRaw.MemTotal * 1024 : os.totalmem()
+  const availBytes = memRaw.MemAvailable ? memRaw.MemAvailable * 1024 : os.freemem()
+  const freeBytes = memRaw.MemFree ? memRaw.MemFree * 1024 : os.freemem()
+  const usedBytes = Math.max(0, totalBytes - availBytes)
+  const memPct = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 1000) / 10 : 0
+  const totalMb = Math.floor(totalBytes / MIB)
+  const usedMb = Math.floor(usedBytes / MIB)
+  const availMb = Math.floor(availBytes / MIB)
+  const minFreeMb = Math.max(0, Number.parseInt(process.env.BOTSCREEN_MIN_FREE_MB || '1024', 10) || 1024)
+  const blocker = (minFreeMb > 0 && availMb < minFreeMb)
+    ? `内存不足，暂不拉起虚拟屏：可用 ${availMb} MB / 限额 ${totalMb} MB，需要至少 ${minFreeMb} MB（BOTSCREEN_MIN_FREE_MB）。`
+    : null
+
+  const cleanPaths = (Array.isArray(diskPaths) ? diskPaths : [diskPaths])
+    .map(p => String(p || '').trim())
+    .filter((p, i, arr) => p !== '' && arr.indexOf(p) === i)
+  if (cleanPaths.length === 0) cleanPaths.push('/')
+
+  const mounts = cleanPaths.map((p) => {
+    try {
+      const st = statfsSync(p)
+      const bsize = Number(st.bsize || st.frsize || 4096)
+      const total = Number(st.blocks || 0) * bsize
+      const free = Number(st.bavail ?? st.bfree ?? 0) * bsize
+      const used = Math.max(0, total - Number(st.bfree ?? st.bavail ?? 0) * bsize)
+      const pct = total > 0 ? Math.round((used / total) * 1000) / 10 : 0
+      return {
+        path: p,
+        total_bytes: total,
+        used_bytes: used,
+        free_bytes: free,
+        total_gb: Math.round((total / GIB) * 100) / 100,
+        used_gb: Math.round((used / GIB) * 100) / 100,
+        free_gb: Math.round((free / GIB) * 100) / 100,
+        usage_percent: pct,
+        ok: true,
+      }
+    } catch (error) {
+      return {
+        path: p,
+        total_bytes: null,
+        used_bytes: null,
+        free_bytes: null,
+        total_gb: null,
+        used_gb: null,
+        free_gb: null,
+        usage_percent: null,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })
+  const primaryDisk = mounts.find(m => m.ok) || mounts[0]
+
+  const upSecs = Math.max(0, Math.floor(os.uptime()))
+  const upFmt = formatLocalUptime(upSecs)
+  const bootIso = new Date(Math.max(0, Date.now() - upSecs * 1000)).toISOString()
+
+  return {
+    available: true,
+    ok: true,
+    degraded: true,
+    source: 'host-fallback',
+    hostname: os.hostname(),
+    os: os.type(),
+    arch: os.arch(),
+    kernel: os.release(),
+    platform: `${os.type()}-${os.release()}-${os.arch()}`,
+    cgroup: false,
+    timestamp: nowSec,
+    collected_at: new Date().toISOString(),
+    available_mb: availMb,
+    limit_mb: totalMb,
+    min_free_mb: minFreeMb,
+    blocker,
+    cpu: {
+      usage_percent: Math.round(cpuPct * 10) / 10,
+      cores,
+      load_avg: loadAvg,
+      estimated,
+    },
+    memory: {
+      total_bytes: totalBytes,
+      used_bytes: usedBytes,
+      available_bytes: availBytes,
+      free_bytes: freeBytes,
+      total_mb: totalMb,
+      used_mb: usedMb,
+      available_mb: availMb,
+      limit_mb: totalMb,
+      usage_percent: memPct,
+      swap_total_mb: Math.floor(((memRaw.SwapTotal || 0) * 1024) / MIB),
+      swap_used_mb: Math.floor((Math.max(0, (memRaw.SwapTotal || 0) - (memRaw.SwapFree || 0)) * 1024) / MIB),
+      min_free_mb: minFreeMb,
+      blocker,
+      cgroup_limited: false,
+      source: 'host',
+    },
+    disk: {
+      path: primaryDisk.path,
+      total_bytes: primaryDisk.total_bytes,
+      used_bytes: primaryDisk.used_bytes,
+      free_bytes: primaryDisk.free_bytes,
+      total_gb: primaryDisk.total_gb,
+      used_gb: primaryDisk.used_gb,
+      free_gb: primaryDisk.free_gb,
+      usage_percent: primaryDisk.usage_percent,
+      mounts,
+    },
+    uptime: {
+      seconds: upSecs,
+      days: upFmt.days,
+      hours: upFmt.hours,
+      minutes: upFmt.minutes,
+      secs: upFmt.secs,
+      formatted: upFmt.formatted,
+      formatted_en: upFmt.formatted_en,
+      boot_time: bootIso,
+    },
+  }
+}
 
 const AUTO_SYSTEM_PACKAGES = [
   'xvfb', 'x11vnc', 'websockify', 'novnc', 'xauth',
@@ -291,6 +502,9 @@ export class ScreenBridge {
   #locks = new Map() // botId -> Promise chain
   #gatewayAvailable = null
   #autoSpawn = false
+  #explicitAutoSpawn = undefined
+  #defaultGatewayUrl = DEFAULT_GATEWAY
+  #defaultAdminToken = ''
   #botscreenRoot = ''
   #pythonBin = ''
   #logDir = ''
@@ -301,11 +515,14 @@ export class ScreenBridge {
   constructor({ approvals, logger, gatewayUrl, adminToken, autoSpawn, botscreenRoot, pythonBin, logDir } = {}) {
     this.approvals = approvals || null
     this.logger = logger || null
-    this.gatewayUrl = String(gatewayUrl || process.env.BOTSCREEN_GATEWAY || DEFAULT_GATEWAY).replace(/\/$/, '')
-    this.adminToken = String(adminToken ?? process.env.BOTSCREEN_ADMIN_TOKEN ?? '').trim()
+    this.#defaultGatewayUrl = String(gatewayUrl || process.env.BOTSCREEN_GATEWAY || DEFAULT_GATEWAY).replace(/\/$/, '')
+    this.#defaultAdminToken = String(adminToken ?? process.env.BOTSCREEN_ADMIN_TOKEN ?? '').trim()
+    this.gatewayUrl = this.#defaultGatewayUrl
+    this.adminToken = this.#defaultAdminToken
     this.#botscreenRoot = String(botscreenRoot || '').trim()
     this.#pythonBin = String(pythonBin || '').trim()
     this.#logDir = String(logDir || '').trim()
+    this.#explicitAutoSpawn = typeof autoSpawn === 'boolean' ? autoSpawn : undefined
     // A different root/python combination may replace a previously probed executable.
     // Drop global interpreter probes for explicitly supplied environments so reinstalls
     // and embedded test fixtures re-evaluate their actual dependencies.
@@ -313,17 +530,46 @@ export class ScreenBridge {
       if (python) _pyChecked.delete(python)
     }
 
+    this.#refreshAutoSpawn()
+  }
+
+  #refreshAutoSpawn() {
     // Default auto-spawn is enabled for the standard local gateway (or when explicit root/autoSpawn is given),
     // while preserving safe isolation for tests running against mock gateways on ephemeral ports.
     const envOpt = process.env.BOTSCREEN_AUTO_START
-    if (typeof autoSpawn === 'boolean') {
-      this.#autoSpawn = autoSpawn
+    if (typeof this.#explicitAutoSpawn === 'boolean') {
+      this.#autoSpawn = this.#explicitAutoSpawn
     } else if (envOpt === '0' || envOpt === 'false') {
       this.#autoSpawn = false
     } else if (envOpt === '1' || envOpt === 'true' || this.#botscreenRoot !== '') {
       this.#autoSpawn = true
     } else {
       this.#autoSpawn = this.#isDefaultLocalGateway()
+    }
+  }
+
+  configure({ gatewayUrl, adminToken } = {}) {
+    const nextUrl = typeof gatewayUrl === 'string' && gatewayUrl.trim() !== ''
+      ? gatewayUrl.trim().replace(/\/+$/, '')
+      : this.#defaultGatewayUrl
+    const nextToken = typeof adminToken === 'string' && adminToken.trim() !== ''
+      ? adminToken.trim()
+      : this.#defaultAdminToken
+    const changed = nextUrl !== this.gatewayUrl || nextToken !== this.adminToken
+    if (changed) {
+      this.gatewayUrl = nextUrl
+      this.adminToken = nextToken
+      this.#gatewayAvailable = null
+      this.#lastError = ''
+      this.#bootAttempted = false
+      this.#tokens.clear()
+      this.#epochs.clear()
+      this.#refreshAutoSpawn()
+    }
+    return {
+      gatewayUrl: this.gatewayUrl,
+      hasAdminToken: Boolean(this.adminToken),
+      changed,
     }
   }
 
@@ -575,10 +821,11 @@ export class ScreenBridge {
       const data = await this.#json('/healthz', { timeoutMs: 2500 })
       const apiVersion = Number(data?.api_version || 1)
       const caps = Array.isArray(data?.capabilities) ? data.capabilities : []
-      const outdated = apiVersion < REQUIRED_GATEWAY_API_VERSION || (caps.length > 0 && !caps.includes('tile_stream'))
+      const outdated = apiVersion < REQUIRED_GATEWAY_API_VERSION
+        || (caps.length > 0 && (!caps.includes('tile_stream') || !caps.includes('system_info')))
       if (outdated && this.#autoSpawn && this.isLocalGateway()) {
         this.#gatewayAvailable = false
-        const msg = `检测到旧版网关 (v${apiVersion}) 占用端口，缺少 ensure / 增量帧路由`
+        const msg = `检测到旧版网关 (v${apiVersion}) 占用端口，缺少 ensure / 增量帧 / 主机系统信息路由`
         return {
           available: false,
           outdated: true,
@@ -595,6 +842,24 @@ export class ScreenBridge {
     } catch (error) {
       this.#gatewayAvailable = false
       return { available: false, gatewayUrl: this.gatewayUrl, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  async #withSystemGatewayRetry(fn) {
+    if (this.#gatewayAvailable !== true && this.canAutoStart()) {
+      await this.ensureGateway().catch(() => undefined)
+    }
+    try {
+      return await fn()
+    } catch (error) {
+      if ((error?.status === 404 || error?.status === undefined) && this.canAutoStart()) {
+        this.#gatewayAvailable = false
+        const ready = await this.ensureGateway().catch(() => ({ available: false }))
+        if (ready?.available) {
+          return await fn()
+        }
+      }
+      throw error
     }
   }
 
@@ -621,6 +886,13 @@ export class ScreenBridge {
         headers: this.#adminHeaders(),
         timeoutMs: 3000,
       })
+      // If a local gateway responded without full host telemetry (legacy v2/v3 build),
+      // trigger an async health/upgrade check so the next poll gets full host info.
+      if (data?.host && !data.host.cpu && this.canAutoStart() && !this.#bootPromise) {
+        void this.health().then((probe) => {
+          if (probe?.outdated && !this.#bootPromise) void this.ensureGateway()
+        }).catch(() => undefined)
+      }
       this.#gatewayAvailable = true
       this.#lastError = ''
       return {
@@ -648,6 +920,121 @@ export class ScreenBridge {
         error: this.#lastError || msg,
       }
     }
+  }
+
+  async getSystemInfo({ diskPaths, timeoutMs = 5000 } = {}) {
+    const qs = Array.isArray(diskPaths) && diskPaths.length > 0
+      ? `?disk_path=${encodeURIComponent(diskPaths.join(','))}`
+      : (typeof diskPaths === 'string' && diskPaths.trim() !== ''
+        ? `?disk_path=${encodeURIComponent(diskPaths.trim())}`
+        : '')
+    try {
+      const data = await this.#withSystemGatewayRetry(() => this.#json(`/api/system${qs}`, {
+        headers: this.#adminHeaders(),
+        timeoutMs,
+      }))
+      this.#gatewayAvailable = true
+      this.#lastError = ''
+      return {
+        available: true,
+        source: 'gateway',
+        gatewayUrl: this.gatewayUrl,
+        ...data,
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      return {
+        available: false,
+        ok: false,
+        source: 'gateway',
+        gatewayUrl: this.gatewayUrl,
+        error: msg,
+        status: error?.status,
+      }
+    }
+  }
+
+  async getSystemConfig({ timeoutMs = 5000 } = {}) {
+    return this.#withSystemGatewayRetry(() => this.#json('/api/system/config', {
+      headers: this.#adminHeaders(),
+      timeoutMs,
+    }))
+  }
+
+  async updateSystemConfig(patch = {}, { timeoutMs = 8000 } = {}) {
+    const body = {}
+    if (typeof patch.enabled === 'boolean') body.enabled = patch.enabled
+    if (Array.isArray(patch.diskPaths)) body.disk_paths = patch.diskPaths
+    else if (Array.isArray(patch.disk_paths)) body.disk_paths = patch.disk_paths
+    else if (typeof patch.diskPath === 'string') body.disk_path = patch.diskPath
+    else if (typeof patch.disk_path === 'string') body.disk_path = patch.disk_path
+    if (patch.refreshIntervalSec !== undefined) body.stream_interval_sec = Number(patch.refreshIntervalSec)
+    else if (patch.stream_interval_sec !== undefined) body.stream_interval_sec = Number(patch.stream_interval_sec)
+    if (typeof patch.pushUrl === 'string') body.push_url = patch.pushUrl
+    else if (typeof patch.push_url === 'string') body.push_url = patch.push_url
+    if (patch.pushIntervalSec !== undefined) body.push_interval_sec = Number(patch.pushIntervalSec)
+    else if (patch.push_interval_sec !== undefined) body.push_interval_sec = Number(patch.push_interval_sec)
+    if (typeof patch.pushToken === 'string') body.push_token = patch.pushToken
+    else if (typeof patch.push_token === 'string') body.push_token = patch.push_token
+
+    return this.#withSystemGatewayRetry(() => this.#json('/api/system/config', {
+      method: 'PUT',
+      headers: this.#adminHeaders({ 'content-type': 'application/json' }),
+      body: JSON.stringify(body),
+      timeoutMs,
+    }))
+  }
+
+  async pushSystemInfo({ url, token, diskPaths, timeoutMs = 10_000 } = {}) {
+    const body = {}
+    if (typeof url === 'string' && url.trim() !== '') body.url = url.trim()
+    if (typeof token === 'string' && token.trim() !== '') body.token = token.trim()
+    if (Array.isArray(diskPaths) && diskPaths.length > 0) body.disk_paths = diskPaths
+    else if (typeof diskPaths === 'string' && diskPaths.trim() !== '') body.disk_path = diskPaths.trim()
+
+    return this.#withSystemGatewayRetry(() => this.#json('/api/system/push', {
+      method: 'POST',
+      headers: this.#adminHeaders({ 'content-type': 'application/json' }),
+      body: JSON.stringify(body),
+      timeoutMs,
+    }))
+  }
+
+  async openSystemStream({ interval, diskPaths, signal } = {}) {
+    if (this.#gatewayAvailable !== true && this.canAutoStart()) {
+      const ready = await this.ensureGateway()
+      if (!ready.available) throw new Error(ready.error || 'BotScreen gateway unavailable')
+    }
+    const params = new URLSearchParams()
+    if (interval !== undefined && Number.isFinite(Number(interval))) {
+      params.set('interval', String(Number(interval)))
+    }
+    if (Array.isArray(diskPaths) && diskPaths.length > 0) {
+      params.set('disk_path', diskPaths.join(','))
+    } else if (typeof diskPaths === 'string' && diskPaths.trim() !== '') {
+      params.set('disk_path', diskPaths.trim())
+    }
+    const qs = params.toString() ? `?${params.toString()}` : ''
+    const connect = () => fetch(`${this.gatewayUrl}/api/system/stream${qs}`, {
+      headers: this.#adminHeaders({ accept: 'text/event-stream' }),
+      signal,
+    })
+    let res = await connect()
+    if (res.status === 404 && this.canAutoStart()) {
+      this.#gatewayAvailable = false
+      const ready = await this.ensureGateway().catch(() => ({ available: false }))
+      if (ready?.available) {
+        res = await connect()
+      }
+    }
+    if (!res.ok || !res.body) {
+      const detail = await res.text().catch(() => '')
+      const err = new Error(detail || `system stream ${res.status}`)
+      err.status = res.status
+      throw err
+    }
+    this.#gatewayAvailable = true
+    return res
   }
 
   async ensure(botId, { autoStart = false } = {}) {
@@ -836,15 +1223,28 @@ export class ScreenBridge {
     return res
   }
 
-  async preview(botId, { cached = true, onlyCached = false } = {}) {
+  async preview(botId, { cached = true, onlyCached = false, ifNoneMatch = '' } = {}) {
     const params = new URLSearchParams()
     if (cached) params.set('cached', '1')
     if (onlyCached) params.set('only_cached', '1')
     const qs = params.toString() ? `?${params.toString()}` : ''
+    const extraHeaders = ifNoneMatch ? { 'if-none-match': ifNoneMatch } : {}
     const res = await this.#req(`/api/screens/${encodeURIComponent(botId)}/preview${qs}`, {
-      headers: this.#adminHeaders(),
+      headers: this.#adminHeaders(extraHeaders),
       timeoutMs: 10_000,
     })
+    const etag = res.headers.get('etag') || ''
+    const width = Number(res.headers.get('x-screen-width'))
+    const height = Number(res.headers.get('x-screen-height'))
+    if (res.status === 304) {
+      return {
+        notModified: true,
+        etag,
+        frozen: res.headers.get('x-screen-frozen') === 'true',
+        width: Number.isFinite(width) && width > 0 ? width : undefined,
+        height: Number.isFinite(height) && height > 0 ? height : undefined,
+      }
+    }
     if (!res.ok) {
       const detail = await res.text().catch(() => '')
       const err = new Error(detail || `preview ${res.status}`)
@@ -852,10 +1252,10 @@ export class ScreenBridge {
       throw err
     }
     const buffer = Buffer.from(await res.arrayBuffer())
-    const width = Number(res.headers.get('x-screen-width'))
-    const height = Number(res.headers.get('x-screen-height'))
     return {
+      notModified: false,
       buffer,
+      etag,
       mimeType: (res.headers.get('content-type') || 'image/jpeg').split(';')[0],
       frozen: res.headers.get('x-screen-frozen') === 'true',
       width: Number.isFinite(width) && width > 0 ? width : undefined,
@@ -921,6 +1321,241 @@ export class ScreenBridge {
       method: 'DELETE',
       headers: this.#adminHeaders(),
       timeoutMs: 10_000,
+    })
+  }
+
+  // ---- Bot Avatar gateway transport --------------------------------------
+
+  async syncAvatar(botId, avatar) {
+    if (!botId || !avatar || typeof avatar !== 'object') return { skipped: true }
+    try {
+      return await this.#json(`/api/screens/${encodeURIComponent(botId)}/avatar`, {
+        method: 'PUT',
+        headers: this.#adminHeaders({ 'content-type': 'application/json' }),
+        body: JSON.stringify(avatar),
+        timeoutMs: 3000,
+      })
+    } catch (_error) {
+      return { skipped: true, bot_id: botId }
+    }
+  }
+
+  async getAvatar(botId) {
+    try {
+      return await this.#json(`/api/screens/${encodeURIComponent(botId)}/avatar`, {
+        headers: this.#adminHeaders(),
+        timeoutMs: 3000,
+      })
+    } catch (_error) {
+      return { bot_id: botId, avatar: null }
+    }
+  }
+
+  async deleteAvatar(botId) {
+    try {
+      return await this.#json(`/api/screens/${encodeURIComponent(botId)}/avatar`, {
+        method: 'DELETE',
+        headers: this.#adminHeaders(),
+        timeoutMs: 3000,
+      })
+    } catch (_error) {
+      return { deleted: botId, skipped: true }
+    }
+  }
+
+  async listAvatars() {
+    try {
+      return await this.#json('/api/avatars', {
+        headers: this.#adminHeaders(),
+        timeoutMs: 3000,
+      })
+    } catch (_error) {
+      return { avatars: {} }
+    }
+  }
+
+  // ---- Agent Reply Artifact gateway transport ----------------------------
+
+  artifactDownloadUrl(artifactId, { botId = '', inline = false, filename = '' } = {}) {
+    const base = botId
+      ? `${this.gatewayUrl}/api/screens/${encodeURIComponent(botId)}/artifacts/${encodeURIComponent(artifactId)}/download`
+      : `${this.gatewayUrl}/api/artifacts/${encodeURIComponent(artifactId)}/download`
+    const params = new URLSearchParams()
+    if (inline) params.set('inline', '1')
+    if (filename) params.set('filename', filename)
+    const qs = params.toString()
+    return qs ? `${base}?${qs}` : base
+  }
+
+  async publishArtifact(botId, artifact = {}) {
+    if (!botId) throw new Error('botId is required to publish an artifact')
+    if (this.#gatewayAvailable !== true && this.canAutoStart()) {
+      await this.ensureGateway().catch(() => undefined)
+    }
+    const path = `/api/screens/${encodeURIComponent(botId)}/artifacts`
+    if (Buffer.isBuffer(artifact.buffer) || artifact.buffer instanceof Uint8Array) {
+      const form = new FormData()
+      const filename = artifact.filename || artifact.name || 'artifact.bin'
+      const mimeType = artifact.mimeType || artifact.mime_type || 'application/octet-stream'
+      form.append('file', new Blob([artifact.buffer], { type: mimeType }), filename)
+      if (artifact.artifactId || artifact.artifact_id || artifact.id) {
+        form.append('artifact_id', String(artifact.artifactId || artifact.artifact_id || artifact.id))
+      }
+      if (artifact.title) form.append('title', String(artifact.title))
+      if (filename) form.append('filename', String(filename))
+      if (artifact.kind) form.append('kind', String(artifact.kind))
+      if (artifact.type || artifact.artifactType || artifact.artifact_type) {
+        form.append('artifact_type', String(artifact.artifact_type || artifact.artifactType || artifact.type))
+      }
+      if (mimeType) form.append('mime_type', String(mimeType))
+      if (artifact.roomId || artifact.room_id) form.append('room_id', String(artifact.room_id || artifact.roomId))
+      if (artifact.roomName || artifact.room_name) form.append('room_name', String(artifact.room_name || artifact.roomName))
+      if (artifact.messageId || artifact.message_id) form.append('message_id', String(artifact.message_id || artifact.messageId))
+      if (artifact.sourcePath || artifact.source_path) form.append('source_path', String(artifact.source_path || artifact.sourcePath))
+      if (artifact.metadata && typeof artifact.metadata === 'object') {
+        form.append('metadata', JSON.stringify(artifact.metadata))
+      }
+      return this.#json(path, {
+        method: 'POST',
+        headers: this.#adminHeaders(),
+        body: form,
+        timeoutMs: 45_000,
+      })
+    }
+
+    const payload = {
+      ...(artifact.artifactId || artifact.artifact_id || artifact.id
+        ? { artifact_id: String(artifact.artifactId || artifact.artifact_id || artifact.id) }
+        : {}),
+      title: String(artifact.title ?? ''),
+      ...(artifact.filename || artifact.name ? { filename: String(artifact.filename || artifact.name) } : {}),
+      kind: String(artifact.kind || 'artifact'),
+      artifact_type: String(artifact.artifact_type || artifact.artifactType || artifact.type || ''),
+      ...(artifact.mimeType || artifact.mime_type ? { mime_type: String(artifact.mime_type || artifact.mimeType) } : {}),
+      content: typeof artifact.content === 'string' ? artifact.content : JSON.stringify(artifact.content ?? ''),
+      encoding: String(artifact.encoding || 'utf-8'),
+      room_id: String(artifact.room_id || artifact.roomId || ''),
+      room_name: String(artifact.room_name || artifact.roomName || ''),
+      message_id: String(artifact.message_id || artifact.messageId || ''),
+      source_path: String(artifact.source_path || artifact.sourcePath || ''),
+      metadata: artifact.metadata && typeof artifact.metadata === 'object' ? artifact.metadata : {},
+    }
+    return this.#json(path, {
+      method: 'POST',
+      headers: this.#adminHeaders({ 'content-type': 'application/json' }),
+      body: JSON.stringify(payload),
+      timeoutMs: 30_000,
+    })
+  }
+
+  async listArtifacts({ botId = '', roomId = '', kind = '', limit = 100, timeoutMs = 8000 } = {}) {
+    if (this.#gatewayAvailable !== true && this.canAutoStart()) {
+      await this.ensureGateway().catch(() => undefined)
+    }
+    const params = new URLSearchParams()
+    if (roomId) params.set('room_id', roomId)
+    if (kind) params.set('kind', kind)
+    if (Number.isFinite(Number(limit))) params.set('limit', String(Math.max(1, Math.min(500, Math.trunc(Number(limit))))))
+    const qs = params.toString() ? `?${params.toString()}` : ''
+    const path = botId
+      ? `/api/screens/${encodeURIComponent(botId)}/artifacts${qs}`
+      : `/api/artifacts${qs}`
+    return this.#json(path, {
+      headers: this.#adminHeaders(),
+      timeoutMs,
+    })
+  }
+
+  async getArtifact(artifactId, { botId = '', timeoutMs = 8000 } = {}) {
+    if (this.#gatewayAvailable !== true && this.canAutoStart()) {
+      await this.ensureGateway().catch(() => undefined)
+    }
+    const path = botId
+      ? `/api/screens/${encodeURIComponent(botId)}/artifacts/${encodeURIComponent(artifactId)}`
+      : `/api/artifacts/${encodeURIComponent(artifactId)}`
+    return this.#json(path, {
+      headers: this.#adminHeaders(),
+      timeoutMs,
+    })
+  }
+
+  async openArtifactDownloadStream(artifactId, { botId = '', inline = false, filename = '', signal } = {}) {
+    if (this.#gatewayAvailable !== true && this.canAutoStart()) {
+      await this.ensureGateway().catch(() => undefined)
+    }
+    const url = this.artifactDownloadUrl(artifactId, { botId, inline, filename })
+    const res = await fetch(url, {
+      headers: this.#adminHeaders(),
+      signal: signal || AbortSignal.timeout(60_000),
+    })
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '')
+      const err = new Error(detail || `artifact download failed (${res.status})`)
+      err.status = res.status
+      throw err
+    }
+    this.#gatewayAvailable = true
+    return res
+  }
+
+  async downloadArtifact(artifactId, { botId = '', inline = false, filename = '', signal } = {}) {
+    const res = await this.openArtifactDownloadStream(artifactId, { botId, inline, filename, signal })
+    const buffer = Buffer.from(await res.arrayBuffer())
+    const disp = res.headers.get('content-disposition') || ''
+    const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(disp)
+    const asciiMatch = /filename="([^"]+)"/i.exec(disp)
+    let resolvedName = filename || artifactId
+    try {
+      if (utf8Match?.[1]) resolvedName = decodeURIComponent(utf8Match[1])
+      else if (asciiMatch?.[1]) resolvedName = asciiMatch[1]
+    } catch (_error) { /* keep fallback */ }
+    return {
+      buffer,
+      mimeType: res.headers.get('content-type') || 'application/octet-stream',
+      contentDisposition: disp,
+      filename: resolvedName,
+      artifactId: res.headers.get('x-artifact-id') || artifactId,
+      botId: res.headers.get('x-bot-id') || botId,
+      sha256: res.headers.get('x-artifact-sha256') || '',
+      kind: res.headers.get('x-artifact-kind') || '',
+      size: buffer.byteLength,
+      source: res.headers.get('x-artifact-source') || 'gateway',
+    }
+  }
+
+  async openArtifactsBundleStream({ artifactIds = [], botId = '', roomId = '', filename = '', signal } = {}) {
+    if (this.#gatewayAvailable !== true && this.canAutoStart()) {
+      await this.ensureGateway().catch(() => undefined)
+    }
+    const body = {}
+    if (Array.isArray(artifactIds) && artifactIds.length > 0) body.artifact_ids = artifactIds
+    if (botId) body.bot_id = botId
+    if (roomId) body.room_id = roomId
+    if (filename) body.filename = filename
+    const res = await fetch(`${this.gatewayUrl}/api/artifacts/bundle`, {
+      method: 'POST',
+      headers: this.#adminHeaders({ 'content-type': 'application/json' }),
+      body: JSON.stringify(body),
+      signal: signal || AbortSignal.timeout(90_000),
+    })
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '')
+      const err = new Error(detail || `artifact bundle failed (${res.status})`)
+      err.status = res.status
+      throw err
+    }
+    this.#gatewayAvailable = true
+    return res
+  }
+
+  async deleteArtifact(artifactId, { botId = '', timeoutMs = 10_000 } = {}) {
+    const path = botId
+      ? `/api/screens/${encodeURIComponent(botId)}/artifacts/${encodeURIComponent(artifactId)}`
+      : `/api/artifacts/${encodeURIComponent(artifactId)}`
+    return this.#json(path, {
+      method: 'DELETE',
+      headers: this.#adminHeaders(),
+      timeoutMs,
     })
   }
 

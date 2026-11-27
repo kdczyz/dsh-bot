@@ -113,6 +113,47 @@ TOOLS: List[Dict[str, Any]] = [
         "description": "列出所有已分配的虚拟屏。",
         "inputSchema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "system_info",
+        "description": "通过网关获取宿主机系统信息：磁盘占用、内存占用、CPU 占用、开机时长。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "disk_path": {"type": "string", "description": "可选磁盘挂载点路径（多个用逗号分隔，默认 /）"},
+            },
+        },
+    },
+    {
+        "name": "artifact_publish",
+        "description": "将 Agent 回复产物（文本/代码/HTML/JSON/Markdown 或 Base64 二进制）上传发布到网关并返回下载接口地址。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "bot_id": {"type": "string", "description": "Bot ID"},
+                "title": {"type": "string", "description": "产物标题"},
+                "filename": {"type": "string", "description": "下载文件名（可选）"},
+                "content": {"type": "string", "description": "产物内容（UTF-8 文本或 base64 字符串）"},
+                "encoding": {"type": "string", "enum": ["utf-8", "base64"], "default": "utf-8"},
+                "artifact_type": {"type": "string", "description": "产物类型：html/markdown/json/code/text/file 等"},
+                "kind": {"type": "string", "enum": ["artifact", "deliverable", "file", "reply"], "default": "artifact"},
+                "mime_type": {"type": "string", "description": "可选 MIME 类型"},
+                "room_id": {"type": "string", "description": "可选所属群聊 ID"},
+            },
+            "required": ["bot_id", "content"],
+        },
+    },
+    {
+        "name": "artifact_list",
+        "description": "查询网关中已发布的 Agent 回复产物列表及下载地址。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "bot_id": {"type": "string", "description": "可选按 Bot ID 过滤"},
+                "room_id": {"type": "string", "description": "可选按群聊 ID 过滤"},
+                "limit": {"type": "integer", "default": 50},
+            },
+        },
+    },
 ]
 
 
@@ -124,6 +165,9 @@ def agent_token(bot_id: str) -> str:
 
 def call_gateway(method: str, path: str, bot_id: str | None = None, **kwargs) -> httpx.Response:
     headers = kwargs.pop("headers", {})
+    admin_token = os.environ.get("BOTSCREEN_ADMIN_TOKEN", "").strip()
+    if admin_token and "X-Admin-Token" not in headers:
+        headers["X-Admin-Token"] = admin_token
     if bot_id:
         headers["X-Agent-Token"] = agent_token(bot_id)
         epoch = kwargs.pop("expected_epoch", None)
@@ -269,6 +313,49 @@ def tool_list(_: Dict[str, Any]) -> Dict[str, Any]:
     return {"content": [{"type": "text", "text": resp.text}]}
 
 
+def tool_system_info(args: Dict[str, Any]) -> Dict[str, Any]:
+    params = {}
+    disk_path = str(args.get("disk_path") or "").strip()
+    if disk_path:
+        params["disk_path"] = disk_path
+    resp = call_gateway("GET", "/api/system", params=params)
+    if resp.status_code != 200:
+        return _err(f"HTTP {resp.status_code}: {resp.text[:300]}")
+    return {"content": [{"type": "text", "text": resp.text}]}
+
+
+def tool_artifact_publish(args: Dict[str, Any]) -> Dict[str, Any]:
+    bot_id = str(args["bot_id"]).strip()
+    payload = {
+        "title": args.get("title", ""),
+        "filename": args.get("filename"),
+        "content": args["content"],
+        "encoding": args.get("encoding", "utf-8"),
+        "artifact_type": args.get("artifact_type", ""),
+        "kind": args.get("kind", "artifact"),
+        "mime_type": args.get("mime_type"),
+        "room_id": args.get("room_id", ""),
+    }
+    resp = call_gateway("POST", f"/api/agent/{bot_id}/artifacts", bot_id, json=payload)
+    if resp.status_code != 200:
+        return _err(f"HTTP {resp.status_code}: {resp.text[:300]}")
+    return {"content": [{"type": "text", "text": resp.text}]}
+
+
+def tool_artifact_list(args: Dict[str, Any]) -> Dict[str, Any]:
+    params: Dict[str, Any] = {"limit": int(args.get("limit", 50))}
+    bot_id = str(args.get("bot_id") or "").strip()
+    room_id = str(args.get("room_id") or "").strip()
+    if room_id:
+        params["room_id"] = room_id
+    if bot_id:
+        params["bot_id"] = bot_id
+    resp = call_gateway("GET", "/api/artifacts", params=params)
+    if resp.status_code != 200:
+        return _err(f"HTTP {resp.status_code}: {resp.text[:300]}")
+    return {"content": [{"type": "text", "text": resp.text}]}
+
+
 HANDLERS = {
     "screen_screenshot": tool_screen_screenshot,
     "screen_click": tool_screen_click,
@@ -278,6 +365,9 @@ HANDLERS = {
     "wait_human_release": tool_wait_release,
     "screen_status": tool_status,
     "screen_list": tool_list,
+    "system_info": tool_system_info,
+    "artifact_publish": tool_artifact_publish,
+    "artifact_list": tool_artifact_list,
 }
 
 

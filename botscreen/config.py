@@ -38,7 +38,7 @@ DISPLAY_BASE = int(os.environ.get("BOTSCREEN_DISPLAY_BASE", "100"))
 WS_PORT_BASE = int(os.environ.get("BOTSCREEN_WS_PORT_BASE", "6100"))
 
 #: 网关协议代数（DSH Host 用于校验网关接口兼容性并自动替换旧进程）
-GATEWAY_API_VERSION = 3
+GATEWAY_API_VERSION = 4
 #: 统一虚拟桌面规格代数（用于检测并淘汰旧版/错位桌面进程）
 DESKTOP_SPEC_VERSION = 4
 #: 顶部统一导航栏固定高度（px），Openbox margins 与 iconlayer 共享此常量
@@ -108,9 +108,29 @@ BOOT_TIMEOUT = float(os.environ.get("BOTSCREEN_BOOT_TIMEOUT", "15"))
 GATEWAY_HOST = os.environ.get("BOTSCREEN_HOST", "127.0.0.1")
 GATEWAY_PORT = int(os.environ.get("BOTSCREEN_PORT", "6200"))
 
+# ---- 系统信息采集与网关上报配置 ----------------------------------------------
+SYSTEM_CONFIG_FILE = os.environ.get(
+    "BOTSCREEN_SYSTEM_CONFIG", os.path.join(DATA_ROOT, "system_config.json")
+)
+DEFAULT_DISK_PATHS = [
+    p.strip()
+    for p in os.environ.get("BOTSCREEN_DISK_PATHS", "/").split(",")
+    if p.strip()
+] or ["/"]
+SYSTEM_STREAM_INTERVAL = float(os.environ.get("BOTSCREEN_SYSTEM_STREAM_INTERVAL", "2.0"))
+SYSTEM_PUSH_URL = os.environ.get("BOTSCREEN_SYSTEM_PUSH_URL", "").strip()
+SYSTEM_PUSH_INTERVAL = int(os.environ.get("BOTSCREEN_SYSTEM_PUSH_INTERVAL", "0"))
+SYSTEM_PUSH_TOKEN = os.environ.get("BOTSCREEN_SYSTEM_PUSH_TOKEN", "").strip()
+
 # ---- 审计 ------------------------------------------------------------------
 AUDIT_ENABLED = os.environ.get("BOTSCREEN_AUDIT", "1") == "1"
 THUMB_WIDTH = 320
+
+# ---- Agent 回复产物传输与下载限制 -------------------------------------------
+ARTIFACT_MAX_BYTES = int(os.environ.get("BOTSCREEN_ARTIFACT_MAX_BYTES", str(64 * 1024 * 1024)))
+ARTIFACT_BUNDLE_MAX_BYTES = int(
+    os.environ.get("BOTSCREEN_ARTIFACT_BUNDLE_MAX_BYTES", str(128 * 1024 * 1024))
+)
 
 # 支持 BOTSCREEN_1..n 形式批量登记；默认 bot_01..bot_04
 DEFAULT_BOTS = os.environ.get(
@@ -247,6 +267,10 @@ class BotPaths:
         return os.path.join(self.root, "downloads")
 
     @property
+    def artifacts(self) -> str:
+        return os.path.join(self.root, "artifacts")
+
+    @property
     def audit(self) -> str:
         return os.path.join(self.root, "audit")
 
@@ -281,6 +305,11 @@ class BotPaths:
     def spec_file(self) -> str:
         """当前运行虚拟屏的规格版本标记。"""
         return os.path.join(self.runtime, "desktop_spec.json")
+
+    @property
+    def avatar_file(self) -> str:
+        """当前 Bot 的自定义形象数据（Image-bot / BotAvatarPrefs 12 字段契约）。"""
+        return os.path.join(self.runtime, "avatar.json")
 
     @property
     def actions_log(self) -> str:

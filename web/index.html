@@ -234,8 +234,22 @@ function render() {
   const human = state.screens.filter(s => s.state === 'HUMAN_TAKEOVER' || s.state === 'NEED_HUMAN').length;
   const mem = state.screens.reduce((a, s) => a + (s.memory_bytes || 0), 0);
   const host = state.host;
-  const hostBit = host && host.available_mb != null
-    ? ` · 宿主可用 <b>${host.available_mb}MB</b>` : '';
+  const hostBits = [];
+  if (host && host.cpu && host.cpu.usage_percent != null) {
+    hostBits.push(`CPU <b>${host.cpu.usage_percent}%</b>`);
+  }
+  if (host && host.memory && host.memory.usage_percent != null) {
+    hostBits.push(`内存 <b>${host.memory.used_mb}/${host.memory.total_mb}MB (${host.memory.usage_percent}%)</b>`);
+  } else if (host && host.available_mb != null) {
+    hostBits.push(`宿主可用 <b>${host.available_mb}MB</b>`);
+  }
+  if (host && host.disk && host.disk.usage_percent != null) {
+    hostBits.push(`磁盘(${host.disk.path}) <b>${host.disk.used_gb}/${host.disk.total_gb}GB (${host.disk.usage_percent}%)</b>`);
+  }
+  if (host && host.uptime && host.uptime.formatted) {
+    hostBits.push(`开机 <b>${host.uptime.formatted}</b>`);
+  }
+  const hostBit = hostBits.length ? ' · ' + hostBits.join(' · ') : '';
   $('#summary').innerHTML =
     `共 <b>${state.screens.length}</b> 屏 · 活跃 <b>${active}</b> · 冻结 <b>${frozen}</b> · 人工 <b>${human}</b> · 屏内存 <b>${fmtBytes(mem)}</b>` + hostBit;
 

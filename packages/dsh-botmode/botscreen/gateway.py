@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import fcntl
+import hashlib
 import io
 import json
 import os
 import secrets
 import shutil
 import signal
+import tempfile
 import time
 from contextlib import asynccontextmanager
 from typing import Dict, List, Optional, Sequence, Union
@@ -38,7 +41,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .config import (
+    ARTIFACT_MAX_BYTES,
     CAPTURE_IDLE_HIBERNATE,
+    DEFAULT_DISK_PATHS,
     DESKTOP_SPEC_VERSION,
     GATEWAY_API_VERSION,
     IDLE_MODE,
@@ -52,6 +57,11 @@ from .config import (
     IDLE_FREEZE_SECONDS,
     KASMVNC_WWW,
     LONG_FREEZE_SECONDS,
+    SYSTEM_CONFIG_FILE,
+    SYSTEM_PUSH_INTERVAL,
+    SYSTEM_PUSH_TOKEN,
+    SYSTEM_PUSH_URL,
+    SYSTEM_STREAM_INTERVAL,
     WATCHDOG_INTERVAL,
     WEB_ROOT,
     SCREENSHOT_FAIL_CLOSED,
@@ -59,7 +69,19 @@ from .config import (
     X_BACKEND,
     SlotAllocator,
 )
-from .resources import MemoryBlocked, summarize as memory_summary
+from .resources import (
+    MemoryBlocked,
+    host_summary,
+    prime_cpu_sample,
+    summarize as memory_summary,
+    system_info,
+)
+from .artifacts import (
+    build_content_disposition,
+    build_zip_bundle,
+    decode_content_bytes,
+    sanitize_filename,
+)
 from .screen import ScreenWorker
 from .state import HumanInControl, StaleLease, State
 
@@ -67,10 +89,148 @@ WEBHOOK_URL = os.environ.get("BOTSCREEN_WEBHOOK_URL", "").strip()
 ADMIN_TOKEN = os.environ.get("BOTSCREEN_ADMIN_TOKEN", "").strip()
 
 
+# ------------------------------------------------------------ 系统信息配置 -----
+def _normalize_disk_paths(paths: Optional[Sequence[str]], fallback: Optional[Sequence[str]] = None) -> List[str]:
+    out: List[str] = []
+    for raw in paths or []:
+        p = str(raw or "").strip()
+        if p and p not in out:
+            out.append(p)
+    if out:
+        return out[:16]
+    if fallback:
+        return [str(p).strip() for p in fallback if str(p).strip()] or ["/"]
+    return ["/"]
+
+
+def _validate_http_url(raw: str) -> str:
+    url = str(raw or "").strip()
+    if not url:
+        return ""
+    if not (url.startswith("http://") or url.startswith("https://")):
+        raise HTTPException(400, "push_url must start with http:// or https://")
+    return url
+
+
+class SystemConfigStore:
+    """持久化网关侧系统信息采集与主动上报配置（原子写入 + flock）。"""
+
+    def __init__(self, path: str = SYSTEM_CONFIG_FILE) -> None:
+        self.path = path
+        self.enabled: bool = True
+        self.disk_paths: List[str] = _normalize_disk_paths(DEFAULT_DISK_PATHS)
+        self.stream_interval_sec: float = max(0.5, min(60.0, float(SYSTEM_STREAM_INTERVAL)))
+        self.push_url: str = SYSTEM_PUSH_URL
+        self.push_interval_sec: int = max(0, min(86400, int(SYSTEM_PUSH_INTERVAL)))
+        self.push_token: str = SYSTEM_PUSH_TOKEN
+        self.last_push_at: Optional[float] = None
+        self.last_push_status: Optional[int] = None
+        self.last_push_error: str = ""
+        self._load()
+
+    def _load(self) -> None:
+        try:
+            with open(self.path, encoding="utf-8") as fh:
+                raw = json.load(fh)
+            if not isinstance(raw, dict):
+                return
+            if isinstance(raw.get("enabled"), bool):
+                self.enabled = raw["enabled"]
+            if isinstance(raw.get("disk_paths"), list):
+                self.disk_paths = _normalize_disk_paths(raw["disk_paths"], self.disk_paths)
+            if raw.get("stream_interval_sec") is not None:
+                self.stream_interval_sec = max(0.5, min(60.0, float(raw["stream_interval_sec"])))
+            if isinstance(raw.get("push_url"), str):
+                url = raw["push_url"].strip()
+                if not url or url.startswith(("http://", "https://")):
+                    self.push_url = url
+            if raw.get("push_interval_sec") is not None:
+                self.push_interval_sec = max(0, min(86400, int(raw["push_interval_sec"])))
+            if isinstance(raw.get("push_token"), str):
+                self.push_token = raw["push_token"].strip()
+        except (OSError, json.JSONDecodeError, ValueError, TypeError):
+            pass
+
+    def _save(self) -> None:
+        directory = os.path.dirname(self.path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        lock_path = self.path + ".lock"
+        payload = {
+            "enabled": self.enabled,
+            "disk_paths": self.disk_paths,
+            "stream_interval_sec": self.stream_interval_sec,
+            "push_url": self.push_url,
+            "push_interval_sec": self.push_interval_sec,
+            "push_token": self.push_token,
+        }
+        with open(lock_path, "a+", encoding="utf-8") as lock_fh:
+            try:
+                fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
+            except OSError:
+                pass
+            fd, tmp = tempfile.mkstemp(dir=directory or ".", prefix=".sysconf-")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    json.dump(payload, fh, ensure_ascii=False, indent=2)
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                os.replace(tmp, self.path)
+            except BaseException:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp)
+                raise
+            finally:
+                with contextlib.suppress(OSError):
+                    fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+
+    def update(
+        self,
+        *,
+        enabled: Optional[bool] = None,
+        disk_paths: Optional[Sequence[str]] = None,
+        stream_interval_sec: Optional[float] = None,
+        push_url: Optional[str] = None,
+        push_interval_sec: Optional[int] = None,
+        push_token: Optional[str] = None,
+    ) -> dict:
+        if enabled is not None:
+            self.enabled = bool(enabled)
+        if disk_paths is not None:
+            self.disk_paths = _normalize_disk_paths(disk_paths, ["/"])
+        if stream_interval_sec is not None:
+            self.stream_interval_sec = round(max(0.5, min(60.0, float(stream_interval_sec))), 2)
+        if push_url is not None:
+            self.push_url = _validate_http_url(push_url)
+        if push_interval_sec is not None:
+            self.push_interval_sec = max(0, min(86400, int(push_interval_sec)))
+        if push_token is not None:
+            self.push_token = str(push_token).strip()
+        try:
+            self._save()
+        except OSError:
+            pass
+        return self.public()
+
+    def public(self) -> dict:
+        return {
+            "enabled": self.enabled,
+            "disk_paths": list(self.disk_paths),
+            "stream_interval_sec": self.stream_interval_sec,
+            "push_url": self.push_url,
+            "push_interval_sec": self.push_interval_sec,
+            "has_push_token": bool(self.push_token),
+            "last_push_at": self.last_push_at,
+            "last_push_status": self.last_push_status,
+            "last_push_error": self.last_push_error,
+        }
+
+
 # ---------------------------------------------------------------- 注册表 -----
 class Registry:
     def __init__(self, bot_ids: List[str]) -> None:
         self.slots = SlotAllocator()
+        self.system_config = SystemConfigStore()
         self.workers: Dict[str, ScreenWorker] = {}
         self.human_tokens: Dict[str, dict] = {}  # token -> {bot_id, expires}
         initial = [raw.strip() for raw in bot_ids if raw.strip()]
@@ -123,6 +283,39 @@ class Registry:
         n = len(self.human_tokens)
         self.human_tokens.clear()
         return n
+
+    def find_artifact(self, artifact_id: str, bot_id: Optional[str] = None) -> Optional[tuple[ScreenWorker, str, dict]]:
+        if bot_id:
+            worker = self.workers.get(bot_id)
+            if worker is None:
+                return None
+            found = worker.artifacts.resolve_file(artifact_id)
+            return (worker, found[0], found[1]) if found else None
+        for worker in list(self.workers.values()):
+            found = worker.artifacts.resolve_file(artifact_id)
+            if found:
+                return worker, found[0], found[1]
+        return None
+
+    def list_artifacts(
+        self,
+        *,
+        bot_id: Optional[str] = None,
+        room_id: Optional[str] = None,
+        kind: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[dict]:
+        cap = max(1, min(500, int(limit or 100)))
+        if bot_id:
+            worker = self.workers.get(bot_id)
+            if worker is None:
+                return []
+            return worker.artifacts.list_items(room_id=room_id, kind=kind, limit=cap)
+        items: List[dict] = []
+        for worker in list(self.workers.values()):
+            items.extend(worker.artifacts.list_items(room_id=room_id, kind=kind, limit=cap))
+        items.sort(key=lambda item: float(item.get("updated_at") or 0.0), reverse=True)
+        return items[:cap]
 
 
 # mss / xdotool 都从进程环境读授权文件：网关单进程服务多屏，必须统一指向共享文件
@@ -201,10 +394,86 @@ async def watchdog(reg: Registry) -> None:
                 worker._last_error = f"watchdog: {exc}"
 
 
+async def push_system_snapshot(
+    reg: Registry,
+    *,
+    url: Optional[str] = None,
+    token: Optional[str] = None,
+    disk_paths: Optional[Sequence[str]] = None,
+) -> dict:
+    """采集当前系统信息并通过网关 HTTP POST 推送到目标接口。"""
+    cfg = reg.system_config
+    target = _validate_http_url(url if url is not None else cfg.push_url)
+    if not target:
+        raise HTTPException(400, "未配置 push_url，请先在系统配置接口中设置上报目标 URL")
+    paths = _normalize_disk_paths(disk_paths, cfg.disk_paths) if disk_paths else cfg.disk_paths
+    cg_avail = bool(getattr(reg, "cgroup_available", False))
+    snapshot = await asyncio.to_thread(system_info, paths, 0.08, cg_avail)
+    payload = {
+        "source": "botscreen-gateway",
+        "gateway_pid": os.getpid(),
+        "system": snapshot,
+    }
+    headers = {"Content-Type": "application/json", "X-BotScreen-Source": "gateway"}
+    auth_token = (token if token is not None else cfg.push_token).strip()
+    if auth_token:
+        headers["Authorization"] = f"Bearer {auth_token}"
+        headers["X-System-Token"] = auth_token
+
+    t0 = time.monotonic()
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.post(target, json=payload, headers=headers)
+        latency_ms = round((time.monotonic() - t0) * 1000.0, 1)
+        cfg.last_push_at = time.time()
+        cfg.last_push_status = resp.status_code
+        cfg.last_push_error = "" if resp.is_success else f"HTTP {resp.status_code}: {resp.text[:200]}"
+        return {
+            "ok": resp.is_success,
+            "url": target,
+            "status_code": resp.status_code,
+            "latency_ms": latency_ms,
+            "error": cfg.last_push_error,
+            "system": snapshot,
+        }
+    except Exception as exc:  # noqa: BLE001
+        latency_ms = round((time.monotonic() - t0) * 1000.0, 1)
+        cfg.last_push_at = time.time()
+        cfg.last_push_status = 0
+        cfg.last_push_error = str(exc)
+        return {
+            "ok": False,
+            "url": target,
+            "status_code": 0,
+            "latency_ms": latency_ms,
+            "error": str(exc),
+            "system": snapshot,
+        }
+
+
+async def system_reporter(reg: Registry) -> None:
+    """按配置周期通过网关向远端接口主动上报系统信息（push_interval_sec=0 时休眠等待配置变更）。"""
+    last_sent = 0.0
+    while True:
+        await asyncio.sleep(1.0)
+        cfg = reg.system_config
+        if not cfg.enabled or not cfg.push_url or cfg.push_interval_sec <= 0:
+            continue
+        now = time.monotonic()
+        if last_sent > 0 and (now - last_sent) < cfg.push_interval_sec:
+            continue
+        last_sent = now
+        try:
+            await push_system_snapshot(reg)
+        except Exception:  # noqa: BLE001
+            continue
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global REGISTRY
     REGISTRY = Registry(DEFAULT_BOTS)
+    prime_cpu_sample()
     try:
         if REGISTRY.workers:
             REGISTRY.workers[next(iter(REGISTRY.workers))].cg.ensure_root()
@@ -226,6 +495,7 @@ async def lifespan(app: FastAPI):
     tasks = [
         asyncio.create_task(idle_reaper(REGISTRY)),
         asyncio.create_task(watchdog(REGISTRY)),
+        asyncio.create_task(system_reporter(REGISTRY)),
     ]
     try:
         yield
@@ -354,6 +624,11 @@ async def healthz() -> dict:
             "idle_stop",
             "session_restore",
             "unified_desktop",
+            "system_info",
+            "host_system",
+            "bot_avatar",
+            "artifacts",
+            "artifact_download",
         ],
         "cgroup": bool(getattr(reg, "cgroup_available", False)),
         "x_backend": backend,
@@ -361,6 +636,139 @@ async def healthz() -> dict:
         "pid": os.getpid(),
         "bots": len(reg.workers),
     }
+
+
+# ------------------------------------------------------------ 系统信息接口 -----
+class SystemConfigBody(BaseModel):
+    enabled: Optional[bool] = None
+    disk_paths: Optional[List[str]] = None
+    disk_path: Optional[str] = None
+    stream_interval_sec: Optional[float] = Field(default=None, ge=0.5, le=60.0)
+    push_url: Optional[str] = None
+    push_interval_sec: Optional[int] = Field(default=None, ge=0, le=86400)
+    push_token: Optional[str] = None
+
+
+class SystemPushBody(BaseModel):
+    url: Optional[str] = None
+    token: Optional[str] = None
+    disk_paths: Optional[List[str]] = None
+    disk_path: Optional[str] = None
+
+
+def _parse_disk_query(disk_path: Optional[str], default_paths: Sequence[str]) -> List[str]:
+    if not disk_path:
+        return list(default_paths)
+    parsed = [p.strip() for p in disk_path.split(",") if p.strip()]
+    return _normalize_disk_paths(parsed, default_paths)
+
+
+@app.get("/api/system", dependencies=[Depends(require_admin)])
+@app.get("/api/system/info", dependencies=[Depends(require_admin)])
+@app.get("/api/host", dependencies=[Depends(require_admin)])
+@app.get("/api/host/info", dependencies=[Depends(require_admin)])
+@app.get("/api/host/system", dependencies=[Depends(require_admin)])
+@app.get("/api/sysinfo", dependencies=[Depends(require_admin)])
+@app.get("/api/node/info", dependencies=[Depends(require_admin)])
+async def get_system_info(disk_path: Optional[str] = Query(default=None)) -> dict:
+    """获取宿主机系统信息（磁盘占用、内存占用、CPU 占用、开机时长与内存门禁）并通过网关传输。"""
+    reg = registry()
+    cfg = reg.system_config
+    paths = _parse_disk_query(disk_path, cfg.disk_paths)
+    cg_avail = bool(getattr(reg, "cgroup_available", False))
+    info = await asyncio.to_thread(host_summary, paths, cgroup_available=cg_avail, fresh=True)
+    return {
+        "ok": True,
+        "source": "gateway",
+        "gateway_pid": os.getpid(),
+        **info,
+        "config": cfg.public(),
+    }
+
+
+@app.get("/api/system/config", dependencies=[Depends(require_admin)])
+async def get_system_config() -> dict:
+    """读取网关侧系统信息采集与主动上报配置。"""
+    return {"ok": True, "config": registry().system_config.public()}
+
+
+@app.put("/api/system/config", dependencies=[Depends(require_admin)])
+@app.post("/api/system/config", dependencies=[Depends(require_admin)])
+async def update_system_config(body: SystemConfigBody) -> dict:
+    """更新网关侧系统信息采集与主动上报配置。"""
+    paths = body.disk_paths
+    if paths is None and body.disk_path is not None:
+        paths = [p.strip() for p in body.disk_path.split(",") if p.strip()]
+    updated = registry().system_config.update(
+        enabled=body.enabled,
+        disk_paths=paths,
+        stream_interval_sec=body.stream_interval_sec,
+        push_url=body.push_url,
+        push_interval_sec=body.push_interval_sec,
+        push_token=body.push_token,
+    )
+    return {"ok": True, "config": updated}
+
+
+@app.post("/api/system/push", dependencies=[Depends(require_admin)])
+async def trigger_system_push(body: Optional[SystemPushBody] = Body(default=None)) -> dict:
+    """立即采集一次系统信息并通过网关推送到配置的目标接口。"""
+    reg = registry()
+    paths = None
+    if body:
+        if body.disk_paths:
+            paths = body.disk_paths
+        elif body.disk_path:
+            paths = [p.strip() for p in body.disk_path.split(",") if p.strip()]
+    return await push_system_snapshot(
+        reg,
+        url=body.url if body else None,
+        token=body.token if body else None,
+        disk_paths=paths,
+    )
+
+
+@app.get("/api/system/stream", dependencies=[Depends(require_admin)])
+@app.get("/api/host/stream", dependencies=[Depends(require_admin)])
+async def stream_system_info(
+    request: Request,
+    interval: Optional[float] = Query(default=None, ge=0.5, le=60.0),
+    disk_path: Optional[str] = Query(default=None),
+) -> StreamingResponse:
+    """SSE 实时系统信息推送流（断开即停，零后台残留）。"""
+    reg = registry()
+    cfg = reg.system_config
+    step = float(interval) if interval is not None else cfg.stream_interval_sec
+    step = max(0.5, min(60.0, step))
+
+    async def _gen():
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                paths = _parse_disk_query(disk_path, cfg.disk_paths)
+                cg_avail = bool(getattr(reg, "cgroup_available", False))
+                snapshot = await asyncio.to_thread(host_summary, paths, cgroup_available=cg_avail, fresh=True)
+                pkt = {
+                    "type": "system",
+                    "source": "gateway",
+                    "gateway_pid": os.getpid(),
+                    **snapshot,
+                }
+                yield f"data: {json.dumps(pkt, separators=(',', ':'))}\n\n"
+                await asyncio.sleep(step)
+        except asyncio.CancelledError:
+            return
+
+    return StreamingResponse(
+        _gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post("/api/admin/shutdown", dependencies=[Depends(require_admin)])
@@ -373,9 +781,12 @@ async def admin_shutdown() -> dict:
 
 @app.get("/api/screens", dependencies=[Depends(require_admin)])
 async def list_screens() -> dict:
+    reg = registry()
+    cg_avail = bool(getattr(reg, "cgroup_available", False))
+    host = await asyncio.to_thread(host_summary, reg.system_config.disk_paths, cgroup_available=cg_avail)
     return {
-        "screens": [w.status() for w in registry().workers.values()],
-        "host": memory_summary(),
+        "screens": [w.status() for w in reg.workers.values()],
+        "host": host,
     }
 
 
@@ -666,26 +1077,63 @@ async def global_brake() -> dict:
     return {"frozen": stopped, "stopped": stopped, "tokens_rotated": True}
 
 
+def _preview_etag(data: bytes) -> str:
+    return f'"{hashlib.blake2b(data, digest_size=12).hexdigest()}"'
+
+
+def _etag_matches(if_none_match: Optional[str], etag: str) -> bool:
+    if not if_none_match:
+        return False
+    target = etag.strip()
+    if target.startswith("W/"):
+        target = target[2:].strip()
+    for part in if_none_match.split(","):
+        token = part.strip()
+        if token == "*":
+            return True
+        if token.startswith("W/"):
+            token = token[2:].strip()
+        if token == target:
+            return True
+    return False
+
+
+def _preview_response(
+    data: bytes,
+    media_type: str,
+    headers: Dict[str, str],
+    if_none_match: Optional[str],
+) -> Response:
+    etag = _preview_etag(data)
+    out_headers = dict(headers)
+    out_headers["ETag"] = etag
+    if _etag_matches(if_none_match, etag):
+        return Response(status_code=304, headers=out_headers)
+    return Response(data, media_type=media_type, headers=out_headers)
+
+
 @app.get("/api/screens/{bot_id}/preview", dependencies=[Depends(require_admin)])
 async def screen_preview(
     bot_id: str,
     cached: bool = Query(False),
     only_cached: bool = Query(False),
+    if_none_match: Optional[str] = Header(default=None),
 ) -> Response:
     """控制台低频静态快照（只读，不改变状态机，不续命闲置计时）。
 
     * `only_cached=1`：若已有缓存帧则直接返回零抓屏开销；仅首次无缓存时抓一帧（5s 后自动释放抓屏器）。
     * 停止或冻结屏传 `cached=1` 返回关闭前保存的最后一帧（内存或磁盘 `runtime/last_preview.jpg`）。
+    * 支持 `If-None-Match` 条件请求，画面未变化时返回 `304 Not Modified` 以降低公网轮询流量。
     """
     worker = registry().get(bot_id)
     if not worker.healthy() or worker.lock.state in (State.STOPPED, State.FROZEN):
         if cached:
             preview = worker.load_cached_preview()
             if preview:
-                return Response(
+                return _preview_response(
                     preview,
-                    media_type="image/jpeg",
-                    headers={
+                    "image/jpeg",
+                    {
                         "Cache-Control": "no-store",
                         "X-Screen-Frozen": "true" if worker.lock.state is State.FROZEN else "false",
                         "X-Screen-Cached": "true",
@@ -693,31 +1141,34 @@ async def screen_preview(
                         "X-Screen-Width": str(SCREEN_WIDTH),
                         "X-Screen-Height": str(SCREEN_HEIGHT),
                     },
+                    if_none_match,
                 )
         raise HTTPException(409, "screen stopped" if not worker.healthy() else "screen frozen")
     if only_cached and worker.last_preview:
-        return Response(
+        return _preview_response(
             worker.last_preview,
-            media_type="image/jpeg",
-            headers={
+            "image/jpeg",
+            {
                 "Cache-Control": "no-store",
                 "X-Screen-State": worker.lock.state.value,
                 "X-Screen-Width": str(SCREEN_WIDTH),
                 "X-Screen-Height": str(SCREEN_HEIGHT),
             },
+            if_none_match,
         )
     shot = await asyncio.to_thread(worker.driver.screenshot, "jpeg", 70, False)
     worker.last_preview = shot.data
     worker.last_preview_at = time.time()
-    return Response(
+    return _preview_response(
         shot.data,
-        media_type=shot.mime,
-        headers={
+        shot.mime,
+        {
             "Cache-Control": "no-store",
             "X-Screen-State": worker.lock.state.value,
             "X-Screen-Width": str(shot.width),
             "X-Screen-Height": str(shot.height),
         },
+        if_none_match,
     )
 
 
@@ -735,6 +1186,58 @@ async def audit_thumb(bot_id: str, name: str) -> Response:
     if not os.path.exists(path):
         raise HTTPException(404, "thumb not found")
     return FileResponse(path, media_type="image/webp")
+
+
+# ---------------------------------------------------------------- Bot 形象 ---
+class BotAvatarBody(BaseModel):
+    avatarId: str = "mochi"
+    customJson: str = ""
+    color: str = "#ff8a1f"
+    eyeColor: str = "#1b1b1b"
+    material: str = "flat"
+    clay: bool = True
+    yaw: float = Field(default=0.0, ge=-0.9, le=0.9)
+    pitch: float = Field(default=0.0, ge=-0.6, le=0.6)
+    orbit: bool = False
+    badge: bool = False
+    depth: float = Field(default=6.0, ge=0.0, le=14.0)
+    followPointer: bool = True
+
+
+@app.get("/api/avatars", dependencies=[Depends(require_admin)])
+async def list_bot_avatars() -> dict:
+    """列出网关已同步的全部 Bot 形象配置。"""
+    reg = registry()
+    avatars: Dict[str, dict] = {}
+    for bot_id, worker in reg.workers.items():
+        av = worker.load_avatar()
+        if av is not None:
+            avatars[bot_id] = av
+    return {"ok": True, "avatars": avatars}
+
+
+@app.get("/api/screens/{bot_id}/avatar", dependencies=[Depends(require_admin)])
+async def get_bot_avatar(bot_id: str) -> dict:
+    worker = registry().get(bot_id)
+    return {"ok": True, "bot_id": bot_id, "avatar": worker.load_avatar()}
+
+
+@app.put("/api/screens/{bot_id}/avatar", dependencies=[Depends(require_admin)])
+@app.post("/api/screens/{bot_id}/avatar", dependencies=[Depends(require_admin)])
+async def put_bot_avatar(bot_id: str, body: BotAvatarBody) -> dict:
+    worker = registry().ensure(bot_id)
+    payload = body.model_dump()
+    if payload["material"] not in ("flat", "fluffy"):
+        payload["material"] = "flat"
+    saved = await asyncio.to_thread(worker.save_avatar, payload)
+    return {"ok": True, "bot_id": bot_id, "avatar": saved}
+
+
+@app.delete("/api/screens/{bot_id}/avatar", dependencies=[Depends(require_admin)])
+async def delete_bot_avatar(bot_id: str) -> dict:
+    worker = registry().get(bot_id)
+    deleted = await asyncio.to_thread(worker.delete_avatar)
+    return {"ok": True, "bot_id": bot_id, "deleted": deleted}
 
 
 # ---------------------------------------------------------------- 文件中转 ---
@@ -781,6 +1284,280 @@ async def delete_file(bot_id: str, name: str) -> dict:
         os.unlink(path)
         return {"deleted": safe}
     raise HTTPException(404, "file not found")
+
+
+# ------------------------------------------------------------ Agent 回复产物 ---
+class ArtifactBundleBody(BaseModel):
+    artifact_ids: Optional[List[str]] = None
+    bot_id: Optional[str] = None
+    room_id: Optional[str] = None
+    filename: Optional[str] = None
+
+
+def _artifact_file_response(
+    bpath: str,
+    meta: dict,
+    *,
+    inline: bool = False,
+    filename_override: Optional[str] = None,
+) -> FileResponse:
+    dl_name = sanitize_filename(filename_override) if filename_override else str(meta.get("filename") or "artifact")
+    mime_type = str(meta.get("mime_type") or "application/octet-stream")
+    headers = {
+        "Content-Disposition": build_content_disposition(dl_name, inline=inline),
+        "X-Content-Type-Options": "nosniff",
+        "X-Artifact-Id": str(meta.get("artifact_id") or ""),
+        "X-Bot-Id": str(meta.get("bot_id") or ""),
+        "X-Artifact-Sha256": str(meta.get("sha256") or ""),
+        "X-Artifact-Kind": str(meta.get("kind") or "artifact"),
+        "X-Artifact-Type": str(meta.get("artifact_type") or ""),
+        "X-Artifact-Source": "gateway",
+        "Cache-Control": "private, max-age=60",
+    }
+    return FileResponse(bpath, media_type=mime_type, headers=headers)
+
+
+async def _ingest_artifact_request(worker: ScreenWorker, request: Request) -> dict:
+    """解析 JSON（文本/Base64）或 multipart/form-data 文件上传，并原子持久化到网关产物库。"""
+    ctype = (request.headers.get("content-type") or "").split(";")[0].strip().lower()
+    if ctype == "application/json":
+        raw_body = await request.body()
+        if len(raw_body) > int(ARTIFACT_MAX_BYTES * 1.4) + 65536:
+            raise HTTPException(413, f"request body exceeds limit ({ARTIFACT_MAX_BYTES} bytes)")
+        try:
+            body = json.loads(raw_body.decode("utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(400, f"invalid JSON payload: {exc}") from exc
+        if not isinstance(body, dict):
+            raise HTTPException(400, "JSON body must be an object")
+        content = body.get("content")
+        if content is None:
+            raise HTTPException(400, "missing required field: content")
+        if not isinstance(content, str):
+            content = json.dumps(content, ensure_ascii=False, indent=2)
+        encoding = str(body.get("encoding") or "utf-8")
+        data = decode_content_bytes(content, encoding=encoding)
+        meta_obj = body.get("metadata") if isinstance(body.get("metadata"), dict) else {}
+        return await asyncio.to_thread(
+            worker.artifacts.save_bytes,
+            data,
+            artifact_id=body.get("artifact_id") or body.get("id"),
+            title=str(body.get("title") or ""),
+            filename=body.get("filename") or body.get("name"),
+            kind=str(body.get("kind") or "artifact"),
+            artifact_type=str(body.get("artifact_type") or body.get("type") or ""),
+            mime_type=body.get("mime_type") or body.get("mimeType"),
+            room_id=str(body.get("room_id") or body.get("roomId") or ""),
+            room_name=str(body.get("room_name") or body.get("roomName") or ""),
+            message_id=str(body.get("message_id") or body.get("messageId") or ""),
+            source_path=str(body.get("source_path") or body.get("sourcePath") or ""),
+            metadata=meta_obj,
+        )
+
+    if ctype == "multipart/form-data":
+        form = await request.form()
+        upload = form.get("file")
+        if upload is None or not hasattr(upload, "read"):
+            raise HTTPException(400, "missing multipart field: file")
+        chunks: List[bytes] = []
+        total = 0
+        while True:
+            chunk = await upload.read(1 << 20)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > ARTIFACT_MAX_BYTES:
+                raise HTTPException(413, f"artifact exceeds max size ({ARTIFACT_MAX_BYTES} bytes)")
+            chunks.append(chunk)
+        data = b"".join(chunks)
+        raw_meta = form.get("metadata")
+        meta_obj: dict = {}
+        if isinstance(raw_meta, str) and raw_meta.strip():
+            try:
+                parsed = json.loads(raw_meta)
+                if isinstance(parsed, dict):
+                    meta_obj = parsed
+            except json.JSONDecodeError:
+                pass
+        filename = (
+            str(form.get("filename") or "").strip()
+            or getattr(upload, "filename", None)
+            or "artifact.bin"
+        )
+        mime_type = (
+            str(form.get("mime_type") or "").strip()
+            or getattr(upload, "content_type", None)
+            or None
+        )
+        return await asyncio.to_thread(
+            worker.artifacts.save_bytes,
+            data,
+            artifact_id=str(form.get("artifact_id") or form.get("id") or "").strip() or None,
+            title=str(form.get("title") or ""),
+            filename=filename,
+            kind=str(form.get("kind") or "file"),
+            artifact_type=str(form.get("artifact_type") or form.get("type") or ""),
+            mime_type=mime_type,
+            room_id=str(form.get("room_id") or form.get("roomId") or ""),
+            room_name=str(form.get("room_name") or form.get("roomName") or ""),
+            message_id=str(form.get("message_id") or form.get("messageId") or ""),
+            source_path=str(form.get("source_path") or form.get("sourcePath") or ""),
+            metadata=meta_obj,
+        )
+
+    raise HTTPException(415, "content-type must be application/json or multipart/form-data")
+
+
+@app.get("/api/artifacts", dependencies=[Depends(require_admin)])
+async def list_all_artifacts(
+    bot_id: Optional[str] = Query(default=None),
+    room_id: Optional[str] = Query(default=None),
+    kind: Optional[str] = Query(default=None),
+    limit: int = Query(100, ge=1, le=500),
+) -> dict:
+    """列出网关已托管的 Agent 回复产物（支持按 bot_id / room_id / kind 过滤）。"""
+    items = await asyncio.to_thread(
+        registry().list_artifacts,
+        bot_id=bot_id,
+        room_id=room_id,
+        kind=kind,
+        limit=limit,
+    )
+    return {"ok": True, "total": len(items), "artifacts": items}
+
+
+@app.post("/api/artifacts/bundle", dependencies=[Depends(require_admin)])
+async def download_artifacts_bundle(body: ArtifactBundleBody) -> Response:
+    """批量将多个 Agent 回复产物打包为 ZIP 并通过网关传输下载。"""
+    reg = registry()
+    entries = []
+    if body.artifact_ids:
+        for aid in body.artifact_ids:
+            found = await asyncio.to_thread(reg.find_artifact, aid, body.bot_id)
+            if found:
+                entries.append((found[1], found[2]))
+    else:
+        items = await asyncio.to_thread(
+            reg.list_artifacts,
+            bot_id=body.bot_id,
+            room_id=body.room_id,
+            limit=200,
+        )
+        for item in items:
+            found = await asyncio.to_thread(reg.find_artifact, item["artifact_id"], item.get("bot_id"))
+            if found:
+                entries.append((found[1], found[2]))
+    if not entries:
+        raise HTTPException(404, "no matching artifacts found for bundle")
+    zip_bytes, count, _manifest = await asyncio.to_thread(build_zip_bundle, entries)
+    dl_name = sanitize_filename(body.filename or "agent-artifacts.zip")
+    if not dl_name.lower().endswith(".zip"):
+        dl_name = f"{dl_name}.zip"
+    return Response(
+        zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": build_content_disposition(dl_name, inline=False),
+            "X-Content-Type-Options": "nosniff",
+            "X-Artifact-Count": str(count),
+            "X-Artifact-Source": "gateway",
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@app.get("/api/artifacts/{artifact_id}", dependencies=[Depends(require_admin)])
+async def get_artifact_meta(
+    artifact_id: str,
+    bot_id: Optional[str] = Query(default=None),
+) -> dict:
+    """读取单个 Agent 回复产物的元信息与下载地址。"""
+    found = await asyncio.to_thread(registry().find_artifact, artifact_id, bot_id)
+    if not found:
+        raise HTTPException(404, f"artifact not found: {artifact_id}")
+    return {"ok": True, "artifact": found[2]}
+
+
+@app.get("/api/artifacts/{artifact_id}/download", dependencies=[Depends(require_admin)])
+async def download_artifact_by_id(
+    artifact_id: str,
+    bot_id: Optional[str] = Query(default=None),
+    inline: bool = Query(False),
+    filename: Optional[str] = Query(default=None),
+) -> FileResponse:
+    """通过网关直接下载指定 artifact_id 的 Agent 回复产物（支持流式与 Range 断点续传）。"""
+    found = await asyncio.to_thread(registry().find_artifact, artifact_id, bot_id)
+    if not found:
+        raise HTTPException(404, f"artifact not found: {artifact_id}")
+    return _artifact_file_response(found[1], found[2], inline=inline, filename_override=filename)
+
+
+@app.delete("/api/artifacts/{artifact_id}", dependencies=[Depends(require_admin)])
+async def delete_artifact_by_id(
+    artifact_id: str,
+    bot_id: Optional[str] = Query(default=None),
+) -> dict:
+    """删除网关托管的单个 Agent 回复产物。"""
+    found = await asyncio.to_thread(registry().find_artifact, artifact_id, bot_id)
+    if not found:
+        raise HTTPException(404, f"artifact not found: {artifact_id}")
+    worker = found[0]
+    deleted = await asyncio.to_thread(worker.artifacts.delete, artifact_id)
+    return {"ok": True, "bot_id": worker.bot_id, "artifact_id": artifact_id, "deleted": deleted}
+
+
+@app.get("/api/screens/{bot_id}/artifacts", dependencies=[Depends(require_admin)])
+async def list_bot_artifacts(
+    bot_id: str,
+    room_id: Optional[str] = Query(default=None),
+    kind: Optional[str] = Query(default=None),
+    limit: int = Query(100, ge=1, le=500),
+) -> dict:
+    """列出指定 Bot 已同步到网关的回复产物。"""
+    worker = registry().ensure(bot_id)
+    items = await asyncio.to_thread(worker.artifacts.list_items, room_id=room_id, kind=kind, limit=limit)
+    return {"ok": True, "bot_id": bot_id, "total": len(items), "artifacts": items}
+
+
+@app.post("/api/screens/{bot_id}/artifacts", dependencies=[Depends(require_admin)])
+async def publish_bot_artifact(bot_id: str, request: Request) -> dict:
+    """上传/发布一个 Bot 的回复产物到网关（支持 application/json 文本/Base64 或 multipart/form-data 文件）。"""
+    worker = registry().ensure(bot_id)
+    saved = await _ingest_artifact_request(worker, request)
+    return {"ok": True, "bot_id": bot_id, "artifact": saved}
+
+
+@app.get("/api/screens/{bot_id}/artifacts/{artifact_id}", dependencies=[Depends(require_admin)])
+async def get_bot_artifact_meta(bot_id: str, artifact_id: str) -> dict:
+    worker = registry().get(bot_id)
+    meta = await asyncio.to_thread(worker.artifacts.get_meta, artifact_id)
+    if meta is None:
+        raise HTTPException(404, f"artifact not found: {artifact_id}")
+    return {"ok": True, "bot_id": bot_id, "artifact": meta}
+
+
+@app.get("/api/screens/{bot_id}/artifacts/{artifact_id}/download", dependencies=[Depends(require_admin)])
+async def download_bot_artifact(
+    bot_id: str,
+    artifact_id: str,
+    inline: bool = Query(False),
+    filename: Optional[str] = Query(default=None),
+) -> FileResponse:
+    """通过网关下载指定 Bot 的单个回复产物。"""
+    worker = registry().get(bot_id)
+    found = await asyncio.to_thread(worker.artifacts.resolve_file, artifact_id)
+    if not found:
+        raise HTTPException(404, f"artifact not found: {artifact_id}")
+    return _artifact_file_response(found[0], found[1], inline=inline, filename_override=filename)
+
+
+@app.delete("/api/screens/{bot_id}/artifacts/{artifact_id}", dependencies=[Depends(require_admin)])
+async def delete_bot_artifact(bot_id: str, artifact_id: str) -> dict:
+    worker = registry().get(bot_id)
+    deleted = await asyncio.to_thread(worker.artifacts.delete, artifact_id)
+    if not deleted:
+        raise HTTPException(404, f"artifact not found: {artifact_id}")
+    return {"ok": True, "bot_id": bot_id, "artifact_id": artifact_id, "deleted": True}
 
 
 # ---------------------------------------------------------------- Agent 面 ---
@@ -1060,6 +1837,71 @@ async def agent_wait_release(
     worker = require_agent(bot_id, x_agent_token)
     released = await worker.lock.wait_for_release(timeout)
     return {"released": released, "state": worker.lock.state.value}
+
+
+@app.post("/api/agent/{bot_id}/artifacts")
+async def agent_publish_artifact(
+    bot_id: str,
+    request: Request,
+    x_agent_token: Optional[str] = Header(default=None),
+) -> dict:
+    """Agent 自身在回复/执行任务时直接上传产物到网关，返回 artifact_id 与下载路径。"""
+    worker = require_agent(bot_id, x_agent_token)
+    saved = await _ingest_artifact_request(worker, request)
+    worker.auditor.record(
+        "artifact_publish",
+        {
+            "artifact_id": saved["artifact_id"],
+            "filename": saved["filename"],
+            "size": saved["size"],
+            "kind": saved["kind"],
+        },
+        state=worker.lock.state.value,
+    )
+    return {"ok": True, "bot_id": bot_id, "artifact": saved}
+
+
+@app.get("/api/agent/{bot_id}/artifacts")
+async def agent_list_artifacts(
+    bot_id: str,
+    room_id: Optional[str] = Query(default=None),
+    kind: Optional[str] = Query(default=None),
+    limit: int = Query(100, ge=1, le=500),
+    x_agent_token: Optional[str] = Header(default=None),
+) -> dict:
+    """Agent 列出自身已发布到网关的回复产物。"""
+    worker = require_agent(bot_id, x_agent_token)
+    items = await asyncio.to_thread(worker.artifacts.list_items, room_id=room_id, kind=kind, limit=limit)
+    return {"ok": True, "bot_id": bot_id, "total": len(items), "artifacts": items}
+
+
+@app.get("/api/agent/{bot_id}/artifacts/{artifact_id}")
+async def agent_get_artifact_meta(
+    bot_id: str,
+    artifact_id: str,
+    x_agent_token: Optional[str] = Header(default=None),
+) -> dict:
+    worker = require_agent(bot_id, x_agent_token)
+    meta = await asyncio.to_thread(worker.artifacts.get_meta, artifact_id)
+    if meta is None:
+        raise HTTPException(404, f"artifact not found: {artifact_id}")
+    return {"ok": True, "bot_id": bot_id, "artifact": meta}
+
+
+@app.get("/api/agent/{bot_id}/artifacts/{artifact_id}/download")
+async def agent_download_artifact(
+    bot_id: str,
+    artifact_id: str,
+    inline: bool = Query(False),
+    filename: Optional[str] = Query(default=None),
+    x_agent_token: Optional[str] = Header(default=None),
+) -> FileResponse:
+    """Agent 通过网关下载自身的产物文件流。"""
+    worker = require_agent(bot_id, x_agent_token)
+    found = await asyncio.to_thread(worker.artifacts.resolve_file, artifact_id)
+    if not found:
+        raise HTTPException(404, f"artifact not found: {artifact_id}")
+    return _artifact_file_response(found[0], found[1], inline=inline, filename_override=filename)
 
 
 # ---------------------------------------------------------------- 推流代理 ---

@@ -2,23 +2,79 @@
  * The Host API the Bot page talks to.
  *
  * One authenticated, same-origin JSON surface behind `/botmode/api/`:
- *   GET  state     — roster, Sections, Rooms, Routines, Memory Hub and live status
- *   GET  models    — live DSH provider/model catalog
- *   GET  memory    — full Memory Hub status, installed plugins, catalog & health
- *   POST image     — upload one image attachment
- *   POST command   — one typed mutation or action
+ *   GET  state          — roster, Sections, Rooms, Routines, Memory Hub and live status
+ *   GET  models         — live DSH provider/model catalog
+ *   GET  memory         — full Memory Hub status, installed plugins, catalog & health
+ *   GET  system         — host system info (disk, memory, CPU, uptime) via BotScreen gateway
+ *   GET  system/config  — read gateway & system info interface configuration
+ *   PUT/POST system/config — update & sync gateway / system info interface configuration
+ *   POST system/push    — push a system info snapshot through gateway to configured endpoint
+ *   GET  system/stream  — SSE live system metrics stream via gateway
+ *   GET  avatar         — read one Bot's avatar (`?botId=...`) or all Bot avatars map
+ *   PUT/POST avatar     — update one Bot's avatar config (synced to BotScreen gateway)
+ *   GET  avatar/catalog — built-in 19-avatar catalog & 12 clay palettes (Image-bot)
+ *   GET  avatar/bundle.js — zero-dependency browser `<grok-bot>` engine bundle
+ *   GET  artifacts      — list Agent reply artifacts & deliverables (with gateway download URLs)
+ *   POST artifacts      — publish/upload an Agent reply artifact through BotScreen gateway
+ *   GET  artifacts/download — download an Agent reply artifact via BotScreen gateway (`?id=...`)
+ *   GET  artifacts/:id/download — REST alias for downloading an Agent reply artifact via gateway
+ *   POST artifacts/bundle — download multiple Agent reply artifacts as a ZIP archive via gateway
+ *   DELETE artifacts    — delete an Agent reply artifact (`?id=...` or `DELETE artifacts/:id`)
+ *   POST image          — upload one image attachment
+ *   POST command        — one typed mutation or action
  */
+import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { clampInt, defaultSettingsState, newId, readTextFile, writeTextFile } from './store.js'
+import {
+  clampInt,
+  defaultSettingsState,
+  newId,
+  normalizeDiskPaths,
+  normalizeSystemSettings,
+  readTextFile,
+  writeTextFile,
+} from './store.js'
 import { syncBotFiles, syncTeamFiles } from './persona.js'
 import { nextCronTime } from './cron.js'
 import { botModelCatalog } from './models.js'
+import {
+  avatarBundleScript,
+  avatarCatalog,
+  deterministicAvatar,
+  hasExplicitAvatar,
+  normalizeAvatar,
+  normalizeHex,
+  randomAvatar,
+} from './avatar.js'
+import {
+  MAX_ARTIFACT_BYTES,
+  buildContentDisposition,
+  extractXmlArtifacts,
+  inferArtifactMimeType,
+  isValidArtifactId,
+  makeDeliverableArtifactId,
+  resolveSafeWorkspaceFile,
+  sanitizeArtifactFilename,
+} from './artifacts.js'
+import { collectLocalHostSystem } from './screen.js'
 
 const MAX_BODY_BYTES = 256 * 1024
+const MAX_ARTIFACT_JSON_BYTES = 32 * 1024 * 1024
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
 const APPROVAL_POLICIES = ['ask', 'always', 'never']
 const PREFIX = '/botmode/api/'
+const SYSTEM_INFO_ROUTES = new Set([
+  'system',
+  'system/info',
+  'host',
+  'host/info',
+  'host/system',
+  'sysinfo',
+  'node/info',
+])
+const SYSTEM_STREAM_ROUTES = new Set(['system/stream', 'host/stream'])
 
 const sendJson = (res, status, payload) => {
   res.statusCode = status
@@ -64,6 +120,8 @@ export class BotApi {
     host: null,
   }
 
+  #systemSnapshot = null
+
   constructor({ ctx, store, dispatcher, rooms, routines, approvals, memory, screen, logger }) {
     this.ctx = ctx
     this.store = store
@@ -83,13 +141,39 @@ export class BotApi {
     for (const item of data.screens || []) {
       if (item && item.bot_id) byBot[item.bot_id] = item
     }
+    const gwUrl = data.gatewayUrl || this.screen.gatewayUrl
+    let host = data.host || null
+    const hasRichHost = Boolean(host && host.cpu && host.memory && host.disk)
+    if (hasRichHost) {
+      this.#systemSnapshot = {
+        available: true,
+        source: 'gateway',
+        gatewayUrl: gwUrl,
+        ...host,
+      }
+    } else if (typeof this.screen.isLocalGateway === 'function' && this.screen.isLocalGateway()) {
+      // Local gateway is offline, starting, or pinned on a legacy build without CPU/disk fields:
+      // enrich with local Host metrics while preserving any gateway memory-gate fields.
+      const sysCfg = this.#currentSystemSettings()
+      const fallback = collectLocalHostSystem(sysCfg.diskPaths)
+      host = {
+        ...fallback,
+        ...(host || {}),
+        gatewayAvailable: data.available === true,
+        gatewayUrl: gwUrl,
+        gatewayError: typeof data.error === 'string' ? data.error : '',
+        degraded: true,
+        source: 'host-fallback',
+      }
+      this.#systemSnapshot = host
+    }
     this.#screenSnapshot = {
       available: data.available === true,
-      gatewayUrl: data.gatewayUrl || this.screen.gatewayUrl,
+      gatewayUrl: gwUrl,
       autoStartable: Boolean(data.autoStartable),
       starting: Boolean(data.starting),
       error: typeof data.error === 'string' ? data.error : '',
-      host: data.host || null,
+      host,
       byBot,
     }
     return this.#screenSnapshot
@@ -144,14 +228,21 @@ export class BotApi {
         }
         const cached = url.searchParams.get('cached') !== '0'
         const onlyCached = url.searchParams.get('onlyCached') === '1'
+        const ifNoneMatch = stringOr(req.headers?.['if-none-match'])
         try {
-          const shot = await this.screen.preview(botId, { cached, onlyCached })
-          res.statusCode = 200
-          res.setHeader('content-type', shot.mimeType)
+          const shot = await this.screen.preview(botId, { cached, onlyCached, ifNoneMatch })
           res.setHeader('cache-control', 'no-store')
+          if (shot.etag) res.setHeader('etag', shot.etag)
           if (shot.frozen) res.setHeader('x-screen-frozen', 'true')
           if (shot.width) res.setHeader('x-screen-width', String(shot.width))
           if (shot.height) res.setHeader('x-screen-height', String(shot.height))
+          if (shot.notModified) {
+            res.statusCode = 304
+            res.end()
+            return
+          }
+          res.statusCode = 200
+          res.setHeader('content-type', shot.mimeType)
           res.end(shot.buffer)
         } catch (error) {
           sendJson(res, error?.status || 409, { ok: false, error: error instanceof Error ? error.message : String(error) })
@@ -167,8 +258,11 @@ export class BotApi {
         const format = url.searchParams.get('fmt') === 'webp' ? 'webp' : 'jpeg'
         const ac = new AbortController()
         const onAbort = () => ac.abort()
-        req.on?.('close', onAbort)
-        res.on?.('close', onAbort)
+        const onResClose = () => {
+          if (!res.writableEnded) ac.abort()
+        }
+        req.on?.('aborted', onAbort)
+        res.on?.('close', onResClose)
         try {
           const upstream = await this.screen.openTileStream(botId, { format, signal: ac.signal })
           res.statusCode = 200
@@ -189,6 +283,8 @@ export class BotApi {
             res.end()
           }
         } finally {
+          req.off?.('aborted', onAbort)
+          res.off?.('close', onResClose)
           ac.abort()
         }
         return
@@ -298,6 +394,371 @@ export class BotApi {
         sendJson(res, 200, { ok: true, memory })
         return
       }
+      if (SYSTEM_INFO_ROUTES.has(route) && req.method === 'GET') {
+        await this.store.load()
+        const rawDisk = url.searchParams.get('diskPath') || url.searchParams.get('disk_path') || ''
+        const diskPaths = rawDisk ? normalizeDiskPaths(rawDisk) : undefined
+        const data = await this.getSystemInfo({ diskPaths })
+        const sys = data.system || {}
+        sendJson(res, 200, {
+          ok: sys.available !== false,
+          ...(sys.hostname !== undefined ? { hostname: sys.hostname } : {}),
+          ...(sys.os !== undefined ? { os: sys.os } : {}),
+          ...(sys.arch !== undefined ? { arch: sys.arch } : {}),
+          ...(sys.kernel !== undefined ? { kernel: sys.kernel } : {}),
+          ...(sys.platform !== undefined ? { platform: sys.platform } : {}),
+          ...(sys.cgroup !== undefined ? { cgroup: sys.cgroup } : {}),
+          ...(sys.source !== undefined ? { source: sys.source } : {}),
+          ...(sys.degraded !== undefined ? { degraded: sys.degraded } : {}),
+          ...(sys.available_mb !== undefined ? { available_mb: sys.available_mb } : {}),
+          ...(sys.limit_mb !== undefined ? { limit_mb: sys.limit_mb } : {}),
+          ...(sys.min_free_mb !== undefined ? { min_free_mb: sys.min_free_mb } : {}),
+          ...(sys.blocker !== undefined ? { blocker: sys.blocker } : {}),
+          ...(sys.cpu !== undefined ? { cpu: sys.cpu } : {}),
+          ...(sys.memory !== undefined ? { memory: sys.memory } : {}),
+          ...(sys.disk !== undefined ? { disk: sys.disk } : {}),
+          ...(sys.uptime !== undefined ? { uptime: sys.uptime } : {}),
+          ...data,
+        })
+        return
+      }
+      if (route === 'system/config' && req.method === 'GET') {
+        await this.store.load()
+        const data = await this.getSystemConfig()
+        sendJson(res, 200, { ok: true, ...data })
+        return
+      }
+      if (route === 'system/config' && (req.method === 'PUT' || req.method === 'POST')) {
+        const ct = String(req.headers?.['content-type'] ?? '').split(';')[0].trim().toLowerCase()
+        if (ct !== 'application/json') {
+          sendJson(res, 415, { ok: false, error: 'content-type must be application/json' })
+          return
+        }
+        const raw = await readBody(req)
+        if (raw === undefined) {
+          sendJson(res, 413, { ok: false, error: 'body too large' })
+          return
+        }
+        let payload
+        try {
+          payload = JSON.parse(raw)
+        } catch (_error) {
+          sendJson(res, 400, { ok: false, error: 'invalid JSON' })
+          return
+        }
+        await this.store.load()
+        const data = await this.saveSystemConfig(payload)
+        sendJson(res, 200, { ok: true, ...data, state: this.publicState() })
+        return
+      }
+      if (route === 'system/push' && req.method === 'POST') {
+        let payload = {}
+        const raw = await readBody(req)
+        if (raw === undefined) {
+          sendJson(res, 413, { ok: false, error: 'body too large' })
+          return
+        }
+        if (raw.trim() !== '') {
+          try {
+            payload = JSON.parse(raw)
+          } catch (_error) {
+            sendJson(res, 400, { ok: false, error: 'invalid JSON' })
+            return
+          }
+        }
+        await this.store.load()
+        const data = await this.pushSystemInfo(payload)
+        sendJson(res, 200, { ok: data?.ok !== false, result: data })
+        return
+      }
+      if (SYSTEM_STREAM_ROUTES.has(route) && req.method === 'GET') {
+        if (!this.screen) {
+          sendJson(res, 503, { ok: false, error: 'Gateway bridge unavailable' })
+          return
+        }
+        await this.store.load()
+        const sysCfg = this.#currentSystemSettings()
+        const rawInterval = url.searchParams.get('interval')
+        const interval = rawInterval !== null && rawInterval !== ''
+          ? Number(rawInterval)
+          : sysCfg.refreshIntervalSec
+        const stepMs = Math.max(500, Math.min(60_000, Math.round((Number.isFinite(interval) ? interval : 2) * 1000)))
+        const rawDisk = url.searchParams.get('diskPath') || url.searchParams.get('disk_path') || ''
+        const diskPaths = rawDisk ? normalizeDiskPaths(rawDisk) : sysCfg.diskPaths
+        const ac = new AbortController()
+        const onAbort = () => ac.abort()
+        const onResClose = () => {
+          if (!res.writableEnded) ac.abort()
+        }
+        req.on?.('aborted', onAbort)
+        res.on?.('close', onResClose)
+        try {
+          const upstream = await this.screen.openSystemStream({ interval, diskPaths, signal: ac.signal })
+          res.statusCode = 200
+          res.setHeader('content-type', 'text/event-stream; charset=utf-8')
+          res.setHeader('cache-control', 'no-cache, no-transform')
+          res.setHeader('connection', 'keep-alive')
+          res.setHeader('x-accel-buffering', 'no')
+          res.flushHeaders?.()
+          for await (const chunk of upstream.body) {
+            if (ac.signal.aborted || res.writableEnded) break
+            res.write(Buffer.from(chunk))
+          }
+          if (!res.writableEnded) res.end()
+        } catch (error) {
+          const canLocalFallback = !ac.signal.aborted
+            && !res.headersSent
+            && typeof this.screen.isLocalGateway === 'function'
+            && this.screen.isLocalGateway()
+          if (canLocalFallback) {
+            const gwErr = error instanceof Error ? error.message : String(error)
+            res.statusCode = 200
+            res.setHeader('content-type', 'text/event-stream; charset=utf-8')
+            res.setHeader('cache-control', 'no-cache, no-transform')
+            res.setHeader('connection', 'keep-alive')
+            res.setHeader('x-accel-buffering', 'no')
+            res.flushHeaders?.()
+            const emit = () => {
+              const pkt = {
+                type: 'system',
+                ...collectLocalHostSystem(diskPaths),
+                gatewayAvailable: false,
+                gatewayUrl: this.screen.gatewayUrl,
+                gatewayError: gwErr,
+              }
+              this.#systemSnapshot = pkt
+              res.write(`data: ${JSON.stringify(pkt)}\n\n`)
+            }
+            emit()
+            // Wait on abort/close when the stream is a real HTTP socket; mock test responses without `.on` finish after one frame.
+            if (typeof res.on === 'function') {
+              await new Promise((resolveDone) => {
+                const timer = setInterval(() => {
+                  if (ac.signal.aborted || res.writableEnded) {
+                    clearInterval(timer)
+                    resolveDone()
+                    return
+                  }
+                  emit()
+                }, stepMs)
+                ac.signal.addEventListener('abort', () => {
+                  clearInterval(timer)
+                  resolveDone()
+                }, { once: true })
+              })
+            }
+            if (!res.writableEnded) res.end()
+          } else if (!ac.signal.aborted && !res.headersSent) {
+            sendJson(res, error?.status || 502, { ok: false, error: error instanceof Error ? error.message : String(error) })
+          } else if (!res.writableEnded) {
+            res.end()
+          }
+        } finally {
+          req.off?.('aborted', onAbort)
+          res.off?.('close', onResClose)
+          ac.abort()
+        }
+        return
+      }
+      if (route === 'avatar/catalog' && req.method === 'GET') {
+        sendJson(res, 200, { ok: true, catalog: avatarCatalog() })
+        return
+      }
+      if (route === 'avatar/bundle.js' && req.method === 'GET') {
+        const script = avatarBundleScript()
+        res.statusCode = 200
+        res.setHeader('content-type', 'application/javascript; charset=utf-8')
+        res.setHeader('cache-control', 'public, max-age=300')
+        res.end(script)
+        return
+      }
+      if (route === 'avatar' && req.method === 'GET') {
+        await this.store.load()
+        const botId = stringOr(url.searchParams.get('botId')).trim()
+        if (botId) {
+          const bot = this.store.bot(botId)
+          if (!bot) {
+            sendJson(res, 404, { ok: false, error: 'Unknown Bot.' })
+            return
+          }
+          sendJson(res, 200, {
+            ok: true,
+            botId: bot.id,
+            name: bot.name,
+            avatar: bot.avatar,
+          })
+          return
+        }
+        const avatars = {}
+        for (const bot of this.store.state.bots) {
+          avatars[bot.id] = bot.avatar
+        }
+        sendJson(res, 200, { ok: true, avatars })
+        return
+      }
+      if (route === 'avatar' && (req.method === 'PUT' || req.method === 'POST')) {
+        const ct = String(req.headers?.['content-type'] ?? '').split(';')[0].trim().toLowerCase()
+        if (ct !== 'application/json') {
+          sendJson(res, 415, { ok: false, error: 'content-type must be application/json' })
+          return
+        }
+        const raw = await readBody(req)
+        if (raw === undefined) {
+          sendJson(res, 413, { ok: false, error: 'body too large' })
+          return
+        }
+        let payload
+        try {
+          payload = JSON.parse(raw)
+        } catch (_error) {
+          sendJson(res, 400, { ok: false, error: 'invalid JSON' })
+          return
+        }
+        await this.store.load()
+        const botId = stringOr(payload?.botId || url.searchParams.get('botId')).trim()
+        const avatarBody = payload?.avatar && typeof payload.avatar === 'object'
+          ? payload.avatar
+          : payload
+        const result = payload?.random === true
+          ? await this.randomizeBotAvatar({ botId })
+          : await this.saveBotAvatar({ botId, avatar: avatarBody })
+        sendJson(res, 200, { ok: true, ...result, state: this.publicState() })
+        return
+      }
+      if (route === 'artifacts' && req.method === 'GET') {
+        await this.store.load()
+        const botId = stringOr(url.searchParams.get('botId') || url.searchParams.get('bot_id')).trim()
+        const roomId = stringOr(url.searchParams.get('roomId') || url.searchParams.get('room_id')).trim()
+        const kind = stringOr(url.searchParams.get('kind')).trim()
+        const rawLimit = url.searchParams.get('limit')
+        const limit = rawLimit !== null && rawLimit.trim() !== '' ? clampInt(rawLimit, 1, 500, 100) : 100
+        const data = await this.listArtifacts({ botId, roomId, kind, limit })
+        sendJson(res, 200, { ok: true, ...data })
+        return
+      }
+      if (route === 'artifacts' && req.method === 'POST') {
+        await this.store.load()
+        const ct = String(req.headers?.['content-type'] ?? '').split(';')[0].trim().toLowerCase()
+        if (ct === 'application/json') {
+          const rawBuf = await readRawBody(req, MAX_ARTIFACT_JSON_BYTES)
+          if (rawBuf === undefined) {
+            sendJson(res, 413, { ok: false, error: 'artifact payload too large' })
+            return
+          }
+          let payload
+          try {
+            payload = JSON.parse(rawBuf.toString('utf8'))
+          } catch (_error) {
+            sendJson(res, 400, { ok: false, error: 'invalid JSON' })
+            return
+          }
+          const result = await this.publishArtifact(payload)
+          sendJson(res, 200, { ok: true, ...result })
+          return
+        }
+        const rawBuf = await readRawBody(req, MAX_ARTIFACT_BYTES)
+        if (rawBuf === undefined) {
+          sendJson(res, 413, { ok: false, error: 'artifact file too large' })
+          return
+        }
+        let filename = 'artifact.bin'
+        try {
+          const rawName = String(req.headers['x-file-name'] || url.searchParams.get('filename') || url.searchParams.get('name') || '')
+          if (rawName) filename = decodeURIComponent(rawName)
+        } catch (_error) { /* keep default */ }
+        const result = await this.publishArtifact({
+          botId: stringOr(url.searchParams.get('botId') || url.searchParams.get('bot_id')).trim(),
+          artifactId: stringOr(url.searchParams.get('id') || url.searchParams.get('artifactId')).trim(),
+          title: stringOr(url.searchParams.get('title')).trim() || filename,
+          filename,
+          kind: stringOr(url.searchParams.get('kind')).trim() || 'file',
+          type: stringOr(url.searchParams.get('type')).trim() || 'file',
+          mimeType: ct || 'application/octet-stream',
+          roomId: stringOr(url.searchParams.get('roomId') || url.searchParams.get('room_id')).trim(),
+          messageId: stringOr(url.searchParams.get('messageId') || url.searchParams.get('message_id')).trim(),
+          buffer: rawBuf,
+        })
+        sendJson(res, 200, { ok: true, ...result })
+        return
+      }
+      if (route === 'artifacts/bundle' && req.method === 'POST') {
+        await this.store.load()
+        const raw = await readBody(req)
+        if (raw === undefined) {
+          sendJson(res, 413, { ok: false, error: 'body too large' })
+          return
+        }
+        let payload = {}
+        if (raw.trim() !== '') {
+          try {
+            payload = JSON.parse(raw)
+          } catch (_error) {
+            sendJson(res, 400, { ok: false, error: 'invalid JSON' })
+            return
+          }
+        }
+        const ac = new AbortController()
+        const onAbort = () => ac.abort()
+        req.on?.('close', onAbort)
+        res.on?.('close', onAbort)
+        try {
+          await this.#streamArtifactsBundle(payload, res, ac.signal)
+        } catch (error) {
+          if (!ac.signal.aborted && !res.headersSent) {
+            sendJson(res, error?.status || 502, { ok: false, error: error instanceof Error ? error.message : String(error) })
+          } else if (!res.writableEnded) {
+            res.end()
+          }
+        } finally {
+          ac.abort()
+        }
+        return
+      }
+      const dlMatch = /^artifacts\/([^/]+)\/download$/.exec(route)
+      if ((route === 'artifacts/download' || dlMatch) && req.method === 'GET') {
+        await this.store.load()
+        const artifactId = dlMatch
+          ? decodeURIComponent(dlMatch[1])
+          : stringOr(url.searchParams.get('id') || url.searchParams.get('artifactId') || url.searchParams.get('artifact_id')).trim()
+        if (!artifactId) {
+          sendJson(res, 400, { ok: false, error: 'missing artifact id' })
+          return
+        }
+        const botId = stringOr(url.searchParams.get('botId') || url.searchParams.get('bot_id')).trim()
+        const inline = url.searchParams.get('inline') === '1' || url.searchParams.get('inline') === 'true'
+        const filename = stringOr(url.searchParams.get('filename')).trim()
+        const ac = new AbortController()
+        const onAbort = () => ac.abort()
+        req.on?.('close', onAbort)
+        res.on?.('close', onAbort)
+        try {
+          await this.#streamArtifactDownload({ artifactId, botId, inline, filename }, res, ac.signal)
+        } catch (error) {
+          if (!ac.signal.aborted && !res.headersSent) {
+            sendJson(res, error?.status || 404, { ok: false, error: error instanceof Error ? error.message : String(error) })
+          } else if (!res.writableEnded) {
+            res.end()
+          }
+        } finally {
+          ac.abort()
+        }
+        return
+      }
+      const delArtMatch = /^artifacts\/([^/]+)$/.exec(route)
+      if ((route === 'artifacts' || delArtMatch) && req.method === 'DELETE') {
+        await this.store.load()
+        const artifactId = delArtMatch
+          ? decodeURIComponent(delArtMatch[1])
+          : stringOr(url.searchParams.get('id') || url.searchParams.get('artifactId') || url.searchParams.get('artifact_id')).trim()
+        if (!artifactId) {
+          sendJson(res, 400, { ok: false, error: 'missing artifact id' })
+          return
+        }
+        const botId = stringOr(url.searchParams.get('botId') || url.searchParams.get('bot_id')).trim()
+        const result = await this.deleteArtifact({ artifactId, botId })
+        sendJson(res, 200, { ok: true, ...result })
+        return
+      }
       if (route === 'image' && req.method === 'POST') {
         const mediaType = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase()
         if (!IMAGE_TYPES.has(mediaType)) {
@@ -385,7 +846,9 @@ export class BotApi {
           actors: runtime.actors || [],
           members: room.memberIds.map((id) => {
             const bot = this.store.bot(id)
-            return bot ? { id: bot.id, name: bot.name, role: bot.role, color: bot.color } : { id, name: id, role: '' }
+            return bot
+              ? { id: bot.id, name: bot.name, role: bot.role, color: bot.color, avatar: bot.avatar }
+              : { id, name: id, role: '' }
           }),
         }
       }),
@@ -409,6 +872,7 @@ export class BotApi {
         error: this.#screenSnapshot.error,
         host: this.#screenSnapshot.host,
       },
+      system: this.#systemSnapshot || (this.#screenSnapshot.host?.cpu ? this.#screenSnapshot.host : null),
       memory: this.memory ? this.memory.publicSummary() : null,
       settings: state.settings ?? defaultSettingsState(),
       usage: this.#usageSummary(state),
@@ -457,17 +921,68 @@ export class BotApi {
     }
   }
 
+  #artifactDownloadUrls(artifactId, botId = '') {
+    const gw = this.screen?.gatewayUrl || 'http://127.0.0.1:6200'
+    const encId = encodeURIComponent(artifactId)
+    const botQs = botId ? `&botId=${encodeURIComponent(botId)}` : ''
+    return {
+      downloadUrl: `${PREFIX}artifacts/download?id=${encId}${botQs}`,
+      restDownloadUrl: `${PREFIX}artifacts/${encId}/download${botId ? `?botId=${encodeURIComponent(botId)}` : ''}`,
+      gatewayDownloadUrl: `${gw}/api/artifacts/${encId}/download`,
+      gatewayBotDownloadUrl: botId ? `${gw}/api/screens/${encodeURIComponent(botId)}/artifacts/${encId}/download` : '',
+    }
+  }
+
+  #artifactEndpoints() {
+    const gw = this.screen?.gatewayUrl || 'http://127.0.0.1:6200'
+    return {
+      hostList: `${PREFIX}artifacts`,
+      hostPublish: `${PREFIX}artifacts`,
+      hostDownload: `${PREFIX}artifacts/download`,
+      hostRestDownload: `${PREFIX}artifacts/{id}/download`,
+      hostBundle: `${PREFIX}artifacts/bundle`,
+      hostDelete: `${PREFIX}artifacts/{id}`,
+      gatewayList: `${gw}/api/artifacts`,
+      gatewayMeta: `${gw}/api/artifacts/{artifact_id}`,
+      gatewayDownload: `${gw}/api/artifacts/{artifact_id}/download`,
+      gatewayBundle: `${gw}/api/artifacts/bundle`,
+      gatewayDelete: `${gw}/api/artifacts/{artifact_id}`,
+      gatewayBotList: `${gw}/api/screens/{bot_id}/artifacts`,
+      gatewayBotPublish: `${gw}/api/screens/{bot_id}/artifacts`,
+      gatewayBotDownload: `${gw}/api/screens/{bot_id}/artifacts/{artifact_id}/download`,
+      gatewayAgentPublish: `${gw}/api/agent/{bot_id}/artifacts`,
+      gatewayAgentList: `${gw}/api/agent/{bot_id}/artifacts`,
+      gatewayAgentDownload: `${gw}/api/agent/{bot_id}/artifacts/{artifact_id}/download`,
+    }
+  }
+
   #artifactsSummary(state) {
-    const items = []
-    const artifactRe = /<artifact\b([^>]*)>([\s\S]*?)<\/artifact>/gi
+    const byId = new Map()
+    const upsert = (entry) => {
+      if (!entry || !entry.id) return
+      const existing = byId.get(entry.id)
+      const urls = this.#artifactDownloadUrls(entry.id, entry.botId || existing?.botId || '')
+      byId.set(entry.id, {
+        ...(existing || {}),
+        ...entry,
+        artifactId: entry.id,
+        ...urls,
+      })
+    }
+
     for (const room of state.rooms ?? []) {
       if (room.completion && Array.isArray(room.completion.deliverables)) {
-        for (const path of room.completion.deliverables) {
-          items.push({
-            id: `deliv:${room.id}:${path}`,
+        for (const filePath of room.completion.deliverables) {
+          const aid = makeDeliverableArtifactId(room.id, filePath)
+          const filename = sanitizeArtifactFilename(filePath, filePath, 'file')
+          upsert({
+            id: aid,
             kind: 'deliverable',
-            title: path,
+            title: filePath,
             type: 'file',
+            filename,
+            mimeType: inferArtifactMimeType(filename, 'file'),
+            sourcePath: filePath,
             roomId: room.id,
             roomName: room.name,
             botId: room.completion.finishedBy || '',
@@ -478,26 +993,35 @@ export class BotApi {
       }
       for (const msg of (room.transcript ?? []).slice(-100)) {
         if (typeof msg.text !== 'string' || !msg.text.includes('<artifact')) continue
-        for (const match of msg.text.matchAll(artifactRe)) {
-          const attrs = match[1] || ''
-          const title = (/title="([^"]+)"/i.exec(attrs)?.[1] ?? /title='([^']+)'/i.exec(attrs)?.[1] ?? 'Artifact').trim()
-          const type = (/type="([^"]+)"/i.exec(attrs)?.[1] ?? /type='([^']+)'/i.exec(attrs)?.[1] ?? 'code').trim()
-          items.push({
-            id: `art:${msg.id}:${items.length}`,
-            kind: 'artifact',
-            title,
-            type,
-            roomId: room.id,
-            roomName: room.name,
-            botId: msg.from || '',
-            botName: msg.name || '',
-            preview: String(match[2] || '').trim().slice(0, 400),
-            at: msg.at || '',
-          })
+        const extracted = extractXmlArtifacts(msg.text, {
+          botId: msg.from || '',
+          botName: msg.name || '',
+          roomId: room.id,
+          roomName: room.name,
+          messageId: msg.id || '',
+          at: msg.at || '',
+        })
+        for (const item of extracted) {
+          const { content: _omitContent, ...metaOnly } = item
+          upsert(metaOnly)
         }
       }
     }
-    return items.slice(-60).reverse()
+
+    for (const item of state.artifacts ?? []) {
+      if (item && item.id) {
+        const filename = sanitizeArtifactFilename(item.filename, item.title, item.type)
+        upsert({
+          ...item,
+          filename,
+          mimeType: item.mimeType || inferArtifactMimeType(filename, item.type),
+        })
+      }
+    }
+
+    return [...byId.values()]
+      .sort((a, b) => Date.parse(b.at || 0) - Date.parse(a.at || 0))
+      .slice(0, 80)
   }
 
   async command(payload) {
@@ -505,6 +1029,8 @@ export class BotApi {
     switch (type) {
       case 'bot.save': return this.saveBot(payload)
       case 'bot.delete': return this.deleteBot(payload)
+      case 'bot.avatar.save': return this.saveBotAvatar(payload)
+      case 'bot.avatar.randomize': return this.randomizeBotAvatar(payload)
       case 'bot.dispatch': return this.dispatchBot(payload)
       case 'bot.stop': return this.stopBot(payload)
       case 'section.save': return this.saveSection(payload)
@@ -614,6 +1140,28 @@ export class BotApi {
       })
       case 'memory.uninstall': return this.#requireMemory().uninstall(stringOr(payload.providerId))
       case 'memory.search': return this.searchBotMemory(payload)
+      case 'system.info': return this.getSystemInfo({
+        diskPaths: payload?.diskPaths ?? payload?.disk_paths ?? payload?.diskPath ?? payload?.disk_path,
+      })
+      case 'system.config.get': return this.getSystemConfig()
+      case 'system.config.save': return this.saveSystemConfig(payload)
+      case 'system.push': return this.pushSystemInfo(payload)
+      case 'artifact.list': return this.listArtifacts({
+        botId: stringOr(payload?.botId || payload?.bot_id).trim(),
+        roomId: stringOr(payload?.roomId || payload?.room_id).trim(),
+        kind: stringOr(payload?.kind).trim(),
+        limit: payload?.limit !== undefined && payload?.limit !== null && payload?.limit !== ''
+          ? clampInt(payload.limit, 1, 500, 100)
+          : 100,
+      })
+      case 'artifact.publish': return this.publishArtifact({
+        ...payload,
+        type: stringOr(payload?.artifactType || payload?.artifact_type).trim(),
+      })
+      case 'artifact.delete': return this.deleteArtifact({
+        artifactId: stringOr(payload?.artifactId || payload?.artifact_id || payload?.id).trim(),
+        botId: stringOr(payload?.botId || payload?.bot_id).trim(),
+      })
       case 'settings.save': return this.saveSettings(payload)
       case 'bot.files.read': return this.readBotFiles(payload)
       case 'bot.files.save': return this.saveBotFiles(payload)
@@ -630,6 +1178,806 @@ export class BotApi {
   #requireScreen() {
     if (!this.screen) throw new Error('Virtual Screen bridge is unavailable in this Host.')
     return this.screen
+  }
+
+  #currentSystemSettings() {
+    const defaults = defaultSettingsState().system
+    return normalizeSystemSettings(this.store.state?.settings?.system, defaults)
+  }
+
+  #systemEndpoints() {
+    const gw = this.screen?.gatewayUrl || 'http://127.0.0.1:6200'
+    return {
+      hostInfo: `${PREFIX}system`,
+      hostAlias: `${PREFIX}host/system`,
+      hostConfig: `${PREFIX}system/config`,
+      hostPush: `${PREFIX}system/push`,
+      hostStream: `${PREFIX}system/stream`,
+      gatewayInfo: `${gw}/api/system`,
+      gatewayAlias: `${gw}/api/host/system`,
+      gatewayConfig: `${gw}/api/system/config`,
+      gatewayPush: `${gw}/api/system/push`,
+      gatewayStream: `${gw}/api/system/stream`,
+    }
+  }
+
+  async getSystemInfo({ diskPaths, timeoutMs } = {}) {
+    const screen = this.#requireScreen()
+    const sysCfg = this.#currentSystemSettings()
+    const resolvedPaths = diskPaths
+      ? normalizeDiskPaths(diskPaths, sysCfg.diskPaths)
+      : sysCfg.diskPaths
+    let data = await screen.getSystemInfo({ diskPaths: resolvedPaths, ...(timeoutMs ? { timeoutMs } : {}) })
+    if (!data?.available && typeof screen.isLocalGateway === 'function' && screen.isLocalGateway()) {
+      const fallback = collectLocalHostSystem(resolvedPaths)
+      data = {
+        ...fallback,
+        gatewayAvailable: false,
+        gatewayUrl: screen.gatewayUrl,
+        gatewayError: data?.error || 'BotScreen gateway unavailable',
+        status: data?.status,
+      }
+    }
+    if (data?.available) {
+      this.#systemSnapshot = data
+    }
+    return {
+      system: data,
+      config: {
+        ...sysCfg,
+        effectiveGatewayUrl: screen.gatewayUrl,
+        endpoints: this.#systemEndpoints(),
+      },
+    }
+  }
+
+  async getSystemConfig() {
+    const sysCfg = this.#currentSystemSettings()
+    let gatewayConfig = null
+    let gatewayError = ''
+    if (this.screen) {
+      try {
+        const res = await this.screen.getSystemConfig()
+        gatewayConfig = res?.config || res || null
+      } catch (error) {
+        gatewayError = error instanceof Error ? error.message : String(error)
+      }
+    }
+    return {
+      config: {
+        ...sysCfg,
+        effectiveGatewayUrl: this.screen?.gatewayUrl || 'http://127.0.0.1:6200',
+        endpoints: this.#systemEndpoints(),
+      },
+      gatewayConfig,
+      gatewayError,
+    }
+  }
+
+  async saveSystemConfig(payload = {}) {
+    const rawPatch = payload?.config && typeof payload.config === 'object'
+      ? payload.config
+      : (payload?.system && typeof payload.system === 'object' ? payload.system : payload)
+
+    const validateOptUrl = (val, label) => {
+      if (val === undefined) return
+      const s = String(val ?? '').trim()
+      if (s !== '' && !/^https?:\/\//i.test(s)) {
+        throw new Error(`${label} must start with http:// or https://`)
+      }
+    }
+    validateOptUrl(rawPatch.gatewayUrl, 'gatewayUrl')
+    validateOptUrl(rawPatch.pushUrl ?? rawPatch.push_url, 'pushUrl')
+
+    const mappedPatch = {
+      ...(rawPatch.enabled !== undefined ? { enabled: rawPatch.enabled === true } : {}),
+      ...(rawPatch.gatewayUrl !== undefined ? { gatewayUrl: String(rawPatch.gatewayUrl ?? '').trim() } : {}),
+      ...(rawPatch.adminToken !== undefined ? { adminToken: String(rawPatch.adminToken ?? '').trim() } : {}),
+      ...(rawPatch.diskPaths !== undefined ? { diskPaths: rawPatch.diskPaths } : {}),
+      ...(rawPatch.disk_paths !== undefined ? { diskPaths: rawPatch.disk_paths } : {}),
+      ...(rawPatch.diskPath !== undefined ? { diskPath: rawPatch.diskPath } : {}),
+      ...(rawPatch.disk_path !== undefined ? { diskPath: rawPatch.disk_path } : {}),
+      ...(rawPatch.refreshIntervalSec !== undefined ? { refreshIntervalSec: rawPatch.refreshIntervalSec } : {}),
+      ...(rawPatch.stream_interval_sec !== undefined ? { refreshIntervalSec: rawPatch.stream_interval_sec } : {}),
+      ...(rawPatch.pushUrl !== undefined ? { pushUrl: String(rawPatch.pushUrl ?? '').trim() } : {}),
+      ...(rawPatch.push_url !== undefined ? { pushUrl: String(rawPatch.push_url ?? '').trim() } : {}),
+      ...(rawPatch.pushIntervalSec !== undefined ? { pushIntervalSec: rawPatch.pushIntervalSec } : {}),
+      ...(rawPatch.push_interval_sec !== undefined ? { pushIntervalSec: rawPatch.push_interval_sec } : {}),
+      ...(rawPatch.pushToken !== undefined ? { pushToken: String(rawPatch.pushToken ?? '').trim() } : {}),
+      ...(rawPatch.push_token !== undefined ? { pushToken: String(rawPatch.push_token ?? '').trim() } : {}),
+    }
+
+    let updated
+    await this.store.mutate((state) => {
+      state.settings = state.settings ?? defaultSettingsState()
+      const current = normalizeSystemSettings(state.settings.system, defaultSettingsState().system)
+      updated = normalizeSystemSettings(mappedPatch, current)
+      state.settings.system = updated
+    })
+
+    let gatewaySynced = false
+    let gatewayConfig = null
+    let gatewayError = ''
+    if (this.screen) {
+      this.screen.configure({
+        gatewayUrl: updated.gatewayUrl,
+        adminToken: updated.adminToken,
+      })
+      try {
+        const synced = await this.screen.updateSystemConfig({
+          enabled: updated.enabled,
+          diskPaths: updated.diskPaths,
+          refreshIntervalSec: updated.refreshIntervalSec,
+          pushUrl: updated.pushUrl,
+          pushIntervalSec: updated.pushIntervalSec,
+          pushToken: updated.pushToken,
+        })
+        gatewaySynced = true
+        gatewayConfig = synced?.config || synced || null
+      } catch (error) {
+        gatewayError = error instanceof Error ? error.message : String(error)
+      }
+    }
+
+    return {
+      config: {
+        ...updated,
+        effectiveGatewayUrl: this.screen?.gatewayUrl || 'http://127.0.0.1:6200',
+        endpoints: this.#systemEndpoints(),
+      },
+      gatewaySynced,
+      gatewayConfig,
+      gatewayError,
+    }
+  }
+
+  async pushSystemInfo(payload = {}) {
+    const screen = this.#requireScreen()
+    const sysCfg = this.#currentSystemSettings()
+    const url = typeof payload?.url === 'string' && payload.url.trim() !== ''
+      ? payload.url.trim()
+      : sysCfg.pushUrl
+    const token = typeof payload?.token === 'string' && payload.token.trim() !== ''
+      ? payload.token.trim()
+      : sysCfg.pushToken
+    const diskPaths = payload?.diskPaths ?? payload?.disk_paths ?? payload?.diskPath ?? payload?.disk_path ?? sysCfg.diskPaths
+    const normalizedPaths = normalizeDiskPaths(diskPaths, sysCfg.diskPaths)
+    return screen.pushSystemInfo({ url, token, diskPaths: normalizedPaths })
+  }
+
+  // ---- Agent Reply Artifact gateway transport -----------------------------
+
+  #allowedRootsForArtifact({ botId = '', roomId = '' } = {}) {
+    const roots = []
+    if (roomId) {
+      const room = this.store.room(roomId)
+      if (room?.workDir) roots.push(room.workDir)
+    }
+    if (botId) {
+      const bot = this.store.bot(botId)
+      if (bot?.dir) roots.push(bot.dir)
+    }
+    for (const room of this.store.state.rooms ?? []) {
+      if (room?.workDir && !roots.includes(room.workDir)) roots.push(room.workDir)
+    }
+    for (const bot of this.store.state.bots ?? []) {
+      if (bot?.dir && !roots.includes(bot.dir)) roots.push(bot.dir)
+    }
+    return roots
+  }
+
+  async #recordArtifactMeta(entry) {
+    if (!entry || !entry.id) return
+    await this.store.mutate((state) => {
+      state.artifacts = Array.isArray(state.artifacts) ? state.artifacts : []
+      const idx = state.artifacts.findIndex(item => item && item.id === entry.id)
+      const prev = idx >= 0 ? state.artifacts[idx] : {}
+      const merged = {
+        ...prev,
+        ...entry,
+        id: entry.id,
+        artifactId: entry.id,
+        at: entry.at || prev.at || new Date().toISOString(),
+      }
+      if (idx >= 0) state.artifacts[idx] = merged
+      else state.artifacts.push(merged)
+      if (state.artifacts.length > 200) {
+        state.artifacts = state.artifacts.slice(-200)
+      }
+    }).catch(() => undefined)
+  }
+
+  async #resolveLocalArtifact(artifactId, hintBotId = '') {
+    const state = this.store.state
+    // 1. Check `<artifact>` blocks in room transcripts
+    for (const room of state.rooms ?? []) {
+      for (const msg of (room.transcript ?? []).slice(-100)) {
+        if (typeof msg.text !== 'string' || !msg.text.includes('<artifact')) continue
+        const extracted = extractXmlArtifacts(msg.text, {
+          botId: msg.from || hintBotId || '',
+          botName: msg.name || '',
+          roomId: room.id,
+          roomName: room.name,
+          messageId: msg.id || '',
+          at: msg.at || '',
+        })
+        const match = extracted.find(item => item.id === artifactId)
+        if (match) {
+          return {
+            ...match,
+            buffer: Buffer.from(match.content, 'utf8'),
+          }
+        }
+      }
+      // 2. Check completion deliverables for this room
+      if (room.completion && Array.isArray(room.completion.deliverables)) {
+        for (const filePath of room.completion.deliverables) {
+          const aid = makeDeliverableArtifactId(room.id, filePath)
+          if (aid !== artifactId && `deliv:${room.id}:${filePath}` !== artifactId) continue
+          const botId = room.completion.finishedBy || hintBotId || room.memberIds?.[0] || ''
+          const roots = this.#allowedRootsForArtifact({ botId, roomId: room.id })
+          const resolved = await resolveSafeWorkspaceFile(filePath, roots)
+          if (!resolved) {
+            const err = new Error(`Deliverable file not found or outside workspace: ${filePath}`)
+            err.status = 404
+            throw err
+          }
+          const buffer = await readFile(resolved.path)
+          const filename = sanitizeArtifactFilename(resolved.path, filePath, 'file')
+          return {
+            id: aid,
+            artifactId: aid,
+            kind: 'deliverable',
+            title: filePath,
+            type: 'file',
+            filename,
+            mimeType: inferArtifactMimeType(filename, 'file'),
+            size: buffer.byteLength,
+            sourcePath: resolved.path,
+            roomId: room.id,
+            roomName: room.name,
+            botId,
+            botName: room.completion.finishedByName || '',
+            at: room.completion.at || room.updatedAt || new Date().toISOString(),
+            buffer,
+          }
+        }
+      }
+    }
+
+    // 3. Check persisted state.artifacts with a workspace sourcePath
+    const stored = (state.artifacts ?? []).find(item => item && item.id === artifactId)
+    if (stored?.sourcePath) {
+      const roots = this.#allowedRootsForArtifact({ botId: stored.botId || hintBotId, roomId: stored.roomId })
+      const resolved = await resolveSafeWorkspaceFile(stored.sourcePath, roots)
+      if (resolved) {
+        const buffer = await readFile(resolved.path)
+        const filename = sanitizeArtifactFilename(stored.filename || resolved.path, stored.title, stored.type)
+        return {
+          ...stored,
+          filename,
+          mimeType: stored.mimeType || inferArtifactMimeType(filename, stored.type),
+          size: buffer.byteLength,
+          buffer,
+        }
+      }
+    }
+    return null
+  }
+
+  async listArtifacts({ botId = '', roomId = '', kind = '', limit = 100 } = {}) {
+    const byId = new Map()
+    for (const item of this.#artifactsSummary(this.store.state)) {
+      byId.set(item.id, item)
+    }
+
+    let gatewayAvailable = false
+    let gatewayError = ''
+    if (this.screen) {
+      try {
+        const res = await this.screen.listArtifacts({ botId, roomId, kind, limit })
+        gatewayAvailable = true
+        for (const gwItem of res?.artifacts ?? []) {
+          if (!gwItem || !gwItem.artifact_id) continue
+          const aid = gwItem.artifact_id
+          const bid = gwItem.bot_id || ''
+          const bot = bid ? this.store.bot(bid) : null
+          const urls = this.#artifactDownloadUrls(aid, bid)
+          const existing = byId.get(aid) || {}
+          byId.set(aid, {
+            ...existing,
+            id: aid,
+            artifactId: aid,
+            kind: gwItem.kind || existing.kind || 'artifact',
+            title: gwItem.title || existing.title || gwItem.filename || aid,
+            type: gwItem.artifact_type || existing.type || 'file',
+            filename: gwItem.filename || existing.filename || '',
+            mimeType: gwItem.mime_type || existing.mimeType || 'application/octet-stream',
+            size: Number.isFinite(Number(gwItem.size)) ? Number(gwItem.size) : (existing.size || 0),
+            sha256: gwItem.sha256 || existing.sha256 || '',
+            botId: bid || existing.botId || '',
+            botName: bot?.name || existing.botName || '',
+            roomId: gwItem.room_id || existing.roomId || '',
+            roomName: gwItem.room_name || existing.roomName || '',
+            messageId: gwItem.message_id || existing.messageId || '',
+            sourcePath: gwItem.source_path || existing.sourcePath || '',
+            preview: gwItem.preview || existing.preview || '',
+            gatewaySynced: true,
+            at: existing.at || (gwItem.updated_at ? new Date(gwItem.updated_at * 1000).toISOString() : new Date().toISOString()),
+            ...urls,
+          })
+        }
+      } catch (error) {
+        gatewayError = error instanceof Error ? error.message : String(error)
+      }
+    }
+
+    let items = [...byId.values()]
+    if (botId) items = items.filter(item => item.botId === botId)
+    if (roomId) items = items.filter(item => item.roomId === roomId)
+    if (kind) items = items.filter(item => item.kind === kind)
+    items.sort((a, b) => Date.parse(b.at || 0) - Date.parse(a.at || 0))
+    const sliced = items.slice(0, clampInt(limit, 1, 500, 100))
+
+    return {
+      total: sliced.length,
+      artifacts: sliced,
+      gatewayAvailable,
+      gatewayError,
+      endpoints: this.#artifactEndpoints(),
+    }
+  }
+
+  async publishArtifact(payload = {}) {
+    const rawBotId = stringOr(payload.botId || payload.bot_id).trim()
+    const bot = rawBotId ? this.store.bot(rawBotId) : this.store.state.bots[0]
+    const targetBotId = rawBotId || bot?.id || 'default'
+    if (targetBotId.includes('/') || targetBotId.includes('..')) {
+      throw new Error('Invalid botId.')
+    }
+    const roomId = stringOr(payload.roomId || payload.room_id).trim()
+    const room = roomId ? this.store.room(roomId) : null
+    const rawId = stringOr(payload.artifactId || payload.artifact_id || payload.id).trim()
+    if (rawId && !isValidArtifactId(rawId)) {
+      throw new Error('Invalid artifactId: only [A-Za-z0-9._-] up to 96 chars allowed.')
+    }
+
+    let buffer = Buffer.isBuffer(payload.buffer)
+      ? payload.buffer
+      : (payload.buffer instanceof Uint8Array ? Buffer.from(payload.buffer) : null)
+    let sourcePath = stringOr(payload.sourcePath || payload.source_path || payload.filePath || payload.file_path).trim()
+    const kind = stringOr(payload.kind).trim() || (sourcePath ? 'deliverable' : 'artifact')
+    const type = stringOr(payload.type || payload.artifactType || payload.artifact_type).trim() || (sourcePath ? 'file' : 'text')
+    let title = stringOr(payload.title).trim()
+    let filename = stringOr(payload.filename || payload.name).trim()
+    let encoding = stringOr(payload.encoding).trim() || 'utf-8'
+
+    if (!buffer && sourcePath) {
+      const roots = this.#allowedRootsForArtifact({ botId: targetBotId, roomId })
+      const resolved = await resolveSafeWorkspaceFile(sourcePath, roots)
+      if (!resolved) {
+        const err = new Error(`File not found or outside allowed Bot/Room workspace: ${sourcePath}`)
+        err.status = 404
+        throw err
+      }
+      buffer = await readFile(resolved.path)
+      sourcePath = resolved.path
+      if (!filename) filename = sanitizeArtifactFilename(resolved.path, title, type)
+      if (!title) title = filename
+    }
+
+    let contentStr
+    if (!buffer) {
+      if (payload.content === undefined || payload.content === null) {
+        throw new Error('Provide either content, buffer, or a workspace sourcePath/filePath.')
+      }
+      contentStr = typeof payload.content === 'string'
+        ? payload.content
+        : JSON.stringify(payload.content, null, 2)
+      if (encoding.toLowerCase() === 'base64' || encoding.toLowerCase() === 'b64') {
+        buffer = Buffer.from(contentStr, 'base64')
+      } else {
+        buffer = Buffer.from(contentStr, 'utf8')
+      }
+    }
+    if (buffer.byteLength > MAX_ARTIFACT_BYTES) {
+      const err = new Error(`Artifact exceeds max size (${MAX_ARTIFACT_BYTES} bytes).`)
+      err.status = 413
+      throw err
+    }
+
+    filename = sanitizeArtifactFilename(filename, title, type)
+    if (!title) title = filename
+    const mimeType = inferArtifactMimeType(filename, type, stringOr(payload.mimeType || payload.mime_type))
+    const sha256 = createHash('sha256').update(buffer).digest('hex')
+    const artifactId = rawId || newId('art')
+    const now = new Date().toISOString()
+
+    let gatewaySynced = false
+    let gatewayError = ''
+    let gwRecord = null
+    if (this.screen) {
+      try {
+        const res = await this.screen.publishArtifact(targetBotId, {
+          artifactId,
+          title,
+          filename,
+          kind,
+          type,
+          mimeType,
+          buffer,
+          roomId,
+          roomName: stringOr(payload.roomName || payload.room_name).trim() || room?.name || '',
+          messageId: stringOr(payload.messageId || payload.message_id).trim(),
+          sourcePath,
+          metadata: payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {},
+        })
+        gwRecord = res?.artifact || null
+        gatewaySynced = Boolean(gwRecord)
+      } catch (error) {
+        gatewayError = error instanceof Error ? error.message : String(error)
+      }
+    } else {
+      gatewayError = 'Screen bridge unavailable'
+    }
+
+    const preview = (mimeType.startsWith('text/') || mimeType.includes('json') || mimeType.includes('xml') || mimeType.includes('svg'))
+      ? buffer.subarray(0, 2048).toString('utf8').trim().slice(0, 400)
+      : ''
+
+    const finalId = gwRecord?.artifact_id || artifactId
+    const urls = this.#artifactDownloadUrls(finalId, targetBotId)
+    const record = {
+      id: finalId,
+      artifactId: finalId,
+      kind: gwRecord?.kind || kind,
+      title: gwRecord?.title || title,
+      type: gwRecord?.artifact_type || type,
+      filename: gwRecord?.filename || filename,
+      mimeType: gwRecord?.mime_type || mimeType,
+      size: gwRecord?.size ?? buffer.byteLength,
+      sha256: gwRecord?.sha256 || sha256,
+      botId: targetBotId,
+      botName: bot?.name || '',
+      roomId,
+      roomName: stringOr(payload.roomName || payload.room_name).trim() || room?.name || '',
+      messageId: stringOr(payload.messageId || payload.message_id).trim(),
+      sourcePath,
+      preview: gwRecord?.preview ?? preview,
+      gatewaySynced,
+      at: now,
+      ...urls,
+    }
+    await this.#recordArtifactMeta(record)
+    return {
+      artifact: record,
+      gatewaySynced,
+      gatewayError,
+      endpoints: this.#artifactEndpoints(),
+    }
+  }
+
+  async #ensureArtifactOnGateway(artifactId, botId = '') {
+    const local = await this.#resolveLocalArtifact(artifactId, botId)
+    if (!local) return null
+    const targetBotId = local.botId || botId || this.store.state.bots[0]?.id || 'default'
+    if (this.screen) {
+      try {
+        await this.screen.publishArtifact(targetBotId, {
+          artifactId: local.id,
+          title: local.title,
+          filename: local.filename,
+          kind: local.kind,
+          type: local.type,
+          mimeType: local.mimeType,
+          buffer: local.buffer,
+          roomId: local.roomId || '',
+          roomName: local.roomName || '',
+          messageId: local.messageId || '',
+          sourcePath: local.sourcePath || '',
+        })
+        await this.#recordArtifactMeta({
+          id: local.id,
+          kind: local.kind,
+          title: local.title,
+          type: local.type,
+          filename: local.filename,
+          mimeType: local.mimeType,
+          size: local.size,
+          botId: targetBotId,
+          botName: local.botName || '',
+          roomId: local.roomId || '',
+          roomName: local.roomName || '',
+          messageId: local.messageId || '',
+          sourcePath: local.sourcePath || '',
+          preview: local.preview || '',
+          gatewaySynced: true,
+          at: local.at,
+        })
+        return { ...local, botId: targetBotId, synced: true }
+      } catch (_error) {
+        return { ...local, botId: targetBotId, synced: false }
+      }
+    }
+    return { ...local, botId: targetBotId, synced: false }
+  }
+
+  async #streamArtifactDownload({ artifactId, botId = '', inline = false, filename = '' }, res, signal) {
+    let upstream = null
+    if (this.screen) {
+      try {
+        upstream = await this.screen.openArtifactDownloadStream(artifactId, { botId, inline, filename, signal })
+      } catch (error) {
+        if (error?.status === 404) {
+          const synced = await this.#ensureArtifactOnGateway(artifactId, botId)
+          if (synced?.synced) {
+            upstream = await this.screen.openArtifactDownloadStream(synced.id, {
+              botId: synced.botId,
+              inline,
+              filename,
+              signal,
+            })
+          } else if (synced?.buffer) {
+            const dlName = filename ? sanitizeArtifactFilename(filename) : synced.filename
+            res.statusCode = 200
+            res.setHeader('content-type', synced.mimeType || 'application/octet-stream')
+            res.setHeader('content-disposition', buildContentDisposition(dlName, inline))
+            res.setHeader('content-length', String(synced.buffer.byteLength))
+            res.setHeader('x-content-type-options', 'nosniff')
+            res.setHeader('x-artifact-id', synced.id)
+            res.setHeader('x-bot-id', synced.botId || '')
+            res.setHeader('x-artifact-sha256', createHash('sha256').update(synced.buffer).digest('hex'))
+            res.setHeader('x-artifact-source', 'host-fallback')
+            res.end(synced.buffer)
+            return
+          } else {
+            const notFound = new Error(`Artifact not found: ${artifactId}`)
+            notFound.status = 404
+            throw notFound
+          }
+        } else {
+          // Gateway unreachable: try local fallback before failing
+          const local = await this.#resolveLocalArtifact(artifactId, botId).catch(() => null)
+          if (local?.buffer) {
+            const dlName = filename ? sanitizeArtifactFilename(filename) : local.filename
+            res.statusCode = 200
+            res.setHeader('content-type', local.mimeType || 'application/octet-stream')
+            res.setHeader('content-disposition', buildContentDisposition(dlName, inline))
+            res.setHeader('content-length', String(local.buffer.byteLength))
+            res.setHeader('x-content-type-options', 'nosniff')
+            res.setHeader('x-artifact-id', local.id)
+            res.setHeader('x-bot-id', local.botId || '')
+            res.setHeader('x-artifact-sha256', createHash('sha256').update(local.buffer).digest('hex'))
+            res.setHeader('x-artifact-source', 'host-fallback')
+            res.end(local.buffer)
+            return
+          }
+          throw error
+        }
+      }
+    } else {
+      const local = await this.#resolveLocalArtifact(artifactId, botId)
+      if (!local?.buffer) {
+        const err = new Error(`Artifact not found: ${artifactId}`)
+        err.status = 404
+        throw err
+      }
+      const dlName = filename ? sanitizeArtifactFilename(filename) : local.filename
+      res.statusCode = 200
+      res.setHeader('content-type', local.mimeType || 'application/octet-stream')
+      res.setHeader('content-disposition', buildContentDisposition(dlName, inline))
+      res.setHeader('content-length', String(local.buffer.byteLength))
+      res.setHeader('x-content-type-options', 'nosniff')
+      res.setHeader('x-artifact-id', local.id)
+      res.setHeader('x-bot-id', local.botId || '')
+      res.setHeader('x-artifact-sha256', createHash('sha256').update(local.buffer).digest('hex'))
+      res.setHeader('x-artifact-source', 'host-fallback')
+      res.end(local.buffer)
+      return
+    }
+
+    res.statusCode = 200
+    const passHeaders = [
+      'content-type',
+      'content-disposition',
+      'content-length',
+      'etag',
+      'last-modified',
+      'x-artifact-id',
+      'x-bot-id',
+      'x-artifact-sha256',
+      'x-artifact-kind',
+      'x-artifact-type',
+      'x-artifact-source',
+    ]
+    for (const hName of passHeaders) {
+      const val = upstream.headers.get(hName)
+      if (val) res.setHeader(hName, val)
+    }
+    res.setHeader('x-content-type-options', 'nosniff')
+    res.flushHeaders?.()
+    if (upstream.body) {
+      for await (const chunk of upstream.body) {
+        if (signal?.aborted || res.writableEnded) break
+        res.write(Buffer.from(chunk))
+      }
+      if (!res.writableEnded) res.end()
+    } else {
+      res.end(Buffer.from(await upstream.arrayBuffer()))
+    }
+  }
+
+  async #streamArtifactsBundle(payload = {}, res, signal) {
+    const screen = this.#requireScreen()
+    const rawIds = Array.isArray(payload.ids)
+      ? payload.ids
+      : (Array.isArray(payload.artifactIds) ? payload.artifactIds : (Array.isArray(payload.artifact_ids) ? payload.artifact_ids : []))
+    const botId = stringOr(payload.botId || payload.bot_id).trim()
+    const roomId = stringOr(payload.roomId || payload.room_id).trim()
+    const filename = stringOr(payload.filename).trim() || 'agent-artifacts.zip'
+
+    // Lazily ensure local reply artifacts / deliverables exist on gateway before bundling
+    const idsToSync = rawIds.length > 0
+      ? rawIds.map(v => String(v ?? '').trim()).filter(Boolean)
+      : this.#artifactsSummary(this.store.state)
+        .filter(item => (!botId || item.botId === botId) && (!roomId || item.roomId === roomId))
+        .map(item => item.id)
+
+    for (const aid of idsToSync.slice(0, 60)) {
+      await this.#ensureArtifactOnGateway(aid, botId).catch(() => undefined)
+    }
+
+    const upstream = await screen.openArtifactsBundleStream({
+      artifactIds: rawIds.map(v => String(v ?? '').trim()).filter(Boolean),
+      botId,
+      roomId,
+      filename,
+      signal,
+    })
+    res.statusCode = 200
+    for (const hName of ['content-type', 'content-disposition', 'content-length', 'x-artifact-count', 'x-artifact-source']) {
+      const val = upstream.headers.get(hName)
+      if (val) res.setHeader(hName, val)
+    }
+    res.setHeader('x-content-type-options', 'nosniff')
+    res.flushHeaders?.()
+    if (upstream.body) {
+      for await (const chunk of upstream.body) {
+        if (signal?.aborted || res.writableEnded) break
+        res.write(Buffer.from(chunk))
+      }
+      if (!res.writableEnded) res.end()
+    } else {
+      res.end(Buffer.from(await upstream.arrayBuffer()))
+    }
+  }
+
+  async downloadArtifact({ artifactId, botId = '', inline = false, filename = '' } = {}) {
+    if (!artifactId) throw new Error('artifactId is required.')
+    if (this.screen) {
+      try {
+        return await this.screen.downloadArtifact(artifactId, { botId, inline, filename })
+      } catch (error) {
+        if (error?.status === 404) {
+          const synced = await this.#ensureArtifactOnGateway(artifactId, botId)
+          if (synced?.synced) {
+            return this.screen.downloadArtifact(synced.id, { botId: synced.botId, inline, filename })
+          }
+          if (synced?.buffer) {
+            return {
+              buffer: synced.buffer,
+              mimeType: synced.mimeType,
+              filename: filename || synced.filename,
+              artifactId: synced.id,
+              botId: synced.botId || '',
+              sha256: createHash('sha256').update(synced.buffer).digest('hex'),
+              size: synced.buffer.byteLength,
+              source: 'host-fallback',
+            }
+          }
+        }
+        throw error
+      }
+    }
+    const local = await this.#resolveLocalArtifact(artifactId, botId)
+    if (!local?.buffer) throw new Error(`Artifact not found: ${artifactId}`)
+    return {
+      buffer: local.buffer,
+      mimeType: local.mimeType,
+      filename: filename || local.filename,
+      artifactId: local.id,
+      botId: local.botId || '',
+      sha256: createHash('sha256').update(local.buffer).digest('hex'),
+      size: local.buffer.byteLength,
+      source: 'host-fallback',
+    }
+  }
+
+  async deleteArtifact({ artifactId, botId = '' } = {}) {
+    if (!artifactId) throw new Error('artifactId is required.')
+    let gatewayDeleted = false
+    if (this.screen) {
+      try {
+        const res = await this.screen.deleteArtifact(artifactId, { botId })
+        gatewayDeleted = Boolean(res?.deleted)
+      } catch (_error) {
+        gatewayDeleted = false
+      }
+    }
+    let stateRemoved = false
+    await this.store.mutate((state) => {
+      if (!Array.isArray(state.artifacts)) return
+      const before = state.artifacts.length
+      state.artifacts = state.artifacts.filter(item => item && item.id !== artifactId)
+      stateRemoved = state.artifacts.length !== before
+    })
+    return {
+      artifactId,
+      botId,
+      deleted: gatewayDeleted || stateRemoved,
+      gatewayDeleted,
+      stateRemoved,
+    }
+  }
+
+  async syncReplyArtifacts({ bot, text, roomId = '', messageId = '', at = '' } = {}) {
+    if (!bot || typeof text !== 'string' || !text.includes('<artifact')) return []
+    const room = roomId ? this.store.room(roomId) : null
+    const extracted = extractXmlArtifacts(text, {
+      botId: bot.id,
+      botName: bot.name,
+      roomId,
+      roomName: room?.name || '',
+      messageId,
+      at: at || new Date().toISOString(),
+    })
+    const results = []
+    for (const item of extracted) {
+      try {
+        const res = await this.publishArtifact({
+          botId: bot.id,
+          artifactId: item.id,
+          title: item.title,
+          filename: item.filename,
+          kind: 'artifact',
+          type: item.type,
+          mimeType: item.mimeType,
+          content: item.content,
+          roomId,
+          roomName: room?.name || '',
+          messageId,
+        })
+        results.push(res.artifact)
+      } catch (_error) {
+        // non-blocking best-effort sync
+      }
+    }
+    return results
+  }
+
+  async syncDeliverables({ room, bot, deliverables = [], messageId = '', at = '' } = {}) {
+    if (!room || !Array.isArray(deliverables) || deliverables.length === 0) return []
+    const results = []
+    for (const filePath of deliverables) {
+      const aid = makeDeliverableArtifactId(room.id, filePath)
+      try {
+        const res = await this.publishArtifact({
+          botId: bot?.id || room.completion?.finishedBy || room.memberIds?.[0] || 'default',
+          artifactId: aid,
+          title: filePath,
+          kind: 'deliverable',
+          type: 'file',
+          sourcePath: filePath,
+          roomId: room.id,
+          roomName: room.name,
+          messageId,
+        })
+        results.push(res.artifact)
+      } catch (_error) {
+        // Deliverable may be conceptual or not on disk yet; keep metadata without failing room finish
+      }
+    }
+    return results
   }
 
   async searchBotMemory(payload) {
@@ -650,6 +1998,7 @@ export class BotApi {
     const patch = payload?.settings && typeof payload.settings === 'object' ? payload.settings : payload
     const rf = patch?.responseFormat && typeof patch.responseFormat === 'object' ? patch.responseFormat : null
     const gc = patch?.groupChat && typeof patch.groupChat === 'object' ? patch.groupChat : null
+    const sys = patch?.system && typeof patch.system === 'object' ? patch.system : null
     let updated
     await this.store.mutate((state) => {
       state.settings = state.settings ?? defaultSettingsState()
@@ -679,8 +2028,19 @@ export class BotApi {
           ...(gc.showActivityStrip !== undefined ? { showActivityStrip: gc.showActivityStrip === true } : {}),
         }
       }
+      if (sys) {
+        const currentSys = normalizeSystemSettings(state.settings.system, defaultSettingsState().system)
+        state.settings.system = normalizeSystemSettings(sys, currentSys)
+      }
       updated = state.settings
     })
+    if (sys && this.screen && updated?.system) {
+      this.screen.configure({
+        gatewayUrl: updated.system.gatewayUrl,
+        adminToken: updated.system.adminToken,
+      })
+      void this.screen.updateSystemConfig(updated.system).catch(() => undefined)
+    }
     return { settings: updated }
   }
 
@@ -772,10 +2132,40 @@ export class BotApi {
         if (state.bots.some(bot => bot.id !== existing.id && bot.name.toLowerCase() === name.toLowerCase())) {
           throw new Error(`A Bot named "${name}" already exists.`)
         }
+        const prevColor = existing.color
+        const prevAvatar = existing.avatar && typeof existing.avatar === 'object'
+          ? existing.avatar
+          : deterministicAvatar(existing.id, prevColor)
         existing.name = name
         existing.role = stringOr(draft.role, existing.role)
         existing.instructions = stringOr(draft.instructions, existing.instructions)
-        existing.color = stringOr(draft.color, existing.color)
+        const nextColorInput = typeof draft.color === 'string' && draft.color.trim() !== ''
+          ? draft.color.trim()
+          : existing.color
+        if (draft.avatarRandom === true || draft?.avatar?.mode === 'random' || draft?.avatar?.random === true) {
+          const picked = randomAvatar({
+            existingBots: state.bots.filter(item => item.id !== existing.id),
+          })
+          existing.avatar = picked
+          existing.color = picked.color
+        } else if (hasExplicitAvatar(draft.avatar)) {
+          const fallbackForEdit = {
+            ...prevAvatar,
+            ...(normalizeHex(nextColorInput) ? { color: normalizeHex(nextColorInput) } : {}),
+          }
+          existing.avatar = normalizeAvatar(draft.avatar, { fallback: fallbackForEdit, strict: true })
+          existing.color = existing.avatar.color
+        } else {
+          existing.color = nextColorInput
+          if (nextColorInput !== prevColor && normalizeHex(nextColorInput)) {
+            existing.avatar = normalizeAvatar(
+              { ...prevAvatar, color: nextColorInput },
+              { fallback: prevAvatar, strict: false },
+            )
+          } else {
+            existing.avatar = prevAvatar
+          }
+        }
         existing.sectionId = sectionId
         if (typeof draft.hidden === 'boolean') existing.hidden = draft.hidden
         if (typeof draft.pinned === 'boolean') existing.pinned = draft.pinned
@@ -791,12 +2181,28 @@ export class BotApi {
       if (state.bots.some(bot => bot.name.toLowerCase() === name.toLowerCase())) {
         throw new Error(`A Bot named "${name}" already exists.`)
       }
+      const draftColorHex = typeof draft.color === 'string' ? normalizeHex(draft.color) : null
+      let avatar
+      if (hasExplicitAvatar(draft.avatar)) {
+        const randBase = randomAvatar({
+          existingBots: state.bots,
+          preferredColor: draftColorHex || '',
+        })
+        avatar = normalizeAvatar(draft.avatar, { fallback: randBase, strict: true })
+      } else {
+        const preferredColor = draft.avatarRandom === true ? '' : (draftColorHex || '')
+        avatar = randomAvatar({
+          existingBots: state.bots,
+          preferredColor,
+        })
+      }
       created = {
         id: newId('bot'),
         name,
         role: stringOr(draft.role),
         instructions: stringOr(draft.instructions),
-        color: stringOr(draft.color, '#4d6bfe'),
+        color: avatar.color,
+        avatar,
         sectionId,
         hidden: draft.hidden === true,
         pinned: draft.pinned === true,
@@ -822,7 +2228,55 @@ export class BotApi {
       }
     }
     await this.syncAll()
+    void this.screen?.syncAvatar?.(bot.id, bot.avatar).catch(() => undefined)
     return { botId: bot.id, bot }
+  }
+
+  async saveBotAvatar(payload) {
+    const botId = stringOr(payload?.botId).trim()
+    const bot = this.store.bot(botId)
+    if (!bot) throw new Error('Unknown Bot.')
+    const rawAvatar = payload?.avatar && typeof payload.avatar === 'object' ? payload.avatar : payload
+    if (!rawAvatar || typeof rawAvatar !== 'object') {
+      throw new Error('Provide an avatar object.')
+    }
+    let updatedAvatar
+    await this.store.mutate((state) => {
+      const target = state.bots.find(item => item.id === botId)
+      if (!target) throw new Error('Unknown Bot.')
+      const base = target.avatar && typeof target.avatar === 'object'
+        ? target.avatar
+        : deterministicAvatar(target.id, target.color)
+      updatedAvatar = normalizeAvatar(rawAvatar, { fallback: base, strict: true })
+      target.avatar = updatedAvatar
+      target.color = updatedAvatar.color
+      target.updatedAt = new Date().toISOString()
+    })
+    const refreshed = this.store.bot(botId)
+    await this.syncAll()
+    void this.screen?.syncAvatar?.(botId, updatedAvatar).catch(() => undefined)
+    return { botId, avatar: updatedAvatar, bot: refreshed }
+  }
+
+  async randomizeBotAvatar(payload) {
+    const botId = stringOr(payload?.botId).trim()
+    const bot = this.store.bot(botId)
+    if (!bot) throw new Error('Unknown Bot.')
+    let nextAvatar
+    await this.store.mutate((state) => {
+      const target = state.bots.find(item => item.id === botId)
+      if (!target) throw new Error('Unknown Bot.')
+      nextAvatar = randomAvatar({
+        existingBots: state.bots.filter(item => item.id !== botId),
+      })
+      target.avatar = nextAvatar
+      target.color = nextAvatar.color
+      target.updatedAt = new Date().toISOString()
+    })
+    const refreshed = this.store.bot(botId)
+    await this.syncAll()
+    void this.screen?.syncAvatar?.(botId, nextAvatar).catch(() => undefined)
+    return { botId, avatar: nextAvatar, bot: refreshed }
   }
 
   async deleteBot(payload) {

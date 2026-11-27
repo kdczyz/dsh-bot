@@ -128,6 +128,32 @@ window.__ModuleLoader__.load({
         'form.instructions': 'Standing instructions',
         'form.instructionsPlaceholder': 'What this Bot owns, how it should work, what it must not do.',
         'form.color': 'Colour',
+        'form.avatar': 'Bot Avatar (optional)',
+        'avatar.modeRandom': 'Random (default)',
+        'avatar.modeCustom': 'Customize',
+        'avatar.randomHint': 'A unique avatar & clay colour palette will be randomly assigned on creation. You can customize it anytime later.',
+        'avatar.loading': 'Loading avatar engine…',
+        'avatar.poke': 'Poke',
+        'avatar.randomize': 'Randomize',
+        'avatar.resetView': 'Reset view',
+        'avatar.dragHint': 'Drag to rotate 3D · Click to poke',
+        'avatar.gallery': 'Built-in avatars (19)',
+        'avatar.bodyColor': 'Body colour',
+        'avatar.eyeColor': 'Eye colour',
+        'avatar.material': 'Material',
+        'avatar.materialFlat': 'Flat',
+        'avatar.materialFluffy': 'Fluffy',
+        'avatar.clay': 'Clay shading',
+        'avatar.depth': 'Depth',
+        'avatar.follow': 'Follow pointer',
+        'avatar.orbit': 'Orbit particles',
+        'avatar.badge': 'Notification badge',
+        'avatar.customJsonToggle': 'Import custom JSON (version: 1)',
+        'avatar.customJsonHint': 'Paste an Image-bot / Avatar Forge version:1 JSON definition (body.path + eyes).',
+        'avatar.customJsonApply': 'Apply JSON',
+        'avatar.customJsonClear': 'Clear custom JSON',
+        'avatar.customJsonApplied': 'Using custom JSON definition',
+        'avatar.customJsonInvalid': 'Invalid avatar JSON: {msg}',
         'form.hint': 'Creating a Bot gives it its own workspace folder named after it. Its persona and standing instructions are written into AGENTS.md, SOUL.md and .dsh/skills/team/SKILL.md there.',
         'form.cancel': 'Cancel',
         'form.create': 'Create Bot',
@@ -363,6 +389,47 @@ window.__ModuleLoader__.load({
         'screen.filesApp': 'Files',
         'screen.files': 'Screen files',
         'screen.filesEmpty': 'No files in screen downloads.',
+        'settings.system': 'System & Gateway',
+        'system.title': 'Host System Info & Gateway Interface',
+        'system.hint': 'Collects host disk, memory, CPU usage and uptime, transmitted via the BotScreen gateway.',
+        'system.refresh': 'Refresh',
+        'system.liveOn': 'Live stream: ON',
+        'system.liveOff': 'Live stream: OFF',
+        'system.cpu': 'CPU Usage',
+        'system.memory': 'Memory Usage',
+        'system.disk': 'Disk Usage',
+        'system.uptime': 'System Uptime',
+        'system.cores': 'Cores',
+        'system.load': 'Load Avg',
+        'system.bootTime': 'Boot Time',
+        'system.available': 'Available',
+        'system.free': 'Free',
+        'system.gatewayStatus': 'Gateway',
+        'system.online': 'Connected',
+        'system.offline': 'Disconnected',
+        'system.configTitle': 'Gateway & Interface Configuration',
+        'system.gatewayUrl': 'Gateway URL',
+        'system.gatewayUrlPlaceholder': 'Default: http://127.0.0.1:6200',
+        'system.adminToken': 'Gateway Admin Token',
+        'system.adminTokenPlaceholder': 'Optional (leave empty to use BOTSCREEN_ADMIN_TOKEN)',
+        'system.diskPaths': 'Disk Mount Paths',
+        'system.diskPathsPlaceholder': 'Comma-separated, e.g. /, /data',
+        'system.refreshInterval': 'Refresh Interval (sec)',
+        'system.pushUrl': 'Outbound Push URL (optional)',
+        'system.pushUrlPlaceholder': 'e.g. http://127.0.0.1:9000/metrics',
+        'system.pushInterval': 'Auto Push Interval (sec, 0=off)',
+        'system.pushToken': 'Push Auth Token (optional)',
+        'system.saveConfig': 'Save & Sync Gateway',
+        'system.testPush': 'Push Now',
+        'system.pushOk': 'Pushed via gateway',
+        'system.endpointsTitle': 'Configured API Endpoints',
+        'system.mountsTitle': 'Disk Mounts',
+        'system.hostPanelTitle': 'Host & Performance',
+        'system.hostname': 'Host',
+        'system.cgroupOff': 'Host metrics (no cgroup)',
+        'system.fallbackMode': 'Host fallback',
+        'system.openDetails': 'Details',
+        'system.waitingGateway': 'Pending',
         'screen.upload': 'Upload',
         'screen.panelToggle': 'Screen & Routines',
         'screen.helpTitle': 'Human takeover needed',
@@ -491,6 +558,32 @@ window.__ModuleLoader__.load({
         'form.instructions': '常驻指令',
         'form.instructionsPlaceholder': '这个 Bot 负责什么、怎么工作、不能做什么。',
         'form.color': '颜色',
+        'form.avatar': 'Bot 形象（可选）',
+        'avatar.modeRandom': '随机生成（默认）',
+        'avatar.modeCustom': '自定义形象',
+        'avatar.randomHint': '未自定义形象时，创建后将自动随机分配一套形象与黏土配色；随时可在编辑或设置中调整。',
+        'avatar.loading': '正在加载形象引擎…',
+        'avatar.poke': '逗一下',
+        'avatar.randomize': '随机一套',
+        'avatar.resetView': '重置视角',
+        'avatar.dragHint': '拖动可 3D 旋转 · 轻点逗一下',
+        'avatar.gallery': '内置形象库（19 款）',
+        'avatar.bodyColor': '主体配色',
+        'avatar.eyeColor': '眼睛配色',
+        'avatar.material': '材质',
+        'avatar.materialFlat': '平面',
+        'avatar.materialFluffy': '毛绒',
+        'avatar.clay': '橡皮泥质感',
+        'avatar.depth': '体积深度',
+        'avatar.follow': '跟随视线',
+        'avatar.orbit': '轨道粒子',
+        'avatar.badge': '通知角标',
+        'avatar.customJsonToggle': '导入自定义形象 JSON（version: 1）',
+        'avatar.customJsonHint': '粘贴 Image-bot / Avatar Forge 的 version:1 定义（含 body.path 与 eyes），应用后优先生效。',
+        'avatar.customJsonApply': '应用 JSON',
+        'avatar.customJsonClear': '取消自定义 JSON',
+        'avatar.customJsonApplied': '当前使用自定义 JSON 形象',
+        'avatar.customJsonInvalid': '形象 JSON 校验失败：{msg}',
         'form.hint': '创建后会为它建立一个同名的工作区文件夹；人格、职责与常驻指令会写进里面的 AGENTS.md、SOUL.md 和 .dsh/skills/team/SKILL.md。',
         'form.cancel': '取消',
         'form.create': '创建 Bot',
@@ -726,6 +819,47 @@ window.__ModuleLoader__.load({
         'screen.filesApp': '文件',
         'screen.files': '屏内文件中转',
         'screen.filesEmpty': '虚拟屏 downloads 目录暂无文件。',
+        'settings.system': '系统监控与网关',
+        'system.title': '宿主机系统信息与网关传输配置',
+        'system.hint': '实时采集磁盘占用、内存占用、CPU 占用与开机时长，通过 BotScreen 网关传输并支持配置接口与主动上报。',
+        'system.refresh': '立即刷新',
+        'system.liveOn': '实时流：已开启',
+        'system.liveOff': '实时流：已关闭',
+        'system.cpu': 'CPU 占用',
+        'system.memory': '内存占用',
+        'system.disk': '磁盘占用',
+        'system.uptime': '开机时长',
+        'system.cores': '核心数',
+        'system.load': '平均负载',
+        'system.bootTime': '开机时间',
+        'system.available': '可用',
+        'system.free': '剩余',
+        'system.gatewayStatus': '网关状态',
+        'system.online': '已连接',
+        'system.offline': '未连接',
+        'system.configTitle': '网关与采集接口配置',
+        'system.gatewayUrl': '网关地址 (Gateway URL)',
+        'system.gatewayUrlPlaceholder': '留空默认 http://127.0.0.1:6200',
+        'system.adminToken': '网关管理 Token',
+        'system.adminTokenPlaceholder': '可选（留空沿用环境变量 BOTSCREEN_ADMIN_TOKEN）',
+        'system.diskPaths': '磁盘挂载点路径',
+        'system.diskPathsPlaceholder': '逗号分隔，如 /, /data',
+        'system.refreshInterval': '刷新间隔（秒）',
+        'system.pushUrl': '网关主动上报目标接口（可选）',
+        'system.pushUrlPlaceholder': '例如 http://127.0.0.1:9000/metrics',
+        'system.pushInterval': '定时上报周期（秒，0 表示关闭）',
+        'system.pushToken': '上报鉴权 Token（可选）',
+        'system.saveConfig': '保存并同步到网关',
+        'system.testPush': '立即推送一次',
+        'system.pushOk': '已通过网关成功推送',
+        'system.endpointsTitle': '已配置的接口地址',
+        'system.mountsTitle': '磁盘挂载点明细',
+        'system.hostPanelTitle': '性能用量 · 主机信息',
+        'system.hostname': '主机',
+        'system.cgroupOff': '整机指标（无 cgroup）',
+        'system.fallbackMode': '本机降级采集',
+        'system.openDetails': '详情',
+        'system.waitingGateway': '待连接',
         'screen.upload': '上传文件',
         'screen.panelToggle': '屏幕与任务栏',
         'screen.helpTitle': '遇到阻塞，请求人工接管',
@@ -1383,6 +1517,27 @@ window.__ModuleLoader__.load({
       .bm-set-chev { font-size: 14px; color: var(--dsw-alias-label-tertiary); opacity: 0.7; }
       .bm-set-body { flex: 1; min-width: 0; overflow: auto; padding: 24px 28px 48px; }
       .bm-set-panel { max-width: 780px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+      .bm-sys-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+      .bm-sys-card { border-radius: 12px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-2);
+        padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+      .bm-sys-card-label { font-size: 11px; font-weight: 600; color: var(--dsw-alias-label-tertiary); text-transform: uppercase; letter-spacing: 0.02em; }
+      .bm-sys-card-val { font-size: 20px; font-weight: 650; color: var(--dsw-alias-label-primary); line-height: 1.2; }
+      .bm-sys-card-sub { font-size: 11.5px; color: var(--dsw-alias-label-secondary); line-height: 1.35; }
+      .bm-sys-bar { height: 6px; border-radius: 99px; background: var(--dsw-alias-border-l2); overflow: hidden; margin-top: 2px; }
+      .bm-sys-bar-fill { height: 100%; border-radius: 99px; background: #4d6bfe; transition: width 0.25s ease; }
+      .bm-sys-bar-fill[data-warn='true'] { background: #f59e0b; }
+      .bm-sys-bar-fill[data-crit='true'] { background: #ef4444; }
+      .bm-host-mini { margin-top: 8px; border-radius: 10px; border: 0.5px solid var(--dsw-alias-border-l2);
+        background: var(--dsw-alias-bg-layer-2); padding: 9px 10px; display: flex; flex-direction: column; gap: 7px; }
+      .bm-host-mini-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+      .bm-host-mini-title { font-size: 11px; font-weight: 600; color: var(--dsw-alias-label-secondary);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .bm-host-mini-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 10.5px; color: var(--dsw-alias-label-tertiary); }
+      .bm-host-mini-rows { display: flex; flex-direction: column; gap: 5px; }
+      .bm-host-mini-row { display: flex; flex-direction: column; gap: 2px; }
+      .bm-host-mini-row-top { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; color: var(--dsw-alias-label-secondary); }
+      .bm-host-mini-row-top strong { font-weight: 600; color: var(--dsw-alias-label-primary); font-variant-numeric: tabular-nums; }
+      .bm-host-mini .bm-sys-bar { height: 4px; margin-top: 0; }
       .bm-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px;
         border-radius: 9px; border: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); cursor: pointer; }
       .bm-toggle-row span { font-size: 12.5px; line-height: 18px; color: var(--dsw-alias-label-primary); }
@@ -1518,6 +1673,42 @@ window.__ModuleLoader__.load({
       .bm-bot-screen-dot[data-state='FROZEN'] { background: #60a5fa; }
       .bm-bot-screen-dot[data-state='NEED_HUMAN'], .bm-bot-screen-dot[data-state='HUMAN_TAKEOVER'] {
         background: #f59e0b; animation: bm-pulse 1.1s ease-in-out infinite; }
+      .bm-avatar-rendered { background: transparent !important; overflow: visible; padding: 0; }
+      .bm-avatar-rendered svg { width: 100%; height: 100%; display: block; overflow: visible; }
+      .bm-avatar-live { display: inline-flex; align-items: center; justify-content: center; flex: none;
+        overflow: visible; cursor: pointer; }
+      .bm-avatar-box { border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 10px; padding: 12px;
+        background: var(--dsw-alias-bg-layer-1); display: flex; flex-direction: column; gap: 10px; }
+      .bm-avatar-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .bm-avatar-stage-wrap { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+      .bm-avatar-stage { width: 132px; height: 132px; border-radius: 14px; flex: none;
+        border: 0.5px solid var(--dsw-alias-border-l3); background: var(--dsw-alias-bg-base);
+        display: flex; align-items: center; justify-content: center; cursor: grab; user-select: none; position: relative; }
+      .bm-avatar-stage:active { cursor: grabbing; }
+      .bm-avatar-stage-side { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 180px; }
+      .bm-avatar-stage-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+      .bm-avatar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 6px;
+        max-height: 196px; overflow-y: auto; padding: 2px; }
+      .bm-avatar-item { appearance: none; border: 1px solid var(--dsw-alias-border-l3); border-radius: 10px;
+        background: var(--dsw-alias-bg-base); padding: 4px 2px; display: flex; flex-direction: column;
+        align-items: center; gap: 2px; cursor: pointer; color: var(--dsw-alias-label-secondary); font-size: 10px; }
+      .bm-avatar-item:hover { border-color: var(--dsw-alias-border-selected); }
+      .bm-avatar-item[data-active='true'] { border-color: var(--dsw-alias-border-selected);
+        background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); font-weight: 600; }
+      .bm-avatar-item-thumb { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; }
+      .bm-avatar-item-thumb svg { width: 38px; height: 38px; display: block; }
+      .bm-avatar-item-name { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+      .bm-avatar-color-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .bm-avatar-color-picker { width: 26px; height: 26px; padding: 0; border: 1px solid var(--dsw-alias-border-l2);
+        border-radius: 50%; background: transparent; cursor: pointer; overflow: hidden; }
+      .bm-avatar-toggles { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+      .bm-avatar-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+        color: var(--dsw-alias-label-secondary); cursor: pointer; user-select: none; }
+      .bm-avatar-depth { display: inline-flex; align-items: center; gap: 8px; font-size: 12px;
+        color: var(--dsw-alias-label-secondary); }
+      .bm-avatar-depth input[type='range'] { width: 110px; }
+      .bm-avatar-json-box { border-top: 0.5px solid var(--dsw-alias-border-l3); padding-top: 8px;
+        display: flex; flex-direction: column; gap: 6px; }
     `
 
     return {
@@ -1529,6 +1720,113 @@ window.__ModuleLoader__.load({
         const locale = ctx.get('locale')
         const hostStore = createStore({ state: null, status: 'loading', error: '' })
         const modelStore = createStore({ status: 'idle', catalog: null, error: '' })
+        const avatarEngineStore = createStore({
+          status: window.__DSH_AVATAR_ENGINE__ ? 'ready' : 'idle',
+          engine: window.__DSH_AVATAR_ENGINE__ || null,
+        })
+        let avatarEnginePromise = null
+        const ensureAvatarEngine = () => {
+          if (window.__DSH_AVATAR_ENGINE__) {
+            if (avatarEngineStore.getSnapshot().status !== 'ready') {
+              avatarEngineStore.set({ status: 'ready', engine: window.__DSH_AVATAR_ENGINE__ })
+            }
+            return Promise.resolve(window.__DSH_AVATAR_ENGINE__)
+          }
+          if (avatarEnginePromise) return avatarEnginePromise
+          avatarEngineStore.set({ status: 'loading', engine: null })
+          avatarEnginePromise = new Promise((resolve) => {
+            const script = document.createElement('script')
+            script.src = '/botmode/api/avatar/bundle.js'
+            script.async = true
+            script.onload = () => {
+              const eng = window.__DSH_AVATAR_ENGINE__ || null
+              avatarEngineStore.set({ status: eng ? 'ready' : 'error', engine: eng })
+              resolve(eng)
+            }
+            script.onerror = () => {
+              avatarEnginePromise = null
+              avatarEngineStore.set({ status: 'error', engine: null })
+              resolve(null)
+            }
+            document.head.appendChild(script)
+          })
+          return avatarEnginePromise
+        }
+        const avatarSvgCache = new Map()
+        const renderAvatarSvgCached = (engine, avatar, px) => {
+          if (!engine || !avatar) return ''
+          const key = JSON.stringify([
+            avatar.avatarId || 'mochi',
+            avatar.customJson || '',
+            avatar.color || '#ff8a1f',
+            avatar.eyeColor || '',
+            avatar.clay !== false,
+            Number(avatar.depth ?? 6),
+            Number(avatar.yaw ?? 0),
+            Number(avatar.pitch ?? 0),
+            Boolean(avatar.orbit),
+            Boolean(avatar.badge),
+            px,
+          ])
+          if (avatarSvgCache.has(key)) return avatarSvgCache.get(key)
+          try {
+            const svg = engine.renderAvatarSvg(avatar, { size: px, reducedMotion: true })
+            if (avatarSvgCache.size >= 256) {
+              const firstKey = avatarSvgCache.keys().next().value
+              if (firstKey !== undefined) avatarSvgCache.delete(firstKey)
+            }
+            avatarSvgCache.set(key, svg)
+            return svg
+          } catch (_err) {
+            return ''
+          }
+        }
+        const useAvatarEngine = () => {
+          const snap = useSyncExternalStore(
+            listener => avatarEngineStore.subscribe(listener),
+            () => avatarEngineStore.getSnapshot(),
+          )
+          useEffect(() => {
+            if (snap.status === 'idle') void ensureAvatarEngine()
+          }, [snap.status])
+          return snap
+        }
+        const AVATAR_EYE_SWATCHES = ['#151515', '#1b1b1b', '#ffffff', '#0a7cff', '#e11d48']
+        const defaultClientAvatar = (fallbackColor) => ({
+          avatarId: 'mochi',
+          customJson: '',
+          color: fallbackColor || '#ff8a1f',
+          eyeColor: '#1b1b1b',
+          material: 'flat',
+          clay: true,
+          yaw: 0,
+          pitch: 0,
+          orbit: false,
+          badge: false,
+          depth: 6,
+          followPointer: true,
+        })
+        const pickRandomClientAvatar = (engine, prevId) => {
+          const items = (engine && engine.ALL_AVATARS) || []
+          const pals = ((engine && engine.PALETTES) || []).filter(p => p && p.id !== 'obsidian' && p.id !== 'pearl')
+          const pool = items.length > 1 ? items.filter(it => it.id !== prevId) : items
+          const item = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : { id: 'mochi' }
+          const pal = pals.length > 0 ? pals[Math.floor(Math.random() * pals.length)] : { base: '#ff6a1a', eye: '#151515' }
+          return {
+            avatarId: item.id,
+            customJson: '',
+            color: pal.base,
+            eyeColor: pal.eye || '#151515',
+            material: 'flat',
+            clay: true,
+            yaw: 0,
+            pitch: 0,
+            orbit: false,
+            badge: false,
+            depth: 6,
+            followPointer: true,
+          }
+        }
         const hostRequest = async (path, init) => {
           const response = await fetch(`/botmode/api/${path}`, {
             credentials: 'include', cache: 'no-store', ...init,
@@ -1903,9 +2201,413 @@ window.__ModuleLoader__.load({
 
         const sessionOf = (state, bot) => (state && state.byId ? state.byId[bot.sessionId] : undefined)
 
+        const AVATAR_SIZE_PX = { xs: 18, sm: 22, md: 36, lg: 44, xl: 64 }
+        const AVATAR_SIZE_CLS = { xs: 'bm-avatar bm-avatar-xs', sm: 'bm-avatar bm-avatar-sm', md: 'bm-avatar', lg: 'bm-avatar bm-avatar-lg' }
+
+        function BotAvatarBadge(props) {
+          const { engine } = useAvatarEngine()
+          const bot = props.bot || null
+          const avatar = props.avatar || (bot && bot.avatar) || null
+          const sizeKey = props.size || 'md'
+          const px = typeof props.px === 'number' ? props.px : (AVATAR_SIZE_PX[sizeKey] || 36)
+          const baseCls = AVATAR_SIZE_CLS[sizeKey] || 'bm-avatar'
+          const color = (avatar && avatar.color) || (bot && bot.color) || props.color || COLORS[0]
+          const label = (bot && bot.name) || props.name || ''
+          const animated = props.animated === true && px >= 32
+          const runtimeState = props.state || (bot && bot.running ? 'working' : 'idle')
+          const mountRef = useRef(null)
+          const instanceRef = useRef(null)
+
+          useEffect(() => {
+            if (!animated || !engine || !avatar || !mountRef.current) return undefined
+            const el = mountRef.current
+            el.replaceChildren()
+            let inst = null
+            try {
+              inst = engine.mountBotAvatar(el, avatar, {
+                size: px,
+                state: runtimeState,
+                mood: 'auto',
+                interactive: true,
+                sleepWhenIdle: true,
+              })
+              instanceRef.current = inst
+            } catch (_err) {
+              instanceRef.current = null
+            }
+            return () => {
+              if (inst) inst.destroy()
+              instanceRef.current = null
+              el.replaceChildren()
+            }
+          }, [
+            animated,
+            engine,
+            px,
+            avatar && avatar.avatarId,
+            avatar && avatar.customJson,
+            avatar && avatar.color,
+            avatar && avatar.eyeColor,
+            avatar && avatar.clay,
+            avatar && avatar.depth,
+            avatar && avatar.yaw,
+            avatar && avatar.pitch,
+            avatar && avatar.orbit,
+            avatar && avatar.badge,
+            avatar && avatar.followPointer,
+          ])
+
+          useEffect(() => {
+            if (instanceRef.current && runtimeState) {
+              try { instanceRef.current.setState(runtimeState) } catch (_err) { /* ignore */ }
+            }
+          }, [runtimeState])
+
+          if (animated && engine && avatar) {
+            return h('span', {
+              ref: mountRef,
+              className: `bm-avatar-live ${props.className || ''}`.trim(),
+              style: { width: `${px}px`, height: `${px}px` },
+              title: label,
+            })
+          }
+
+          const svg = engine && avatar ? renderAvatarSvgCached(engine, avatar, px) : ''
+          if (svg) {
+            return h('span', {
+              className: `${baseCls} bm-avatar-rendered ${props.className || ''}`.trim(),
+              style: { width: `${px}px`, height: `${px}px` },
+              title: label,
+              dangerouslySetInnerHTML: { __html: svg },
+            })
+          }
+
+          return h('span', {
+            className: `${baseCls} ${props.className || ''}`.trim(),
+            style: { background: color },
+            title: label,
+          }, initialOf(label))
+        }
+
+        function BotAvatarEditor(props) {
+          const t = useT()
+          const { status, engine } = useAvatarEngine()
+          const isCreate = props.mode === 'create'
+          const useCustom = isCreate ? Boolean(props.useCustom) : true
+          const value = props.value || defaultClientAvatar(props.fallbackColor)
+          const stageRef = useRef(null)
+          const botRef = useRef(null)
+          const dragRef = useRef(null)
+          const [jsonOpen, setJsonOpen] = useState(Boolean(value.customJson))
+          const [jsonText, setJsonText] = useState(value.customJson || '')
+          const [jsonErr, setJsonErr] = useState('')
+
+          useEffect(() => {
+            setJsonText(value.customJson || '')
+          }, [value.customJson])
+
+          const patch = (partial) => {
+            if (typeof props.onChange === 'function') {
+              props.onChange({ ...value, ...partial })
+            }
+          }
+
+          useEffect(() => {
+            if (!useCustom || !engine || !stageRef.current) return undefined
+            const hostEl = stageRef.current
+            hostEl.replaceChildren()
+            let inst = null
+            try {
+              inst = engine.mountBotAvatar(hostEl, value, {
+                size: 118,
+                state: 'idle',
+                mood: 'auto',
+                interactive: false,
+                sleepWhenIdle: false,
+              })
+              botRef.current = inst
+            } catch (_err) {
+              botRef.current = null
+            }
+            return () => {
+              if (inst) inst.destroy()
+              botRef.current = null
+              hostEl.replaceChildren()
+            }
+          }, [useCustom, engine])
+
+          useEffect(() => {
+            const inst = botRef.current
+            if (!inst || !engine) return
+            try {
+              inst.setShape(engine.resolveDefinition(value))
+              inst.setPalette(value.color || '#ff8a1f')
+              inst.setEyeColor(value.eyeColor || undefined)
+              inst.setDepth(Number(value.depth ?? 6))
+              inst.setClay(value.clay !== false)
+              inst.setOrbit(Boolean(value.orbit))
+              inst.setBadge(engine.normalizeBadge(value.badge))
+              inst.setFollowPointer(value.followPointer !== false)
+              inst.setView(Number(value.yaw ?? 0), Number(value.pitch ?? 0), true)
+            } catch (_err) { /* ignore transient invalid value */ }
+          }, [
+            engine,
+            value.avatarId,
+            value.customJson,
+            value.color,
+            value.eyeColor,
+            value.depth,
+            value.clay,
+            value.orbit,
+            value.badge,
+            value.followPointer,
+            value.yaw,
+            value.pitch,
+          ])
+
+          const onStagePointerDown = (e) => {
+            e.currentTarget.setPointerCapture?.(e.pointerId)
+            dragRef.current = {
+              x: e.clientX,
+              y: e.clientY,
+              yaw: Number(value.yaw ?? 0),
+              pitch: Number(value.pitch ?? 0),
+              moved: false,
+            }
+          }
+          const onStagePointerMove = (e) => {
+            const d = dragRef.current
+            if (!d) return
+            const dx = e.clientX - d.x
+            const dy = e.clientY - d.y
+            if (Math.hypot(dx, dy) > 4) d.moved = true
+            if (!d.moved) return
+            const nextYaw = Math.max(-0.9, Math.min(0.9, Number((d.yaw + dx / 180).toFixed(3))))
+            const nextPitch = Math.max(-0.6, Math.min(0.6, Number((d.pitch - dy / 220).toFixed(3))))
+            patch({ yaw: nextYaw, pitch: nextPitch })
+          }
+          const onStagePointerUp = (e) => {
+            const d = dragRef.current
+            dragRef.current = null
+            e.currentTarget.releasePointerCapture?.(e.pointerId)
+            if (d && !d.moved && botRef.current) {
+              try { botRef.current.poke() } catch (_err) { /* ignore */ }
+            }
+          }
+
+          const applyCustomJson = () => {
+            const raw = String(jsonText || '').trim()
+            if (raw === '') {
+              setJsonErr('')
+              patch({ customJson: '' })
+              return
+            }
+            try {
+              const parsed = JSON.parse(raw)
+              if (engine && typeof engine.validateAvatar === 'function') {
+                const res = engine.validateAvatar(parsed)
+                if (!res.ok) {
+                  setJsonErr(interpolate(t('avatar.customJsonInvalid'), { msg: (res.errors || []).join('; ') }))
+                  return
+                }
+                setJsonErr('')
+                patch({ customJson: JSON.stringify(res.value) })
+                return
+              }
+              if (parsed.version !== 1 || !parsed.body || !parsed.body.path || !parsed.eyes) {
+                setJsonErr(interpolate(t('avatar.customJsonInvalid'), { msg: 'version:1 + body.path + eyes required' }))
+                return
+              }
+              setJsonErr('')
+              patch({ customJson: JSON.stringify(parsed) })
+            } catch (err) {
+              setJsonErr(interpolate(t('avatar.customJsonInvalid'), { msg: err && err.message ? err.message : String(err) }))
+            }
+          }
+
+          const allAvatars = (engine && engine.ALL_AVATARS) || []
+          const palettes = (engine && engine.PALETTES) || COLORS.map(c => ({ id: c, name: c, base: c, eye: '#151515' }))
+
+          return h('div', { className: 'bm-avatar-box' },
+            h('div', { className: 'bm-avatar-head' },
+              h('span', { className: 'bm-model-title' }, t('form.avatar')),
+              isCreate
+                ? h('div', { className: 'bm-seg' },
+                  h('button', {
+                    type: 'button', 'data-active': !useCustom,
+                    onClick: () => props.onModeChange && props.onModeChange(false),
+                  }, t('avatar.modeRandom')),
+                  h('button', {
+                    type: 'button', 'data-active': useCustom,
+                    onClick: () => props.onModeChange && props.onModeChange(true),
+                  }, t('avatar.modeCustom')))
+                : null),
+            !useCustom
+              ? h('div', { className: 'bm-model-hint' }, t('avatar.randomHint'))
+              : !engine
+                ? h('div', { className: 'bm-model-hint' }, status === 'error' ? 'Avatar engine unavailable' : t('avatar.loading'))
+                : h(React.Fragment, null,
+                  h('div', { className: 'bm-avatar-stage-wrap' },
+                    h('div', {
+                      ref: stageRef,
+                      className: 'bm-avatar-stage',
+                      onPointerDown: onStagePointerDown,
+                      onPointerMove: onStagePointerMove,
+                      onPointerUp: onStagePointerUp,
+                      onPointerCancel: onStagePointerUp,
+                    }),
+                    h('div', { className: 'bm-avatar-stage-side' },
+                      h('div', { className: 'bm-model-hint' }, t('avatar.dragHint')),
+                      value.customJson
+                        ? h('div', { className: 'bm-model-now' }, t('avatar.customJsonApplied'))
+                        : null,
+                      h('div', { className: 'bm-avatar-stage-btns' },
+                        h('button', {
+                          type: 'button', className: 'bm-btn small',
+                          onClick: () => { if (botRef.current) botRef.current.poke() },
+                        }, t('avatar.poke')),
+                        h('button', {
+                          type: 'button', className: 'bm-btn small',
+                          onClick: () => {
+                            const next = pickRandomClientAvatar(engine, value.avatarId)
+                            props.onChange && props.onChange(next)
+                          },
+                        }, t('avatar.randomize')),
+                        (Number(value.yaw || 0) !== 0 || Number(value.pitch || 0) !== 0)
+                          ? h('button', {
+                            type: 'button', className: 'bm-btn small',
+                            onClick: () => patch({ yaw: 0, pitch: 0 }),
+                          }, t('avatar.resetView'))
+                          : null),
+                      h('div', { className: 'bm-avatar-toggles' },
+                        h('div', { className: 'bm-seg' },
+                          h('button', {
+                            type: 'button', 'data-active': (value.material || 'flat') === 'flat',
+                            onClick: () => patch({ material: 'flat' }),
+                          }, t('avatar.materialFlat')),
+                          h('button', {
+                            type: 'button', 'data-active': value.material === 'fluffy',
+                            onClick: () => patch({ material: 'fluffy' }),
+                          }, t('avatar.materialFluffy'))),
+                        h('label', { className: 'bm-avatar-depth' },
+                          h('span', null, `${t('avatar.depth')} ${Math.round(Number(value.depth ?? 6))}`),
+                          h('input', {
+                            type: 'range', min: 0, max: 14, step: 1,
+                            value: Number(value.depth ?? 6),
+                            onChange: (e) => patch({ depth: Number(e.target.value) }),
+                          }))))),
+                  h('div', { className: 'bm-label' }, t('avatar.gallery'),
+                    h('div', { className: 'bm-avatar-grid' }, allAvatars.map(item => {
+                      const thumbSvg = renderAvatarSvgCached(engine, {
+                        ...value,
+                        avatarId: item.id,
+                        customJson: '',
+                        yaw: 0,
+                        pitch: 0,
+                        orbit: false,
+                        badge: false,
+                      }, 38)
+                      const active = !value.customJson && value.avatarId === item.id
+                      return h('button', {
+                        key: item.id,
+                        type: 'button',
+                        className: 'bm-avatar-item',
+                        'data-active': active,
+                        title: item.name,
+                        onClick: () => patch({ avatarId: item.id, customJson: '' }),
+                      },
+                        h('span', { className: 'bm-avatar-item-thumb', dangerouslySetInnerHTML: { __html: thumbSvg } }),
+                        h('span', { className: 'bm-avatar-item-name' }, item.name))
+                    }))),
+                  h('div', { className: 'bm-label' }, t('avatar.bodyColor'),
+                    h('div', { className: 'bm-avatar-color-row' },
+                      palettes.map(pal => h('button', {
+                        key: pal.id,
+                        type: 'button',
+                        className: 'bm-swatch',
+                        title: `${pal.name} (${pal.base})`,
+                        style: { background: pal.base },
+                        'data-active': String(value.color || '').toLowerCase() === String(pal.base).toLowerCase(),
+                        onClick: () => patch({ color: pal.base, eyeColor: pal.eye || value.eyeColor }),
+                      })),
+                      h('input', {
+                        type: 'color',
+                        className: 'bm-avatar-color-picker',
+                        value: /^#[0-9a-f]{6}$/i.test(value.color || '') ? value.color : '#ff8a1f',
+                        title: t('avatar.bodyColor'),
+                        onChange: (e) => patch({ color: e.target.value }),
+                      }))),
+                  h('div', { className: 'bm-label' }, t('avatar.eyeColor'),
+                    h('div', { className: 'bm-avatar-color-row' },
+                      AVATAR_EYE_SWATCHES.map(hex => h('button', {
+                        key: hex,
+                        type: 'button',
+                        className: 'bm-swatch',
+                        title: hex,
+                        style: { background: hex },
+                        'data-active': String(value.eyeColor || '').toLowerCase() === hex,
+                        onClick: () => patch({ eyeColor: hex }),
+                      })),
+                      h('input', {
+                        type: 'color',
+                        className: 'bm-avatar-color-picker',
+                        value: /^#[0-9a-f]{6}$/i.test(value.eyeColor || '') ? value.eyeColor : '#1b1b1b',
+                        title: t('avatar.eyeColor'),
+                        onChange: (e) => patch({ eyeColor: e.target.value }),
+                      }))),
+                  h('div', { className: 'bm-avatar-toggles' },
+                    h('label', { className: 'bm-avatar-toggle' },
+                      h('input', {
+                        type: 'checkbox', checked: value.clay !== false,
+                        onChange: (e) => patch({ clay: e.target.checked }),
+                      }), t('avatar.clay')),
+                    h('label', { className: 'bm-avatar-toggle' },
+                      h('input', {
+                        type: 'checkbox', checked: value.followPointer !== false,
+                        onChange: (e) => patch({ followPointer: e.target.checked }),
+                      }), t('avatar.follow')),
+                    h('label', { className: 'bm-avatar-toggle' },
+                      h('input', {
+                        type: 'checkbox', checked: Boolean(value.orbit),
+                        onChange: (e) => patch({ orbit: e.target.checked }),
+                      }), t('avatar.orbit')),
+                    h('label', { className: 'bm-avatar-toggle' },
+                      h('input', {
+                        type: 'checkbox', checked: Boolean(value.badge),
+                        onChange: (e) => patch({ badge: e.target.checked }),
+                      }), t('avatar.badge'))),
+                  h('div', { className: 'bm-avatar-json-box' },
+                    h('div', { className: 'bm-avatar-stage-btns' },
+                      h('button', {
+                        type: 'button', className: 'bm-btn small',
+                        onClick: () => setJsonOpen(v => !v),
+                      }, t('avatar.customJsonToggle')),
+                      value.customJson
+                        ? h('button', {
+                          type: 'button', className: 'bm-btn small',
+                          onClick: () => { setJsonText(''); setJsonErr(''); patch({ customJson: '' }) },
+                        }, t('avatar.customJsonClear'))
+                        : null),
+                    jsonOpen
+                      ? h(React.Fragment, null,
+                        h('div', { className: 'bm-model-hint' }, t('avatar.customJsonHint')),
+                        h('textarea', {
+                          className: 'bm-area',
+                          rows: 4,
+                          value: jsonText,
+                          placeholder: '{"version":1,"id":"custom","name":"Custom","body":{"path":"M...Z"},"eyes":{"x":50,"y":48,"spacing":18,"scale":1.1}}',
+                          onChange: (e) => { setJsonText(e.target.value); setJsonErr('') },
+                        }),
+                        jsonErr ? h('div', { className: 'bm-error' }, jsonErr) : null,
+                        h('div', { className: 'bm-avatar-stage-btns' },
+                          h('button', { type: 'button', className: 'bm-btn small primary', onClick: applyCustomJson }, t('avatar.customJsonApply'))))
+                      : null)))
+        }
+
         function BotForm(props) {
           const t = useT()
           const [draft, setDraft] = useState(props.initial)
+          const [avatarCustom, setAvatarCustom] = useState(props.mode !== 'create')
           const [busy, setBusy] = useState(false)
           const [error, setError] = useState('')
           const models = props.models || { status: 'idle', catalog: null, error: '' }
@@ -2058,7 +2760,22 @@ window.__ModuleLoader__.load({
             setBusy(true)
             setError('')
             try {
-              const value = { ...draft, name }
+              const useCustomAvatar = props.mode !== 'create' || avatarCustom
+              const value = {
+                ...draft,
+                name,
+                ...(useCustomAvatar
+                  ? {
+                    color: (draft.avatar && draft.avatar.color) || draft.color,
+                    avatar: draft.avatar || defaultClientAvatar(draft.color),
+                    avatarRandom: false,
+                  }
+                  : {
+                    color: '',
+                    avatar: undefined,
+                    avatarRandom: true,
+                  }),
+              }
               if (props.mode === 'create') await createBot(value, props.lang)
               else await updateBot(props.bot, value, props.lang)
               props.onDone()
@@ -2092,12 +2809,24 @@ window.__ModuleLoader__.load({
                 placeholder: t('form.instructionsPlaceholder'),
                 onChange: event => setDraft({ ...draft, instructions: event.target.value }),
               })),
-            h('label', { className: 'bm-label' }, t('form.color'),
-              h('div', { className: 'bm-swatches' }, COLORS.map(color => h('button', {
-                key: color, type: 'button', className: 'bm-swatch', title: color,
-                style: { background: color }, 'data-active': draft.color === color,
-                onClick: () => setDraft({ ...draft, color }),
-              })))),
+            h(BotAvatarEditor, {
+              mode: props.mode,
+              useCustom: avatarCustom,
+              onModeChange: (next) => {
+                setAvatarCustom(next)
+                if (next && !draft.avatar) {
+                  const initialAv = pickRandomClientAvatar(avatarEngineStore.getSnapshot().engine)
+                  setDraft({ ...draft, avatar: initialAv, color: initialAv.color })
+                }
+              },
+              value: draft.avatar || defaultClientAvatar(draft.color),
+              fallbackColor: draft.color,
+              onChange: (nextAvatar) => setDraft({
+                ...draft,
+                avatar: nextAvatar,
+                color: nextAvatar.color || draft.color,
+              }),
+            }),
             modelBox,
             h('label', { className: 'bm-label' }, t('form.approval'),
               h('select', {
@@ -2194,7 +2923,7 @@ window.__ModuleLoader__.load({
           const summary = props.summary
           return h('article', { className: 'bm-card' },
             h('div', { className: 'bm-card-top' },
-              h('span', { className: 'bm-avatar', style: { background: bot.color || COLORS[0] } }, initialOf(bot.name)),
+              h(BotAvatarBadge, { bot, size: 'md' }),
               h('div', null,
                 h('div', { className: 'bm-name' }, bot.name),
                 h('div', { className: 'bm-role' }, bot.role || '—')),
@@ -2345,7 +3074,7 @@ window.__ModuleLoader__.load({
           }
           return h('div', { className: 'bm-detail' },
             h('header', { className: 'bm-dhead' },
-              h('span', { className: 'bm-avatar bm-avatar-lg', style: { background: bot.color || COLORS[0] } }, initialOf(bot.name)),
+              h(BotAvatarBadge, { bot, size: 'lg', animated: true }),
               h('div', { className: 'bm-dhead-text' },
                 h('div', { className: 'bm-name bm-name-lg' }, bot.name),
                 h('div', { className: 'bm-role' }, bot.role || '—'),
@@ -3164,7 +3893,7 @@ window.__ModuleLoader__.load({
           const t = useT()
           return h('div', { className: 'bm-turn', 'data-streaming': props.turn.streaming === true },
             h('div', { className: 'bm-turn-who' },
-              h('span', { className: 'bm-avatar bm-avatar-xs', style: { background: props.bot.color || COLORS[0] } }, initialOf(props.bot.name)),
+              h(BotAvatarBadge, { bot: props.bot, size: 'xs' }),
               h('span', { className: 'bm-turn-name' }, props.bot.name)),
             h('div', { className: 'bm-turn-body' },
               props.turn.blocks.map((block, index) => block.kind === 'reasoning'
@@ -3298,7 +4027,7 @@ window.__ModuleLoader__.load({
             try { await hostCommand('bot.stop', { botId: props.bot.id }) } catch (_failure) { /* the turn may already be settling */ }
           }
           const head = h('header', { className: 'bm-chat-head' },
-            h('span', { className: 'bm-avatar bm-avatar-sm', style: { background: props.bot.color || COLORS[0] } }, initialOf(props.bot.name)),
+            h(BotAvatarBadge, { bot: props.bot, size: 'sm' }),
             h('div', { className: 'bm-chat-title' },
               h('span', { className: 'bm-name' }, props.bot.name),
               h('span', { className: 'bm-role' }, props.bot.role || '—')),
@@ -3677,7 +4406,7 @@ window.__ModuleLoader__.load({
 
           return h('div', { className: 'bm-msg bm-msg-bot bm-msg-streaming' },
             h('div', { className: 'bm-msg-name', style: { display: 'flex', alignItems: 'center', gap: '6px' } },
-              h('span', { className: 'bm-avatar bm-avatar-xs', style: { background: bot.color || COLORS[0] } }, initialOf(bot.name)),
+              h(BotAvatarBadge, { bot, size: 'xs' }),
               h('span', null, bot.name),
               h('span', { className: 'bm-spin', style: { marginLeft: 'auto' } })),
             h('div', { className: 'bm-assistant-text' },
@@ -3748,6 +4477,7 @@ window.__ModuleLoader__.load({
               name: bot.name,
               role: bot.role || '',
               color: bot.color || COLORS[0],
+              avatar: bot.avatar || null,
               isAll: false,
               searchKey: `${bot.name} ${bot.role || ''} ${bot.id}`.toLowerCase(),
             }))
@@ -4047,7 +4777,7 @@ window.__ModuleLoader__.load({
                 return h('div', { key: message.id, className: 'bm-msg bm-msg-bot' },
                   h('div', { className: 'bm-msg-name', style: { display: 'flex', alignItems: 'center', gap: '6px' } },
                     authorBot
-                      ? h('span', { className: 'bm-avatar bm-avatar-xs', style: { background: authorBot.color || COLORS[0] } }, initialOf(authorBot.name))
+                      ? h(BotAvatarBadge, { bot: authorBot, size: 'xs' })
                       : null,
                     h('span', null, message.name),
                     message.seq ? h('span', { className: 'bm-muted', style: { marginLeft: 'auto', fontWeight: 400 } }, `#${message.seq}`) : null),
@@ -4084,7 +4814,9 @@ window.__ModuleLoader__.load({
                     onMouseEnter: () => setMentionIdx(idx),
                     onMouseDown: (e) => { e.preventDefault(); insertMention(cand) },
                   },
-                  h('span', { className: 'bm-avatar bm-avatar-xs', style: { background: cand.color } }, cand.isAll ? '@' : initialOf(cand.name)),
+                  cand.isAll
+                    ? h('span', { className: 'bm-avatar bm-avatar-xs', style: { background: cand.color } }, '@')
+                    : h(BotAvatarBadge, { bot: cand, size: 'xs' }),
                   h('span', { className: 'bm-mention-opt-body' },
                     h('span', { className: 'bm-mention-opt-name' }, cand.name),
                     cand.role ? h('span', { className: 'bm-mention-opt-role' }, cand.role) : null),
@@ -4467,6 +5199,11 @@ window.__ModuleLoader__.load({
           if (kind === 'logs') {
             return h('svg', common, h('path', { d: 'M6 3h9l4 4v14H6z' }), h('path', { d: 'M9 11h6M9 15h6' }))
           }
+          if (kind === 'system') {
+            return h('svg', common,
+              h('rect', { x: 3, y: 4, width: 18, height: 12, rx: 2 }),
+              h('path', { d: 'M7 20h10M12 16v4M7 10h2l1.5-3 2.5 6 1.5-3H17' }))
+          }
           return h('svg', common,
             h('circle', { cx: 12, cy: 12, r: 3 }),
             h('path', { d: 'M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3h.1a1.6 1.6 0 0 0 .9-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8v.1a1.6 1.6 0 0 0 1.5.9H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z' }))
@@ -4500,6 +5237,338 @@ window.__ModuleLoader__.load({
           '<artifact type="html" title="独立 HTML 预览卡"><div style="font-family:sans-serif;padding:12px;color:#0f172a"><strong>Artifact 预览</strong><p style="margin:4px 0 0;color:#475569">复杂代码、报告或 HTML 片段自动分流到独立卡片中。</p></div></artifact>',
         ].join('\n')
 
+        function SystemMonitorPanel(props) {
+          const t = useT()
+          const initialCfg = (props.settings && props.settings.system) || {}
+          const initialInfo = props.initialSystem || (props.screenGateway && props.screenGateway.host) || null
+          const [info, setInfo] = useState(initialInfo)
+          const [endpoints, setEndpoints] = useState(null)
+          const [live, setLive] = useState(true)
+          const [busy, setBusy] = useState(false)
+          const [notice, setNotice] = useState('')
+          const [error, setError] = useState('')
+
+          const [gatewayUrl, setGatewayUrl] = useState(initialCfg.gatewayUrl || '')
+          const [adminToken, setAdminToken] = useState(initialCfg.adminToken || '')
+          const [diskPaths, setDiskPaths] = useState(Array.isArray(initialCfg.diskPaths) ? initialCfg.diskPaths.join(', ') : '/')
+          const [refreshIntervalSec, setRefreshIntervalSec] = useState(String(initialCfg.refreshIntervalSec ?? 5))
+          const [pushUrl, setPushUrl] = useState(initialCfg.pushUrl || '')
+          const [pushIntervalSec, setPushIntervalSec] = useState(String(initialCfg.pushIntervalSec ?? 0))
+          const [pushToken, setPushToken] = useState(initialCfg.pushToken || '')
+
+          const fetchNow = async () => {
+            setError('')
+            try {
+              const res = await props.onCommand('system.info', {})
+              if (res && res.system) setInfo(res.system)
+              if (res && res.config && res.config.endpoints) setEndpoints(res.config.endpoints)
+            } catch (err) {
+              setError(err && err.message ? err.message : String(err))
+            }
+          }
+
+          useEffect(() => {
+            void fetchNow()
+            void props.onCommand('system.config.get', {})
+              .then((res) => {
+                const cfg = res && res.config
+                if (cfg) {
+                  setGatewayUrl(cfg.gatewayUrl || '')
+                  setAdminToken(cfg.adminToken || '')
+                  setDiskPaths(Array.isArray(cfg.diskPaths) ? cfg.diskPaths.join(', ') : '/')
+                  setRefreshIntervalSec(String(cfg.refreshIntervalSec ?? 5))
+                  setPushUrl(cfg.pushUrl || '')
+                  setPushIntervalSec(String(cfg.pushIntervalSec ?? 0))
+                  setPushToken(cfg.pushToken || '')
+                  if (cfg.endpoints) setEndpoints(cfg.endpoints)
+                }
+              })
+              .catch(() => {})
+          }, [])
+
+          useEffect(() => {
+            if (!live) return undefined
+            const sec = Math.max(1, Math.min(60, Number(refreshIntervalSec) || 5))
+            let cancelled = false
+            let es = null
+            let pollTimer = null
+            let watchdog = null
+            let receivedAny = false
+
+            const startPolling = () => {
+              if (cancelled || pollTimer) return
+              if (es) {
+                try { es.close() } catch (_e) { /* ignore */ }
+                es = null
+              }
+              if (watchdog) {
+                window.clearTimeout(watchdog)
+                watchdog = null
+              }
+              void fetchNow()
+              pollTimer = window.setInterval(() => { void fetchNow() }, sec * 1000)
+            }
+
+            if (typeof window.EventSource === 'function') {
+              es = new window.EventSource(`/botmode/api/system/stream?interval=${encodeURIComponent(String(sec))}`, { withCredentials: true })
+              watchdog = window.setTimeout(() => {
+                if (!cancelled && !receivedAny) startPolling()
+              }, Math.max(4000, sec * 1000 + 2500))
+              es.onmessage = (ev) => {
+                if (cancelled || !ev.data) return
+                try {
+                  const pkt = JSON.parse(ev.data)
+                  if (pkt && (pkt.cpu || pkt.memory || pkt.disk || pkt.uptime)) {
+                    receivedAny = true
+                    if (watchdog) {
+                      window.clearTimeout(watchdog)
+                      watchdog = null
+                    }
+                    setInfo(prev => ({ ...(prev || {}), ...pkt, available: true }))
+                  }
+                } catch (_e) { /* ignore */ }
+              }
+              es.onerror = () => {
+                if (!cancelled) startPolling()
+              }
+            } else {
+              startPolling()
+            }
+
+            return () => {
+              cancelled = true
+              if (es) {
+                try { es.close() } catch (_e) { /* ignore */ }
+                es = null
+              }
+              if (watchdog) {
+                window.clearTimeout(watchdog)
+                watchdog = null
+              }
+              if (pollTimer) {
+                window.clearInterval(pollTimer)
+                pollTimer = null
+              }
+            }
+          }, [live, refreshIntervalSec])
+
+          const saveConfig = async () => {
+            setBusy(true)
+            setError('')
+            setNotice('')
+            try {
+              const res = await props.onCommand('system.config.save', {
+                config: {
+                  gatewayUrl: gatewayUrl.trim(),
+                  adminToken: adminToken.trim(),
+                  diskPaths: diskPaths.split(/[,\n]/).map(s => s.trim()).filter(Boolean),
+                  refreshIntervalSec: Number(refreshIntervalSec) || 5,
+                  pushUrl: pushUrl.trim(),
+                  pushIntervalSec: Number(pushIntervalSec) || 0,
+                  pushToken: pushToken.trim(),
+                },
+              })
+              if (res && res.config && res.config.endpoints) setEndpoints(res.config.endpoints)
+              setNotice(res && res.gatewaySynced
+                ? t('settings.saved')
+                : `${t('settings.saved')}${res && res.gatewayError ? ` (${res.gatewayError})` : ''}`)
+              await fetchNow()
+            } catch (err) {
+              setError(err && err.message ? err.message : String(err))
+            } finally {
+              setBusy(false)
+            }
+          }
+
+          const triggerPush = async () => {
+            setBusy(true)
+            setError('')
+            setNotice('')
+            try {
+              const res = await props.onCommand('system.push', {
+                url: pushUrl.trim() || undefined,
+                token: pushToken.trim() || undefined,
+              })
+              if (res && res.ok) {
+                setNotice(`${t('system.pushOk')} (HTTP ${res.status_code}, ${res.latency_ms}ms)`)
+              } else {
+                setError((res && res.error) || 'Push failed')
+              }
+            } catch (err) {
+              setError(err && err.message ? err.message : String(err))
+            } finally {
+              setBusy(false)
+            }
+          }
+
+          const cpu = info && info.cpu
+          const mem = info && info.memory
+          const disk = info && info.disk
+          const up = info && info.uptime
+          const fallbackMemTotal = mem && mem.total_mb != null ? mem.total_mb : (info && info.limit_mb != null ? info.limit_mb : null)
+          const fallbackMemAvail = mem && mem.available_mb != null ? mem.available_mb : (info && info.available_mb != null ? info.available_mb : null)
+          const fallbackMemUsed = mem && mem.used_mb != null
+            ? mem.used_mb
+            : (fallbackMemTotal != null && fallbackMemAvail != null ? Math.max(0, fallbackMemTotal - fallbackMemAvail) : null)
+          const memPct = mem && mem.usage_percent != null
+            ? mem.usage_percent
+            : (fallbackMemTotal != null && fallbackMemTotal > 0 && fallbackMemUsed != null
+              ? Math.round((fallbackMemUsed / fallbackMemTotal) * 1000) / 10
+              : null)
+          const gwOnline = Boolean(info && info.available !== false && info.gatewayAvailable !== false && (cpu || mem || disk || up || fallbackMemAvail != null))
+          const isFallback = Boolean(info && (info.degraded || info.source === 'host-fallback'))
+          const cgroupDisabled = info && info.cgroup === false
+
+          const metricBar = (pct) => {
+            const num = Number(pct)
+            if (!Number.isFinite(num)) return null
+            const clamped = Math.max(0, Math.min(100, num))
+            return h('div', { className: 'bm-sys-bar' },
+              h('div', {
+                className: 'bm-sys-bar-fill',
+                'data-warn': clamped >= 75 && clamped < 90,
+                'data-crit': clamped >= 90,
+                style: { width: `${clamped}%` },
+              }))
+          }
+
+          return h('div', { className: 'bm-set-panel' },
+            error ? h('div', { className: 'bm-error' }, error) : null,
+            notice ? h('div', { className: 'bm-ok' }, notice) : null,
+            h('section', { className: 'bm-form' },
+              h('div', { className: 'bm-block-head' },
+                h('h2', null, t('system.title')),
+                h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } },
+                  h('span', { className: 'bm-act-chip' }, `${t('system.gatewayStatus')}: ${gwOnline ? t('system.online') : (isFallback ? t('system.fallbackMode') : t('system.offline'))}`),
+                  cgroupDisabled ? h('span', { className: 'bm-act-chip' }, t('system.cgroupOff')) : null,
+                  h('button', {
+                    type: 'button', className: 'bm-btn small',
+                    onClick: () => setLive(v => !v),
+                  }, live ? t('system.liveOn') : t('system.liveOff')),
+                  h('button', {
+                    type: 'button', className: 'bm-btn small',
+                    onClick: () => { void fetchNow() },
+                  }, t('system.refresh')))),
+              h('p', { className: 'bm-form-hint' }, t('system.hint')),
+              info && (info.hostname || info.platform || info.gatewayError)
+                ? h('div', { className: 'bm-host-mini-meta', style: { marginBottom: '2px' } },
+                  info.hostname ? h('span', { className: 'bm-act-chip' }, `${t('system.hostname')}: ${info.hostname}`) : null,
+                  info.os && info.arch ? h('span', { className: 'bm-act-chip' }, `${info.os} ${info.arch}${info.kernel ? ` (${info.kernel})` : ''}`) : (info.platform ? h('span', { className: 'bm-act-chip' }, info.platform) : null),
+                  info.gatewayError ? h('span', { className: 'bm-act-chip', style: { color: '#f59e0b' } }, info.gatewayError) : null)
+                : null,
+              h('div', { className: 'bm-sys-grid' },
+                h('div', { className: 'bm-sys-card' },
+                  h('span', { className: 'bm-sys-card-label' }, t('system.cpu')),
+                  h('strong', { className: 'bm-sys-card-val' }, cpu && cpu.usage_percent != null ? `${cpu.usage_percent}%` : '—'),
+                  metricBar(cpu && cpu.usage_percent),
+                  h('span', { className: 'bm-sys-card-sub' }, cpu
+                    ? `${t('system.cores')}: ${cpu.cores}${cpu.load_avg ? ` · ${t('system.load')}: ${cpu.load_avg['1m']} / ${cpu.load_avg['5m']} / ${cpu.load_avg['15m']}` : ''}`
+                    : '—')),
+                h('div', { className: 'bm-sys-card' },
+                  h('span', { className: 'bm-sys-card-label' }, t('system.memory')),
+                  h('strong', { className: 'bm-sys-card-val' }, memPct != null ? `${memPct}%` : '—'),
+                  metricBar(memPct),
+                  h('span', { className: 'bm-sys-card-sub' }, fallbackMemTotal != null
+                    ? `${fallbackMemUsed ?? '—'} / ${fallbackMemTotal} MB (${t('system.available')} ${fallbackMemAvail ?? '—'} MB)`
+                    : (fallbackMemAvail != null ? `${t('system.available')} ${fallbackMemAvail} MB` : '—'))),
+                h('div', { className: 'bm-sys-card' },
+                  h('span', { className: 'bm-sys-card-label' }, `${t('system.disk')}${disk && disk.path ? ` (${disk.path})` : ''}`),
+                  h('strong', { className: 'bm-sys-card-val' }, disk && disk.usage_percent != null ? `${disk.usage_percent}%` : '—'),
+                  metricBar(disk && disk.usage_percent),
+                  h('span', { className: 'bm-sys-card-sub' }, disk && disk.total_gb != null
+                    ? `${disk.used_gb} / ${disk.total_gb} GB (${t('system.free')} ${disk.free_gb} GB)`
+                    : '—')),
+                h('div', { className: 'bm-sys-card' },
+                  h('span', { className: 'bm-sys-card-label' }, t('system.uptime')),
+                  h('strong', { className: 'bm-sys-card-val', style: { fontSize: '16px' } }, up && up.formatted ? up.formatted : '—'),
+                  h('span', { className: 'bm-sys-card-sub' }, up && up.boot_time
+                    ? `${t('system.bootTime')}: ${up.boot_time.replace('T', ' ').slice(0, 19)} UTC`
+                    : (info && info.hostname ? info.hostname : '—')))),
+              disk && Array.isArray(disk.mounts) && disk.mounts.length > 1
+                ? h('div', { className: 'bm-table-wrap', style: { margin: '8px 0 0' } },
+                  h('table', { className: 'bm-table' },
+                    h('thead', null, h('tr', null,
+                      h('th', null, t('system.mountsTitle')),
+                      h('th', null, 'Used / Total'),
+                      h('th', null, 'Free'),
+                      h('th', null, '%'))),
+                    h('tbody', null, disk.mounts.map(m => h('tr', { key: m.path },
+                      h('td', null, m.path),
+                      h('td', null, m.ok ? `${m.used_gb} / ${m.total_gb} GB` : (m.error || 'N/A')),
+                      h('td', null, m.ok ? `${m.free_gb} GB` : '—'),
+                      h('td', null, m.ok ? `${m.usage_percent}%` : '—'))))))
+                : null),
+            h('section', { className: 'bm-form' },
+              h('h2', null, t('system.configTitle')),
+              h('div', { className: 'bm-row' },
+                h('label', { className: 'bm-label' }, t('system.gatewayUrl'),
+                  h('input', {
+                    className: 'bm-input', value: gatewayUrl,
+                    placeholder: t('system.gatewayUrlPlaceholder'),
+                    onChange: e => setGatewayUrl(e.target.value),
+                  })),
+                h('label', { className: 'bm-label' }, t('system.adminToken'),
+                  h('input', {
+                    className: 'bm-input', type: 'password', value: adminToken,
+                    placeholder: t('system.adminTokenPlaceholder'),
+                    onChange: e => setAdminToken(e.target.value),
+                  }))),
+              h('div', { className: 'bm-row' },
+                h('label', { className: 'bm-label' }, t('system.diskPaths'),
+                  h('input', {
+                    className: 'bm-input', value: diskPaths,
+                    placeholder: t('system.diskPathsPlaceholder'),
+                    onChange: e => setDiskPaths(e.target.value),
+                  })),
+                h('label', { className: 'bm-label' }, t('system.refreshInterval'),
+                  h('input', {
+                    className: 'bm-input', type: 'number', min: 1, max: 60, value: refreshIntervalSec,
+                    onChange: e => setRefreshIntervalSec(e.target.value),
+                  }))),
+              h('div', { className: 'bm-row' },
+                h('label', { className: 'bm-label' }, t('system.pushUrl'),
+                  h('input', {
+                    className: 'bm-input', value: pushUrl,
+                    placeholder: t('system.pushUrlPlaceholder'),
+                    onChange: e => setPushUrl(e.target.value),
+                  })),
+                h('label', { className: 'bm-label' }, t('system.pushInterval'),
+                  h('input', {
+                    className: 'bm-input', type: 'number', min: 0, max: 86400, value: pushIntervalSec,
+                    onChange: e => setPushIntervalSec(e.target.value),
+                  }))),
+              h('label', { className: 'bm-label' }, t('system.pushToken'),
+                h('input', {
+                  className: 'bm-input', type: 'password', value: pushToken,
+                  onChange: e => setPushToken(e.target.value),
+                })),
+              h('div', { className: 'bm-form-actions' },
+                h('button', {
+                  type: 'button', className: 'bm-btn primary', disabled: busy,
+                  onClick: () => { void saveConfig() },
+                }, t('system.saveConfig')),
+                h('button', {
+                  type: 'button', className: 'bm-btn', disabled: busy || !pushUrl.trim(),
+                  onClick: () => { void triggerPush() },
+                }, t('system.testPush')))),
+            endpoints
+              ? h('section', { className: 'bm-form' },
+                h('h2', null, t('system.endpointsTitle')),
+                h('div', { className: 'bm-table-wrap', style: { margin: 0 } },
+                  h('table', { className: 'bm-table' },
+                    h('tbody', null,
+                      h('tr', null, h('th', null, 'Plugin Info (GET)'), h('td', null, h('code', null, endpoints.hostInfo))),
+                      endpoints.hostAlias ? h('tr', null, h('th', null, 'Plugin Host Alias (GET)'), h('td', null, h('code', null, endpoints.hostAlias))) : null,
+                      h('tr', null, h('th', null, 'Plugin Config (GET/PUT)'), h('td', null, h('code', null, endpoints.hostConfig))),
+                      h('tr', null, h('th', null, 'Plugin SSE Stream (GET)'), h('td', null, h('code', null, endpoints.hostStream))),
+                      h('tr', null, h('th', null, 'Plugin Push (POST)'), h('td', null, h('code', null, endpoints.hostPush))),
+                      h('tr', null, h('th', null, 'Gateway Info (GET)'), h('td', null, h('code', null, endpoints.gatewayInfo))),
+                      endpoints.gatewayAlias ? h('tr', null, h('th', null, 'Gateway Host Alias (GET)'), h('td', null, h('code', null, endpoints.gatewayAlias))) : null,
+                      h('tr', null, h('th', null, 'Gateway Config (GET/PUT)'), h('td', null, h('code', null, endpoints.gatewayConfig))),
+                      h('tr', null, h('th', null, 'Gateway Stream (GET)'), h('td', null, h('code', null, endpoints.gatewayStream)))))))
+              : null)
+        }
+
         function SettingsView(props) {
           const t = useT()
           const bots = props.bots || []
@@ -4529,6 +5598,7 @@ window.__ModuleLoader__.load({
           const [botRole, setBotRole] = useState(bot ? (bot.role || '') : '')
           const [botInstructions, setBotInstructions] = useState(bot ? (bot.instructions || '') : '')
           const [botColor, setBotColor] = useState(bot ? (bot.color || COLORS[0]) : COLORS[0])
+          const [botAvatar, setBotAvatar] = useState(bot && bot.avatar ? { ...bot.avatar } : defaultClientAvatar(bot ? bot.color : COLORS[0]))
           const [botSectionId, setBotSectionId] = useState(bot ? (bot.sectionId || 'general') : 'general')
           const [botApproval, setBotApproval] = useState(bot ? (bot.approvalPolicy || 'ask') : 'ask')
           const [botToolsAllow, setBotToolsAllow] = useState(bot && bot.tools ? (bot.tools.allow || []).join(', ') : '')
@@ -4548,6 +5618,7 @@ window.__ModuleLoader__.load({
             setBotRole(bot.role || '')
             setBotInstructions(bot.instructions || '')
             setBotColor(bot.color || COLORS[0])
+            setBotAvatar(bot.avatar ? { ...bot.avatar } : defaultClientAvatar(bot.color || COLORS[0]))
             setBotSectionId(bot.sectionId || 'general')
             setBotApproval(bot.approvalPolicy || 'ask')
             setBotToolsAllow((bot.tools && bot.tools.allow ? bot.tools.allow : []).join(', '))
@@ -4603,7 +5674,8 @@ window.__ModuleLoader__.load({
                 name: botName.trim() || bot.name,
                 role: botRole.trim(),
                 instructions: botInstructions,
-                color: botColor,
+                color: (botAvatar && botAvatar.color) || botColor,
+                avatar: botAvatar,
                 sectionId: botSectionId,
                 approvalPolicy: botApproval,
                 model: botModel,
@@ -4747,11 +5819,21 @@ window.__ModuleLoader__.load({
                   h('h2', null, `${t('settings.artifacts')} (${artifacts.length})`),
                   artifacts.length === 0
                     ? h('p', { className: 'bm-muted' }, t('settings.artifactsEmpty'))
-                    : artifacts.map(item => h('div', { key: item.id, className: 'bm-routine' },
-                      h('div', { className: 'bm-routine-text' },
-                        h('span', { className: 'bm-routine-name' }, `${item.title} [${item.type}]`),
-                        h('span', { className: 'bm-routine-meta' }, `${item.roomName || ''}${item.botName ? ` · @${item.botName}` : ''}`),
-                        item.preview ? h('span', { className: 'bm-routine-prompt' }, item.preview) : null)))))
+                    : artifacts.map(item => {
+                      const dlUrl = item.downloadUrl
+                        || `/botmode/api/artifacts/download?id=${encodeURIComponent(item.artifactId || item.id)}${item.botId ? `&botId=${encodeURIComponent(item.botId)}` : ''}`
+                      return h('div', { key: item.id, className: 'bm-routine' },
+                        h('div', { className: 'bm-routine-text' },
+                          h('span', { className: 'bm-routine-name' }, `${item.title} [${item.type}]`),
+                          h('span', { className: 'bm-routine-meta' }, `${item.roomName || ''}${item.botName ? ` · @${item.botName}` : ''}${item.filename ? ` · ${item.filename}` : ''}`),
+                          item.preview ? h('span', { className: 'bm-routine-prompt' }, item.preview) : null),
+                        h('a', {
+                          className: 'bm-btn small',
+                          href: dlUrl,
+                          download: item.filename || '',
+                          style: { textDecoration: 'none', flex: 'none' },
+                        }, t('rich.download')))
+                    })))
             }
 
             if (moduleKey === 'usage') {
@@ -4783,6 +5865,15 @@ window.__ModuleLoader__.load({
                           h('td', null, String(r.messages)),
                           h('td', null, `${Math.round((r.tokensUsed || 0) / 100) / 10}k${r.tokenLimit > 0 ? ` / ${Math.round(r.tokenLimit / 1000)}k` : ''}`)))))))
                   : null)
+            }
+
+            if (moduleKey === 'system') {
+              return h(SystemMonitorPanel, {
+                settings: appSettings,
+                screenGateway: props.screenGateway,
+                initialSystem: props.systemInfo,
+                onCommand: props.onCommand,
+              })
             }
 
             if (moduleKey === 'integrations') {
@@ -4976,11 +6067,16 @@ window.__ModuleLoader__.load({
                     h('input', { className: 'bm-input', value: botName, onChange: e => setBotName(e.target.value) })),
                   h('label', { className: 'bm-label' }, t('form.role'),
                     h('input', { className: 'bm-input', value: botRole, onChange: e => setBotRole(e.target.value) }))),
-                h('div', { className: 'bm-label' }, t('form.color'),
-                  h('div', { className: 'bm-swatches' }, COLORS.map(c => h('button', {
-                    key: c, type: 'button', className: 'bm-swatch', 'data-active': botColor === c,
-                    style: { background: c }, onClick: () => setBotColor(c),
-                  })))),
+                h(BotAvatarEditor, {
+                  mode: 'edit',
+                  useCustom: true,
+                  value: botAvatar,
+                  fallbackColor: botColor,
+                  onChange: (nextAv) => {
+                    setBotAvatar(nextAv)
+                    if (nextAv && nextAv.color) setBotColor(nextAv.color)
+                  },
+                }),
                 h('label', { className: 'bm-label' }, t('form.instructions'),
                   h('textarea', { className: 'bm-area', rows: 4, value: botInstructions, onChange: e => setBotInstructions(e.target.value) })),
                 h('label', { className: 'bm-label' }, 'SOUL.md',
@@ -4999,7 +6095,7 @@ window.__ModuleLoader__.load({
                   h('strong', { style: { fontSize: '14px' } }, t('settings.title')),
                   h('button', { type: 'button', className: 'bm-btn small', onClick: props.onNewBot }, `+ ${t('page.new')}`)),
                 bot
-                  ? h('span', { className: 'bm-avatar bm-avatar-lg', style: { background: bot.color || COLORS[0] } }, initialOf(bot.name))
+                  ? h(BotAvatarBadge, { bot, avatar: botAvatar, size: 'lg', animated: true })
                   : null,
                 bot ? h('strong', { style: { fontSize: '15px' } }, bot.name) : null,
                 bots.length > 1
@@ -5033,6 +6129,7 @@ window.__ModuleLoader__.load({
                   h('span', { className: 'bm-set-row-label' }, t('settings.groupAdvanced')),
                   h('span', { className: 'bm-set-chev' }, advOpen ? '⌄' : '›')),
                 advOpen ? navRow('approval', 'approval', t('settings.approval'), bot ? bot.approvalPolicy : '') : null,
+                advOpen ? navRow('system', 'system', t('settings.system'), props.screenGateway && props.screenGateway.available ? 'ON' : '') : null,
                 advOpen ? navRow('integrations', 'integrations', t('settings.integrations'), String(allTools.length)) : null,
                 advOpen ? navRow('logs', 'logs', t('settings.logs'), '') : null)),
             h('div', { className: 'bm-set-body' },
@@ -5125,12 +6222,26 @@ window.__ModuleLoader__.load({
           const paintQueueRef = useRef(Promise.resolve())
           const moveFlushTimerRef = useRef(null)
           const fallbackPollRef = useRef(null)
+          const nudgePollRef = useRef(null)
           const legacyModeRef = useRef(false)
 
           useEffect(() => {
             if (!modal) return undefined
             let cancelled = false
             legacyModeRef.current = false
+            let es = null
+            let sseFrameSeen = false
+            let fallbackActive = false
+            let pullInFlight = false
+            let pendingNudge = false
+            let lastPreviewEtag = ''
+            let failStreak = 0
+            let earlyPreviewTimer = null
+            let streamWatchdogTimer = null
+            let errorFallbackTimer = null
+            let followUpPollTimer = null
+            let pollAbort = null
+
             const canvas = canvasRef.current
             if (canvas) {
               const ctx = canvas.getContext('2d')
@@ -5142,6 +6253,18 @@ window.__ModuleLoader__.load({
                 ctx.textAlign = 'center'
                 ctx.fillText('Connecting stream…', canvas.width / 2, canvas.height / 2)
               }
+            }
+
+            const closeEventSource = () => {
+              if (es) {
+                try { es.close() } catch (_e) { /* ignore */ }
+                es = null
+              }
+            }
+
+            const clearTimer = (id) => {
+              if (id) window.clearTimeout(id)
+              return null
             }
 
             const decodeBase64Tile = async (b64, mime) => {
@@ -5158,6 +6281,52 @@ window.__ModuleLoader__.load({
                 img.onerror = reject
                 img.src = `data:${mime || 'image/jpeg'};base64,${b64}`
               })
+            }
+
+            const decodeImageBlob = async (blob) => {
+              if (typeof window.createImageBitmap === 'function') {
+                try {
+                  return await window.createImageBitmap(blob)
+                } catch (_e) { /* fallback to Image */ }
+              }
+              return new Promise((resolve, reject) => {
+                const objUrl = URL.createObjectURL(blob)
+                const img = new Image()
+                img.onload = () => {
+                  URL.revokeObjectURL(objUrl)
+                  resolve(img)
+                }
+                img.onerror = (ev) => {
+                  URL.revokeObjectURL(objUrl)
+                  reject(ev)
+                }
+                img.src = objUrl
+              })
+            }
+
+            const paintFullImage = (img) => {
+              const task = async () => {
+                if (cancelled) {
+                  if (img && typeof img.close === 'function') img.close()
+                  return
+                }
+                const node = canvasRef.current
+                if (!node) {
+                  if (img && typeof img.close === 'function') img.close()
+                  return
+                }
+                const w = img.naturalWidth || img.width || 0
+                const h = img.naturalHeight || img.height || 0
+                if (w > 0 && h > 0 && (node.width !== w || node.height !== h)) {
+                  screenSizeRef.current = { w, h }
+                  node.width = w
+                  node.height = h
+                }
+                const ctx = node.getContext('2d')
+                if (ctx) ctx.drawImage(img, 0, 0, node.width, node.height)
+                if (img && typeof img.close === 'function') img.close()
+              }
+              paintQueueRef.current = paintQueueRef.current.then(task, () => undefined)
             }
 
             const applyFramePacket = (pkt) => {
@@ -5192,47 +6361,125 @@ window.__ModuleLoader__.load({
               paintQueueRef.current = paintQueueRef.current.then(task, () => undefined)
             }
 
-            const startFallbackPolling = () => {
-              if (cancelled || fallbackPollRef.current) return
-              const pullOnce = async () => {
-                if (cancelled) return
-                try {
-                  const res = await fetch(
-                    `/botmode/api/screen/preview?botId=${encodeURIComponent(modal.botId)}&cached=1&t=${Date.now()}`,
-                    { credentials: 'include', cache: 'no-store' },
-                  )
-                  if (!cancelled && res.ok) {
-                    const blob = await res.blob()
-                    const bmp = typeof window.createImageBitmap === 'function'
-                      ? await window.createImageBitmap(blob)
-                      : null
-                    const node = canvasRef.current
-                    if (!cancelled && bmp && node) {
-                      if (node.width !== bmp.width || node.height !== bmp.height) {
-                        screenSizeRef.current = { w: bmp.width, h: bmp.height }
-                        node.width = bmp.width
-                        node.height = bmp.height
-                      }
-                      const ctx = node.getContext('2d')
-                      if (ctx) ctx.drawImage(bmp, 0, 0, node.width, node.height)
-                      bmp.close()
-                    }
-                  }
-                } catch (_e) { /* retry */ }
-                if (!cancelled) {
-                  fallbackPollRef.current = window.setTimeout(() => { void pullOnce() }, 350)
+            const pullPreviewOnce = async ({ ignoreEtag = false } = {}) => {
+              if (cancelled || pullInFlight) return false
+              pullInFlight = true
+              const ac = typeof window.AbortController === 'function' ? new window.AbortController() : null
+              pollAbort = ac
+              try {
+                const headers = (!ignoreEtag && lastPreviewEtag) ? { 'If-None-Match': lastPreviewEtag } : undefined
+                const res = await fetch(
+                  `/botmode/api/screen/preview?botId=${encodeURIComponent(modal.botId)}&cached=1&t=${Date.now()}`,
+                  { credentials: 'include', cache: 'no-store', headers, signal: ac ? ac.signal : undefined },
+                )
+                if (cancelled) return false
+                if (res.status === 304) {
+                  failStreak = 0
+                  return true
                 }
+                if (res.ok) {
+                  const etag = res.headers.get('etag') || ''
+                  if (etag) lastPreviewEtag = etag
+                  const blob = await res.blob()
+                  if (cancelled) return false
+                  const img = await decodeImageBlob(blob)
+                  if (cancelled) {
+                    if (img && typeof img.close === 'function') img.close()
+                    return false
+                  }
+                  paintFullImage(img)
+                  failStreak = 0
+                  setErr('')
+                  return true
+                }
+                failStreak += 1
+                if (failStreak >= 3) {
+                  setErr(`画面刷新失败 (HTTP ${res.status})`)
+                }
+                return false
+              } catch (e) {
+                if (!cancelled && (!e || e.name !== 'AbortError')) {
+                  failStreak += 1
+                  if (failStreak >= 3) {
+                    setErr(e && e.message ? e.message : '画面拉取失败，正在重试…')
+                  }
+                }
+                return false
+              } finally {
+                if (pollAbort === ac) pollAbort = null
+                pullInFlight = false
               }
-              fallbackPollRef.current = window.setTimeout(() => { void pullOnce() }, 50)
             }
 
-            // 按需接入 64×64 脏矩形增量帧 SSE 流；关闭弹窗即刻断连，5 秒后远端自动休眠抓屏器
+            const scheduleNextPoll = (delayMs) => {
+              if (cancelled || !fallbackActive) return
+              fallbackPollRef.current = clearTimer(fallbackPollRef.current)
+              fallbackPollRef.current = window.setTimeout(() => {
+                fallbackPollRef.current = null
+                void pollLoop()
+              }, delayMs)
+            }
+
+            const pollLoop = async () => {
+              if (cancelled || !fallbackActive) return
+              const ok = await pullPreviewOnce({ ignoreEtag: false })
+              if (cancelled || !fallbackActive) return
+              if (pendingNudge) {
+                pendingNudge = false
+                scheduleNextPoll(60)
+                return
+              }
+              const nextDelay = ok ? 280 : Math.min(1500, 350 * Math.max(1, failStreak))
+              scheduleNextPoll(nextDelay)
+            }
+
+            const startFallbackPolling = () => {
+              if (cancelled || fallbackActive) return
+              fallbackActive = true
+              // 主动关闭被代理缓冲/假活的 SSE 连接，防止服务端持续抓屏与连接泄漏
+              closeEventSource()
+              earlyPreviewTimer = clearTimer(earlyPreviewTimer)
+              streamWatchdogTimer = clearTimer(streamWatchdogTimer)
+              errorFallbackTimer = clearTimer(errorFallbackTimer)
+              nudgePollRef.current = () => {
+                if (cancelled || !fallbackActive) return
+                followUpPollTimer = clearTimer(followUpPollTimer)
+                if (pullInFlight) {
+                  pendingNudge = true
+                } else {
+                  scheduleNextPoll(60)
+                }
+                followUpPollTimer = window.setTimeout(() => {
+                  followUpPollTimer = null
+                  if (cancelled || !fallbackActive) return
+                  if (pullInFlight) pendingNudge = true
+                  else scheduleNextPoll(0)
+                }, 220)
+              }
+              scheduleNextPoll(20)
+            }
+
+            // 按需接入 64×64 脏矩形增量帧 SSE 流；若经 Cloudflare/反代缓冲导致 SSE 假活无首帧，自动无感降级为 HTTP 条件轮询
             const streamUrl = `/botmode/api/screen/stream?botId=${encodeURIComponent(modal.botId)}&fmt=jpeg`
-            let es = null
             if (typeof window.EventSource === 'function') {
               es = new window.EventSource(streamUrl, { withCredentials: true })
+              // 400ms 未见 SSE 首帧时先拉一帧快照消除黑屏等待；不立即关 SSE，若 SSE 随后通畅自动接管
+              earlyPreviewTimer = window.setTimeout(() => {
+                earlyPreviewTimer = null
+                if (!cancelled && !sseFrameSeen && !fallbackActive) {
+                  void pullPreviewOnce({ ignoreEtag: true })
+                }
+              }, 400)
+              // 1800ms 仍未收到任何 SSE frame（如代理/隧道缓冲 text/event-stream），直接关闭假活 SSE 并切轮询
+              streamWatchdogTimer = window.setTimeout(() => {
+                streamWatchdogTimer = null
+                if (!cancelled && !sseFrameSeen && !fallbackActive) {
+                  startFallbackPolling()
+                }
+              }, 1800)
+
               es.onmessage = (ev) => {
-                if (cancelled || !ev.data) return
+                if (cancelled || !ev.data || fallbackActive) return
                 try {
                   const pkt = JSON.parse(ev.data)
                   if (pkt.type === 'meta' && pkt.w > 0 && pkt.h > 0) {
@@ -5243,14 +6490,25 @@ window.__ModuleLoader__.load({
                       node.height = pkt.h
                     }
                   } else if (pkt.type === 'frame') {
+                    sseFrameSeen = true
+                    earlyPreviewTimer = clearTimer(earlyPreviewTimer)
+                    streamWatchdogTimer = clearTimer(streamWatchdogTimer)
+                    errorFallbackTimer = clearTimer(errorFallbackTimer)
                     applyFramePacket(pkt)
                   }
                 } catch (_e) { /* ignore malformed frame */ }
               }
               es.onerror = () => {
-                if (cancelled) return
-                if (es && es.readyState === window.EventSource.CLOSED) {
+                if (cancelled || fallbackActive) return
+                if (!sseFrameSeen || (es && es.readyState === window.EventSource.CLOSED)) {
                   startFallbackPolling()
+                  return
+                }
+                if (!errorFallbackTimer) {
+                  errorFallbackTimer = window.setTimeout(() => {
+                    errorFallbackTimer = null
+                    if (!cancelled && !fallbackActive) startFallbackPolling()
+                  }, 2500)
                 }
               }
             } else {
@@ -5259,18 +6517,18 @@ window.__ModuleLoader__.load({
 
             return () => {
               cancelled = true
-              if (es) {
-                try { es.close() } catch (_e) { /* ignore */ }
-                es = null
+              nudgePollRef.current = null
+              closeEventSource()
+              if (pollAbort) {
+                try { pollAbort.abort() } catch (_e) { /* ignore */ }
+                pollAbort = null
               }
-              if (fallbackPollRef.current) {
-                window.clearTimeout(fallbackPollRef.current)
-                fallbackPollRef.current = null
-              }
-              if (moveFlushTimerRef.current) {
-                window.clearTimeout(moveFlushTimerRef.current)
-                moveFlushTimerRef.current = null
-              }
+              earlyPreviewTimer = clearTimer(earlyPreviewTimer)
+              streamWatchdogTimer = clearTimer(streamWatchdogTimer)
+              errorFallbackTimer = clearTimer(errorFallbackTimer)
+              followUpPollTimer = clearTimer(followUpPollTimer)
+              fallbackPollRef.current = clearTimer(fallbackPollRef.current)
+              moveFlushTimerRef.current = clearTimer(moveFlushTimerRef.current)
             }
           }, [modal && modal.botId])
 
@@ -5303,6 +6561,8 @@ window.__ModuleLoader__.load({
                   return
                 }
                 setErr(msg)
+              } finally {
+                if (nudgePollRef.current) nudgePollRef.current()
               }
             }
             inputQueueRef.current = inputQueueRef.current.then(task, task)
@@ -5540,7 +6800,7 @@ window.__ModuleLoader__.load({
 
         function RightScreenPanel(props) {
           const t = useT()
-          const { bot, screen, screenGateway, gatewayAvailable, routines, onCommand, onOpenTakeover, onRefreshHost } = props
+          const { bot, screen, screenGateway, systemInfo, gatewayAvailable, routines, onCommand, onOpenTakeover, onRefreshHost, onOpenSystemSettings } = props
           const [railTab, setRailTab] = useState('tasks')
           const [shotTick, setShotTick] = useState(0)
           const [busy, setBusy] = useState(false)
@@ -5738,13 +6998,83 @@ window.__ModuleLoader__.load({
                   : null,
                 !err && props.hostScreenSupported && !gatewayAvailable && gatewayErr && !gatewayStarting
                   ? h('div', { className: 'bm-muted', style: { marginTop: '6px', fontSize: '11px', lineHeight: '1.35', wordBreak: 'break-word' } }, gatewayErr)
-                  : null),
+                  : null,
+                (() => {
+                  const host = (screenGateway && screenGateway.host) || systemInfo || null
+                  if (!props.hostScreenSupported) return null
+                  const cpu = host && host.cpu
+                  const mem = host && host.memory
+                  const disk = host && host.disk
+                  const up = host && host.uptime
+                  const memTotal = mem && mem.total_mb != null ? mem.total_mb : (host && host.limit_mb != null ? host.limit_mb : null)
+                  const memAvail = mem && mem.available_mb != null ? mem.available_mb : (host && host.available_mb != null ? host.available_mb : null)
+                  const memUsed = mem && mem.used_mb != null
+                    ? mem.used_mb
+                    : (memTotal != null && memAvail != null ? Math.max(0, memTotal - memAvail) : null)
+                  const memPct = mem && mem.usage_percent != null
+                    ? mem.usage_percent
+                    : (memTotal != null && memTotal > 0 && memUsed != null ? Math.round((memUsed / memTotal) * 1000) / 10 : null)
+                  const cpuPct = cpu && cpu.usage_percent != null ? cpu.usage_percent : null
+                  const diskPct = disk && disk.usage_percent != null ? disk.usage_percent : null
+                  const hasMetrics = cpuPct != null || memPct != null || diskPct != null
+                  const isFallback = Boolean(host && (host.degraded || host.source === 'host-fallback'))
+                  const miniBar = (pct) => {
+                    const num = Number(pct)
+                    const clamped = Number.isFinite(num) ? Math.max(0, Math.min(100, num)) : 0
+                    return h('div', { className: 'bm-sys-bar' },
+                      h('div', {
+                        className: 'bm-sys-bar-fill',
+                        'data-warn': clamped >= 75 && clamped < 90,
+                        'data-crit': clamped >= 90,
+                        style: { width: `${clamped}%` },
+                      }))
+                  }
+                  const statusChip = gatewayAvailable
+                    ? (host && host.cgroup === false ? t('system.cgroupOff') : t('system.online'))
+                    : (isFallback ? t('system.fallbackMode') : t('system.waitingGateway'))
+                  return h('div', { className: 'bm-host-mini' },
+                    h('div', { className: 'bm-host-mini-head' },
+                      h('span', { className: 'bm-host-mini-title', title: (host && host.hostname) || '' },
+                        `${t('system.hostPanelTitle')}${host && host.hostname ? ` · ${host.hostname}` : ''}`),
+                      onOpenSystemSettings
+                        ? h('button', {
+                          type: 'button',
+                          className: 'bm-btn xs',
+                          onClick: onOpenSystemSettings,
+                        }, t('system.openDetails'))
+                        : null),
+                    h('div', { className: 'bm-host-mini-meta' },
+                      h('span', { className: 'bm-act-chip' }, statusChip),
+                      up && up.formatted ? h('span', null, `${t('system.uptime')} ${up.formatted}`) : null),
+                    hasMetrics
+                      ? h('div', { className: 'bm-host-mini-rows' },
+                        h('div', { className: 'bm-host-mini-row' },
+                          h('div', { className: 'bm-host-mini-row-top' },
+                            h('span', null, `${t('system.cpu')}${cpu && cpu.cores ? ` (${cpu.cores}C)` : ''}`),
+                            h('strong', null, cpuPct != null ? `${cpuPct}%` : '—')),
+                          miniBar(cpuPct)),
+                        h('div', { className: 'bm-host-mini-row' },
+                          h('div', { className: 'bm-host-mini-row-top' },
+                            h('span', null, t('system.memory')),
+                            h('strong', null, memPct != null
+                              ? `${memPct}%${memTotal != null ? ` · ${memUsed}/${memTotal}MB` : ''}`
+                              : (memAvail != null ? `${t('system.available')} ${memAvail}MB` : '—'))),
+                          miniBar(memPct)),
+                        h('div', { className: 'bm-host-mini-row' },
+                          h('div', { className: 'bm-host-mini-row-top' },
+                            h('span', null, `${t('system.disk')}${disk && disk.path ? ` (${disk.path})` : ''}`),
+                            h('strong', null, diskPct != null
+                              ? `${diskPct}%${disk && disk.total_gb != null ? ` · ${disk.used_gb}/${disk.total_gb}G` : ''}`
+                              : '—')),
+                          miniBar(diskPct)))
+                      : h('div', { className: 'bm-muted', style: { fontSize: '10.5px' } }, statusChip))
+                })()),
 
               // Bottom section: Scheduled Tasks or Screen Files
               railTab === 'tasks'
                 ? h('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: '10px' } },
                   h('div', { className: 'bm-rail-bothead' },
-                    h('span', { className: 'bm-avatar bm-avatar-sm', style: { background: bot.color || COLORS[0] } }, initialOf(bot.name)),
+                    h(BotAvatarBadge, { bot, size: 'sm' }),
                     h('div', { className: 'bm-rail-botmeta' },
                       h('div', { className: 'bm-rail-botname' },
                         h('span', null, bot.name),
@@ -5948,7 +7278,7 @@ window.__ModuleLoader__.load({
               key: bot.id, type: 'button', className: 'bm-frow', 'data-active': active,
               onClick: () => openBotEntry(bot),
             },
-              h('span', { className: 'bm-avatar bm-avatar-sm', style: { background: bot.color || COLORS[0] } }, initialOf(bot.name)),
+              h(BotAvatarBadge, { bot, size: 'sm' }),
               h('span', { className: 'bm-frow-text' },
                 h('span', { className: 'bm-frow-top' },
                   h('span', { className: 'bm-frow-name' }, bot.name),
@@ -6079,7 +7409,8 @@ window.__ModuleLoader__.load({
                   initial: form.mode === 'create'
                     ? {
                       name: '', role: '', instructions: '',
-                      color: COLORS[(bots.length + 1) % COLORS.length],
+                      color: '',
+                      avatar: null,
                       sectionId: sections[0] ? sections[0].id : 'general',
                       model: { provider: '', model: '', reasoningEffort: '' },
                       tools: { allow: [], deny: [] },
@@ -6090,6 +7421,7 @@ window.__ModuleLoader__.load({
                       role: form.bot.role || '',
                       instructions: form.bot.instructions || '',
                       color: form.bot.color || COLORS[0],
+                      avatar: form.bot.avatar ? { ...form.bot.avatar } : defaultClientAvatar(form.bot.color),
                       sectionId: form.bot.sectionId || 'general',
                       model: form.bot.model || { provider: '', model: '', reasoningEffort: '' },
                       tools: form.bot.tools || { allow: [], deny: [] },
@@ -6114,6 +7446,8 @@ window.__ModuleLoader__.load({
                 artifacts: artifactsList,
                 tools: hostTools,
                 runtime: runtimeInfo,
+                screenGateway,
+                systemInfo: (hostSnapshot.state && hostSnapshot.state.system) || null,
                 onReloadModels: (force) => { void loadModels(force) },
                 onCommand: hostCommand,
                 onNewBot: () => setForm({ mode: 'create' }),
@@ -6146,11 +7480,13 @@ window.__ModuleLoader__.load({
                       bot: activeBot,
                       screen: screensMap[activeBot.id] || null,
                       screenGateway,
+                      systemInfo: (hostSnapshot.state && hostSnapshot.state.system) || null,
                       hostScreenSupported: Boolean(hostSnapshot.state && 'screenGateway' in hostSnapshot.state),
                       gatewayAvailable: screenGateway.available === true,
                       routines: routines.filter(routine => routine.botId === activeBot.id),
                       onCommand: hostCommand,
                       onRefreshHost: () => { void refreshHost() },
+                      onOpenSystemSettings: () => openSettingsView('system'),
                       onOpenTakeover: (b) => openScreenTakeover(b, screenHelps.find(s => s.botId === b.id) || null),
                     })
                     : null)

@@ -53,9 +53,11 @@ const SCREEN_TOOLS = [
   'screen_windows',
   'screen_request_help',
 ]
+const SYSTEM_TOOLS = ['system_info']
+const ARTIFACT_TOOLS = ['publish_artifact']
 const ROOM_COORDINATION_TOOLS = ['claim_subtask', 'room_task_progress', 'room_finish_task']
-const DEFAULT_PRIMARY_TOOLS = ['message_agent', 'bot_team', ...MEMORY_TOOLS, ...SCREEN_TOOLS]
-const DEFAULT_ROOM_TOOLS = ['bot_team', ...ROOM_COORDINATION_TOOLS, ...MEMORY_TOOLS, ...SCREEN_TOOLS]
+const DEFAULT_PRIMARY_TOOLS = ['message_agent', 'bot_team', ...MEMORY_TOOLS, ...SCREEN_TOOLS, ...SYSTEM_TOOLS, ...ARTIFACT_TOOLS]
+const DEFAULT_ROOM_TOOLS = ['bot_team', ...ROOM_COORDINATION_TOOLS, ...MEMORY_TOOLS, ...SCREEN_TOOLS, ...SYSTEM_TOOLS, ...ARTIFACT_TOOLS]
 
 const sessionIdOf = (agent) => {
   try {
@@ -84,16 +86,33 @@ export function apply(ctx) {
   const rooms = new Rooms(store, dispatcher, logger, approvals)
   const routines = new Routines(ctx, store, dispatcher, logger)
   const api = new BotApi({ ctx, store, dispatcher, rooms, routines, approvals, memory, screen, logger })
+  dispatcher.setArtifactHandler(event => api.syncReplyArtifacts(event))
+  rooms.setArtifactHandler(event => api.syncDeliverables(event))
 
   const ready = store.load()
     .then(async () => {
       await memory.ensureReady()
+      // Apply saved gateway / system monitoring settings before warming up the gateway.
+      const sysCfg = store.state?.settings?.system
+      if (sysCfg && typeof sysCfg === 'object') {
+        screen.configure({
+          gatewayUrl: sysCfg.gatewayUrl || '',
+          adminToken: sysCfg.adminToken || '',
+        })
+      }
       // Ensure existing Bot workspaces pick up built-in skills (e.g. `room-completion/SKILL.md`) on startup.
       for (const bot of store.state.bots) {
         if (bot.dir) await syncBotFiles(store, bot, store.state).catch(() => undefined)
       }
       // Best-effort non-blocking warm-up so local BotScreen gateway starts automatically on plugin load.
-      void screen.warmUp().catch(() => undefined)
+      void screen.warmUp()
+        .then((res) => {
+          if (res?.available && sysCfg && typeof sysCfg === 'object') {
+            return screen.updateSystemConfig(sysCfg).catch(() => undefined)
+          }
+          return undefined
+        })
+        .catch(() => undefined)
     })
     .catch((error) => {
       logger?.warn?.(`botmode: startup initialization warning: ${String(error)}`)
@@ -190,6 +209,38 @@ export function apply(ctx) {
     configureMemory: (patch) => memory.configure(patch),
     installMemoryPlugin: (source, options) => memory.install(source, options),
     uninstallMemoryPlugin: (providerId) => memory.uninstall(providerId),
+    systemInfo: async (options) => {
+      await ready
+      return api.getSystemInfo(options)
+    },
+    getSystemConfig: async () => {
+      await ready
+      return api.getSystemConfig()
+    },
+    configureSystem: async (patch) => {
+      await ready
+      return api.saveSystemConfig(patch)
+    },
+    pushSystemInfo: async (options) => {
+      await ready
+      return api.pushSystemInfo(options)
+    },
+    listArtifacts: async (options) => {
+      await ready
+      return api.listArtifacts(options)
+    },
+    publishArtifact: async (payload) => {
+      await ready
+      return api.publishArtifact(payload)
+    },
+    downloadArtifact: async (options) => {
+      await ready
+      return api.downloadArtifact(options)
+    },
+    deleteArtifact: async (options) => {
+      await ready
+      return api.deleteArtifact(options)
+    },
   }
   ctx.effect(() => ctx.reflect.provide('bots', botsService), 'botmode: ctx.bots service')
 
@@ -967,11 +1018,84 @@ export function apply(ctx) {
     },
   }), 'botmode: screen_request_help tool')
 
+  // Host system telemetry tool (disk, memory, CPU, uptime) via BotScreen gateway.
+  ctx.effect(() => ctx.tools.register({
+    name: 'system_info',
+    description: 'Fetch host system metrics (disk usage, memory usage, CPU usage, and system uptime) transmitted through the BotScreen gateway.',
+    parameters: {
+      type: 'object',
+      properties: {
+        disk_path: {
+          type: 'string',
+          description: 'Optional comma-separated disk mount path(s) to inspect (defaults to configured disk paths, e.g. "/").',
+        },
+      },
+      additionalProperties: false,
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(args) {
+      await ready
+      const diskPath = typeof args?.disk_path === 'string' && args.disk_path.trim() !== ''
+        ? args.disk_path.trim()
+        : undefined
+      const res = await api.getSystemInfo({ diskPaths: diskPath })
+      return JSON.stringify(res)
+    },
+  }), 'botmode: system_info tool')
+
+  // Agent reply artifact gateway publish tool: uploads file or text artifact to BotScreen gateway and returns download URLs.
+  ctx.effect(() => ctx.tools.register({
+    name: 'publish_artifact',
+    description: 'Publish an Agent reply artifact (a workspace file path or inline text/HTML/JSON/Markdown/Base64 content) to the BotScreen gateway and return downloadable URLs.',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Human-readable artifact title.' },
+        filename: { type: 'string', description: 'Optional download filename (e.g. report.html, output.csv).' },
+        type: { type: 'string', description: 'Artifact type: html, markdown, json, code, text, file, etc.' },
+        kind: { type: 'string', enum: ['artifact', 'deliverable', 'file', 'reply'], description: 'Artifact category.' },
+        content: { type: 'string', description: 'Inline artifact content (UTF-8 text or base64 when encoding="base64").' },
+        encoding: { type: 'string', enum: ['utf-8', 'base64'], description: 'Encoding for content (default utf-8).' },
+        file_path: { type: 'string', description: 'Optional workspace file path (relative to Bot/Room workspace or absolute inside it) to upload.' },
+        mime_type: { type: 'string', description: 'Optional explicit MIME type.' },
+      },
+      additionalProperties: false,
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(args, exec) {
+      await ready
+      const caller = await resolveCallerBot(exec)
+      const res = await api.publishArtifact({
+        botId: caller?.bot?.id || '',
+        roomId: caller?.roomId || '',
+        title: args?.title,
+        filename: args?.filename,
+        type: args?.type,
+        kind: args?.kind,
+        content: args?.content,
+        encoding: args?.encoding,
+        filePath: args?.file_path,
+        mimeType: args?.mime_type,
+      })
+      return JSON.stringify({
+        ok: true,
+        gatewaySynced: res.gatewaySynced,
+        artifact: res.artifact,
+      })
+    },
+  }), 'botmode: publish_artifact tool')
+
   // Human command for headless use and troubleshooting.
   ctx.effect(() => ctx.commands.register({
     name: 'botmode',
-    description: 'Inspect or drive Bot mode from a Session: status, roster, dispatch, room, routine, memory.',
-    input: { hint: 'status | roster | dispatch <bot> <text> | room <roomId> <text> | routine <id> | memory <status|list|use|test|install|uninstall>' },
+    description: 'Inspect or drive Bot mode from a Session: status, roster, dispatch, room, routine, memory, system, artifacts.',
+    input: { hint: 'status | roster | dispatch <bot> <text> | room <roomId> <text> | routine <id> | memory <status|list|use|test|install|uninstall> | system [info|config|push [url]] | artifacts [list|delete <id>]' },
     handler: async ({ rawInput }) => {
       await ready
       const input = String(rawInput ?? '').trim()
@@ -1060,6 +1184,39 @@ export function apply(ctx) {
           return { kind: 'success', text: `Uninstalled memory plugin: ${arg}` }
         }
         return { kind: 'error', text: 'Use: memory <status|list|use|test|install|uninstall>' }
+      }
+      if (action === 'system') {
+        const parts = rest.split(/\s+/).filter(Boolean)
+        const sub = (parts[0] || 'info').toLowerCase()
+        const arg = parts.slice(1).join(' ').trim()
+        if (sub === 'info' || sub === 'status') {
+          const data = await api.getSystemInfo({ diskPaths: arg || undefined })
+          return { kind: 'success', text: JSON.stringify(data, null, 2) }
+        }
+        if (sub === 'config') {
+          const data = await api.getSystemConfig()
+          return { kind: 'success', text: JSON.stringify(data, null, 2) }
+        }
+        if (sub === 'push') {
+          const data = await api.pushSystemInfo(arg ? { url: arg } : {})
+          return { kind: data?.ok !== false ? 'success' : 'error', text: JSON.stringify(data, null, 2) }
+        }
+        return { kind: 'error', text: 'Use: system <info [disk_path]|config|push [url]>' }
+      }
+      if (action === 'artifacts' || action === 'artifact') {
+        const parts = rest.split(/\s+/).filter(Boolean)
+        const sub = (parts[0] || 'list').toLowerCase()
+        const arg = parts.slice(1).join(' ').trim()
+        if (sub === 'list') {
+          const data = await api.listArtifacts({ botId: arg || '' })
+          return { kind: 'success', text: JSON.stringify(data, null, 2) }
+        }
+        if (sub === 'delete' || sub === 'rm') {
+          if (!arg) return { kind: 'error', text: 'Use: artifacts delete <artifactId>' }
+          const data = await api.deleteArtifact({ artifactId: arg })
+          return { kind: 'success', text: JSON.stringify(data, null, 2) }
+        }
+        return { kind: 'error', text: 'Use: artifacts <list [botId]|delete <artifactId>>' }
       }
       if (action === 'scaffold') {
         await syncTeamFiles(store, store.state)

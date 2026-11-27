@@ -62,10 +62,15 @@ export class Dispatcher {
     this.logger = logger
     this.onAgent = onAgent
     this.memory = memory
+    this.onReplyArtifacts = null
   }
 
   setMemoryManager(memory) {
     this.memory = memory
+  }
+
+  setArtifactHandler(handler) {
+    this.onReplyArtifacts = typeof handler === 'function' ? handler : null
   }
 
   /** Called by Rooms when a room starts or stops driving a discussion. */
@@ -371,6 +376,16 @@ export class Dispatcher {
         }
         stored.lastError = ''
       })
+      if (this.onReplyArtifacts && typeof reply === 'string' && reply.includes('<artifact')) {
+        void Promise.resolve(this.onReplyArtifacts({
+          bot,
+          text: reply,
+          roomId: options.roomId ?? '',
+          messageId: message.id,
+          sessionId: session.id,
+          at: new Date().toISOString(),
+        })).catch(() => undefined)
+      }
       this.#last.set(botId, result)
       return result
     } catch (error) {

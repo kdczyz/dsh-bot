@@ -11,6 +11,7 @@
 import { readFile, writeFile, appendFile, mkdir, rename, rm, readdir, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { deterministicAvatar, normalizeAvatar } from './avatar.js'
 
 /** True ONLY when `candidatePath` resolves strictly inside `parentDir` (never equal, never sibling/escape). */
 export const isStrictSubpath = (parentDir, candidatePath) => {
@@ -35,6 +36,45 @@ export const ROOM_STATUSES = new Set([
 ])
 
 export const newId = (prefix) => `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 10)}`
+
+export const normalizeDiskPaths = (value, fallback = ['/']) => {
+  const raw = Array.isArray(value)
+    ? value
+    : (typeof value === 'string' ? value.split(/[\n,]/) : [])
+  const out = []
+  for (const item of raw) {
+    const p = String(item ?? '').trim()
+    if (p && !out.includes(p)) out.push(p)
+  }
+  return out.length > 0 ? out.slice(0, 16) : [...fallback]
+}
+
+export const normalizeSystemSettings = (input, base = defaultSettingsState().system) => {
+  const sys = input && typeof input === 'object' ? input : {}
+  const cleanUrl = (val, fallback = '') => {
+    if (typeof val !== 'string') return fallback
+    const trimmed = val.trim().replace(/\/+$/, '')
+    if (trimmed === '') return ''
+    if (/^https?:\/\//i.test(trimmed)) return trimmed
+    return fallback
+  }
+  return {
+    enabled: sys.enabled !== undefined ? sys.enabled !== false : base.enabled,
+    gatewayUrl: sys.gatewayUrl !== undefined ? cleanUrl(sys.gatewayUrl, base.gatewayUrl) : base.gatewayUrl,
+    adminToken: typeof sys.adminToken === 'string' ? sys.adminToken.trim() : base.adminToken,
+    diskPaths: sys.diskPaths !== undefined
+      ? normalizeDiskPaths(sys.diskPaths, base.diskPaths)
+      : (sys.diskPath !== undefined ? normalizeDiskPaths(sys.diskPath, base.diskPaths) : [...base.diskPaths]),
+    refreshIntervalSec: sys.refreshIntervalSec !== undefined
+      ? clampInt(sys.refreshIntervalSec, 1, 60, base.refreshIntervalSec)
+      : base.refreshIntervalSec,
+    pushUrl: sys.pushUrl !== undefined ? cleanUrl(sys.pushUrl, base.pushUrl) : base.pushUrl,
+    pushIntervalSec: sys.pushIntervalSec !== undefined
+      ? clampInt(sys.pushIntervalSec, 0, 86400, base.pushIntervalSec)
+      : base.pushIntervalSec,
+    pushToken: typeof sys.pushToken === 'string' ? sys.pushToken.trim() : base.pushToken,
+  }
+}
 
 export const clampInt = (value, min, max, fallback) => {
   const num = Number(value)
@@ -84,6 +124,16 @@ export const defaultSettingsState = () => ({
     autoProgressReview: true,
     showActivityStrip: false,
   },
+  system: {
+    enabled: true,
+    gatewayUrl: '',         // 空表示使用 BOTSCREEN_GATEWAY 或默认 http://127.0.0.1:6200
+    adminToken: '',         // 空表示使用 BOTSCREEN_ADMIN_TOKEN
+    diskPaths: ['/'],       // 采集磁盘占用的挂载点列表
+    refreshIntervalSec: 5,  // 监控流/界面刷新周期（秒）
+    pushUrl: '',            // 可选：通过网关主动上报的目标接口 URL
+    pushIntervalSec: 0,     // 0 = 关闭定时主动上报；>0 为秒级周期
+    pushToken: '',          // 可选：主动上报鉴权 Token
+  },
 })
 
 export const emptyState = () => ({
@@ -93,6 +143,7 @@ export const emptyState = () => ({
   bots: [],
   rooms: [],
   routines: [],
+  artifacts: [],
   memory: defaultMemoryState(),
   settings: defaultSettingsState(),
 })
@@ -194,8 +245,39 @@ export class BotStore {
       bots: bots.map(bot => this.#normalizeBot(bot)),
       rooms: Array.isArray(stored.rooms) ? stored.rooms.map(room => this.#normalizeRoom(room)).filter(Boolean) : [],
       routines: Array.isArray(stored.routines) ? stored.routines.map(routine => this.#normalizeRoutine(routine)).filter(Boolean) : [],
+      artifacts: Array.isArray(stored.artifacts)
+        ? stored.artifacts.map(item => this.#normalizeArtifact(item)).filter(Boolean).slice(-200)
+        : [],
       memory: this.#normalizeMemory(stored.memory),
       settings: this.#normalizeSettings(stored.settings),
+    }
+  }
+
+  #normalizeArtifact(item) {
+    if (!item || typeof item !== 'object') return undefined
+    const id = typeof item.id === 'string' && item.id.trim() !== ''
+      ? item.id.trim()
+      : (typeof item.artifactId === 'string' ? item.artifactId.trim() : '')
+    if (!id) return undefined
+    return {
+      id,
+      artifactId: id,
+      kind: typeof item.kind === 'string' && item.kind.trim() !== '' ? item.kind.trim() : 'artifact',
+      title: typeof item.title === 'string' && item.title.trim() !== '' ? item.title.trim() : id,
+      type: typeof item.type === 'string' && item.type.trim() !== '' ? item.type.trim() : 'file',
+      filename: typeof item.filename === 'string' ? item.filename : '',
+      mimeType: typeof item.mimeType === 'string' ? item.mimeType : '',
+      size: Number.isFinite(Number(item.size)) ? Math.max(0, Math.trunc(Number(item.size))) : 0,
+      sha256: typeof item.sha256 === 'string' ? item.sha256 : '',
+      botId: typeof item.botId === 'string' ? item.botId : '',
+      botName: typeof item.botName === 'string' ? item.botName : '',
+      roomId: typeof item.roomId === 'string' ? item.roomId : '',
+      roomName: typeof item.roomName === 'string' ? item.roomName : '',
+      messageId: typeof item.messageId === 'string' ? item.messageId : '',
+      sourcePath: typeof item.sourcePath === 'string' ? item.sourcePath : '',
+      preview: typeof item.preview === 'string' ? item.preview.slice(0, 400) : '',
+      gatewaySynced: item.gatewaySynced === true,
+      at: typeof item.at === 'string' && item.at !== '' ? item.at : new Date().toISOString(),
     }
   }
 
@@ -221,6 +303,7 @@ export class BotStore {
         autoProgressReview: gc.autoProgressReview !== false,
         showActivityStrip: gc.showActivityStrip === true,
       },
+      system: normalizeSystemSettings(settings.system, defaults.system),
     }
   }
 
@@ -255,12 +338,18 @@ export class BotStore {
   }
 
   #normalizeBot(bot) {
+    const baseColor = typeof bot.color === 'string' && bot.color !== '' ? bot.color : '#4d6bfe'
+    const fallbackAvatar = deterministicAvatar(bot.id, baseColor)
+    const avatar = bot.avatar && typeof bot.avatar === 'object'
+      ? normalizeAvatar(bot.avatar, { fallback: fallbackAvatar, strict: false })
+      : fallbackAvatar
     return {
       id: bot.id,
       name: typeof bot.name === 'string' && bot.name !== '' ? bot.name : bot.id,
       role: typeof bot.role === 'string' ? bot.role : '',
       instructions: typeof bot.instructions === 'string' ? bot.instructions : '',
-      color: typeof bot.color === 'string' && bot.color !== '' ? bot.color : '#4d6bfe',
+      color: baseColor,
+      avatar,
       sectionId: 'general',
       hidden: bot.hidden === true,
       pinned: bot.pinned === true,

@@ -187,6 +187,8 @@ export const syncTeamFiles = async (store, state) => {
     id: bot.id,
     name: bot.name,
     role: bot.role,
+    color: bot.color,
+    avatar: bot.avatar,
     sectionId: bot.sectionId,
     sessionId: bot.sessionId,
     dir: bot.dir,

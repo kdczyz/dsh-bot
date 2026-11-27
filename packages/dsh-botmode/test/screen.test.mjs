@@ -22,6 +22,14 @@ function startMockGateway() {
   const stateByBot = new Map()
   const requests = []
   let locked423 = false
+  let systemConfig = {
+    enabled: true,
+    disk_paths: ['/'],
+    stream_interval_sec: 2.0,
+    push_url: '',
+    push_interval_sec: 0,
+    has_push_token: false,
+  }
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1')
@@ -40,13 +48,72 @@ function startMockGateway() {
     if (url.pathname === '/healthz') {
       return send(200, {
         ok: true,
-        api_version: 2,
-        capabilities: ['ensure', 'tile_stream', 'xtest_input', 'ratio_coords', 'human_pause'],
+        api_version: 4,
+        capabilities: ['ensure', 'tile_stream', 'xtest_input', 'ratio_coords', 'human_pause', 'system_info', 'host_system'],
         bots: stateByBot.size,
       })
     }
     if (url.pathname === '/api/screens') {
       return send(200, { screens: [...stateByBot.values()], host: { available_mb: 8192 } })
+    }
+    if (
+      url.pathname === '/api/system'
+      || url.pathname === '/api/system/info'
+      || url.pathname === '/api/host'
+      || url.pathname === '/api/host/info'
+      || url.pathname === '/api/host/system'
+      || url.pathname === '/api/sysinfo'
+      || url.pathname === '/api/node/info'
+    ) {
+      const qDisk = url.searchParams.get('disk_path')
+      const paths = qDisk ? qDisk.split(',').filter(Boolean) : systemConfig.disk_paths
+      return send(200, {
+        ok: true,
+        source: 'gateway',
+        hostname: 'mock-host',
+        os: 'Linux',
+        arch: 'x86_64',
+        cgroup: false,
+        available_mb: 8192,
+        limit_mb: 16384,
+        min_free_mb: 1024,
+        blocker: null,
+        cpu: { usage_percent: 23.4, cores: 4, load_avg: { '1m': 0.5, '5m': 0.4, '15m': 0.3 } },
+        memory: { total_mb: 16384, used_mb: 8192, available_mb: 8192, usage_percent: 50.0 },
+        disk: {
+          path: paths[0] || '/',
+          total_gb: 200,
+          used_gb: 80,
+          free_gb: 120,
+          usage_percent: 40.0,
+          mounts: paths.map(p => ({ path: p, total_gb: 200, used_gb: 80, free_gb: 120, usage_percent: 40.0, ok: true })),
+        },
+        uptime: { seconds: 90061, days: 1, hours: 1, minutes: 1, secs: 1, formatted: '1天 1小时 1分', formatted_en: '1d 1h 1m' },
+        config: systemConfig,
+      })
+    }
+    if (url.pathname === '/api/system/config' && req.method === 'GET') {
+      return send(200, { ok: true, config: systemConfig })
+    }
+    if (url.pathname === '/api/system/config' && (req.method === 'PUT' || req.method === 'POST')) {
+      const patch = bodyText ? JSON.parse(bodyText) : {}
+      if (Array.isArray(patch.disk_paths)) systemConfig.disk_paths = patch.disk_paths
+      if (typeof patch.push_url === 'string') systemConfig.push_url = patch.push_url
+      if (patch.push_interval_sec !== undefined) systemConfig.push_interval_sec = Number(patch.push_interval_sec)
+      if (patch.stream_interval_sec !== undefined) systemConfig.stream_interval_sec = Number(patch.stream_interval_sec)
+      if (typeof patch.push_token === 'string') systemConfig.has_push_token = patch.push_token.length > 0
+      return send(200, { ok: true, config: systemConfig })
+    }
+    if (url.pathname === '/api/system/push' && req.method === 'POST') {
+      const body = bodyText ? JSON.parse(bodyText) : {}
+      return send(200, { ok: true, url: body.url || systemConfig.push_url, status_code: 200, latency_ms: 4.2 })
+    }
+    if (url.pathname === '/api/system/stream' && req.method === 'GET') {
+      res.statusCode = 200
+      res.setHeader('content-type', 'text/event-stream')
+      res.write(`data: ${JSON.stringify({ type: 'system', source: 'gateway', cpu: { usage_percent: 19.5, cores: 4 }, uptime: { seconds: 90062, formatted: '1天 1小时 1分' } })}\n\n`)
+      res.end()
+      return
     }
 
     const ensureMatch = /^\/api\/screens\/([^/]+)\/ensure$/.exec(url.pathname)
@@ -99,10 +166,17 @@ function startMockGateway() {
 
     const previewMatch = /^\/api\/screens\/([^/]+)\/preview$/.exec(url.pathname)
     if (previewMatch) {
-      res.statusCode = 200
-      res.setHeader('content-type', 'image/jpeg')
+      const etag = '"mock-preview-etag-1"'
+      res.setHeader('etag', etag)
       res.setHeader('x-screen-width', '1280')
       res.setHeader('x-screen-height', '720')
+      if (req.headers['if-none-match'] === etag) {
+        res.statusCode = 304
+        res.end()
+        return
+      }
+      res.statusCode = 200
+      res.setHeader('content-type', 'image/jpeg')
       res.end(tinyJpeg)
       return
     }
@@ -303,6 +377,16 @@ try {
   assert.equal(prevResp.status, 200)
   assert.equal(prevResp.headers['x-screen-width'], '1280')
   assert.equal(prevResp.headers['x-screen-height'], '720')
+  assert.equal(prevResp.headers.etag, '"mock-preview-etag-1"')
+
+  const prev304Resp = await runApiReq({
+    method: 'GET',
+    url: `/botmode/api/screen/preview?botId=${encodeURIComponent(bot.id)}&cached=1`,
+    headers: { 'if-none-match': prevResp.headers.etag },
+  })
+  assert.equal(prev304Resp.status, 304)
+  assert.equal(prev304Resp.headers.etag, '"mock-preview-etag-1"')
+  assert.equal(prev304Resp.body.length, 0)
 
   const streamResp = await runApiReq({
     method: 'GET',
@@ -311,6 +395,94 @@ try {
   assert.equal(streamResp.status, 200)
   assert.ok(streamResp.headers['content-type'].includes('text/event-stream'))
   assert.ok(streamResp.body.toString('utf8').includes('"type":"frame"'))
+
+  // 4c. System info (disk, memory, CPU, uptime) via gateway & configuration interface
+  const sysInfoResp = await runApiReq({ method: 'GET', url: '/botmode/api/system' })
+  assert.equal(sysInfoResp.status, 200)
+  const sysInfoJson = JSON.parse(sysInfoResp.body.toString('utf8'))
+  assert.equal(sysInfoJson.ok, true)
+  assert.equal(sysInfoJson.system.available, true)
+  assert.equal(sysInfoJson.system.source, 'gateway')
+  assert.equal(sysInfoJson.system.cpu.usage_percent, 23.4)
+  assert.equal(sysInfoJson.cpu.usage_percent, 23.4)
+  assert.equal(sysInfoJson.hostname, 'mock-host')
+  assert.equal(sysInfoJson.cgroup, false)
+  assert.equal(sysInfoJson.system.memory.usage_percent, 50.0)
+  assert.equal(sysInfoJson.system.disk.usage_percent, 40.0)
+  assert.equal(sysInfoJson.system.uptime.formatted, '1天 1小时 1分')
+  assert.equal(sysInfoJson.config.endpoints.hostInfo, '/botmode/api/system')
+  assert.equal(sysInfoJson.config.endpoints.hostAlias, '/botmode/api/host/system')
+  assert.equal(sysInfoJson.config.endpoints.gatewayInfo, `${gw.url}/api/system`)
+  assert.equal(sysInfoJson.config.endpoints.gatewayAlias, `${gw.url}/api/host/system`)
+
+  // All host/system alias routes must return 200 (never 404)
+  for (const aliasPath of ['/botmode/api/system/info', '/botmode/api/host', '/botmode/api/host/info', '/botmode/api/host/system', '/botmode/api/sysinfo', '/botmode/api/node/info']) {
+    const aliasResp = await runApiReq({ method: 'GET', url: aliasPath })
+    assert.equal(aliasResp.status, 200, `${aliasPath} should return 200`)
+    const aliasJson = JSON.parse(aliasResp.body.toString('utf8'))
+    assert.equal(aliasJson.ok, true)
+    assert.equal(aliasJson.hostname, 'mock-host')
+    assert.equal(aliasJson.cpu.usage_percent, 23.4)
+  }
+  const hostStreamResp = await runApiReq({ method: 'GET', url: '/botmode/api/host/stream?interval=2' })
+  assert.equal(hostStreamResp.status, 200)
+  assert.ok(hostStreamResp.headers['content-type'].includes('text/event-stream'))
+  assert.ok(hostStreamResp.body.toString('utf8').includes('"type":"system"'))
+
+  const sysCfgPut = await runApiReq({
+    method: 'PUT',
+    url: '/botmode/api/system/config',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      diskPaths: ['/', '/data'],
+      refreshIntervalSec: 3,
+      pushUrl: 'http://127.0.0.1:9999/metrics',
+      pushIntervalSec: 30,
+      pushToken: 'secret-tok',
+    }),
+  })
+  assert.equal(sysCfgPut.status, 200)
+  const sysCfgJson = JSON.parse(sysCfgPut.body.toString('utf8'))
+  assert.equal(sysCfgJson.ok, true)
+  assert.equal(sysCfgJson.gatewaySynced, true)
+  assert.deepEqual(sysCfgJson.config.diskPaths, ['/', '/data'])
+  assert.equal(sysCfgJson.config.refreshIntervalSec, 3)
+  assert.equal(sysCfgJson.config.pushUrl, 'http://127.0.0.1:9999/metrics')
+  assert.equal(sysCfgJson.config.pushIntervalSec, 30)
+  assert.equal(sysCfgJson.gatewayConfig.has_push_token, true)
+
+  const sysCfgGet = await runApiReq({ method: 'GET', url: '/botmode/api/system/config' })
+  assert.equal(sysCfgGet.status, 200)
+  assert.deepEqual(JSON.parse(sysCfgGet.body.toString('utf8')).config.diskPaths, ['/', '/data'])
+
+  const sysPushResp = await runApiReq({
+    method: 'POST',
+    url: '/botmode/api/system/push',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+  assert.equal(sysPushResp.status, 200)
+  assert.equal(JSON.parse(sysPushResp.body.toString('utf8')).result.url, 'http://127.0.0.1:9999/metrics')
+
+  const sysStreamResp = await runApiReq({ method: 'GET', url: '/botmode/api/system/stream?interval=2' })
+  assert.equal(sysStreamResp.status, 200)
+  assert.ok(sysStreamResp.headers['content-type'].includes('text/event-stream'))
+  assert.ok(sysStreamResp.body.toString('utf8').includes('"type":"system"'))
+
+  // Verify BotStore persisted settings.system across reload
+  const reloadedStore = new BotStore(dir)
+  await reloadedStore.load()
+  assert.deepEqual(reloadedStore.state.settings.system.diskPaths, ['/', '/data'])
+  assert.equal(reloadedStore.state.settings.system.pushUrl, 'http://127.0.0.1:9999/metrics')
+  assert.equal(reloadedStore.state.settings.system.pushIntervalSec, 30)
+
+  // Verify command interface: system.info & system.config.save validation
+  const cmdInfo = await api.command({ type: 'system.info', diskPath: '/var' })
+  assert.equal(cmdInfo.system.disk.path, '/var')
+  await assert.rejects(
+    () => api.command({ type: 'system.config.save', config: { pushUrl: 'ftp://bad.example' } }),
+    /http:\/\/ or https:\/\//,
+  )
 
   const relRes = await api.command({ type: 'screen.release', botId: bot.id })
   assert.equal(relRes.state, 'AGENT_ACTIVE')
@@ -342,8 +514,9 @@ fs.writeFileSync(${JSON.stringify(pidFile)}, String(process.pid))
 const port = Number(process.env.BOTSCREEN_PORT)
   const server = http.createServer((req, res) => {
   res.setHeader('content-type', 'application/json')
-  if (req.url === '/healthz') return res.end(JSON.stringify({ ok: true, api_version: 2, capabilities: ['ensure', 'tile_stream'], bots: 0 }))
-  if (req.url === '/api/screens') return res.end(JSON.stringify({ screens: [], host: { available_mb: 4096 } }))
+  if (req.url === '/healthz') return res.end(JSON.stringify({ ok: true, api_version: 4, capabilities: ['ensure', 'tile_stream', 'system_info', 'host_system'], bots: 0 }))
+  if (req.url === '/api/screens') return res.end(JSON.stringify({ screens: [], host: { available_mb: 4096, limit_mb: 8192, min_free_mb: 1024, blocker: null, hostname: 'auto-host', cpu: { usage_percent: 12.3, cores: 4 }, memory: { usage_percent: 50.0, total_mb: 8192, used_mb: 4096, available_mb: 4096 }, disk: { path: '/', usage_percent: 30.0, total_gb: 100, used_gb: 30, free_gb: 70 } } }))
+  if (req.url.startsWith('/api/system') || req.url.startsWith('/api/host')) return res.end(JSON.stringify({ ok: true, source: 'gateway', hostname: 'auto-host', cpu: { usage_percent: 12.3, cores: 4 }, memory: { usage_percent: 50.0, total_mb: 8192, used_mb: 4096, available_mb: 4096 }, disk: { path: '/', usage_percent: 30.0, total_gb: 100, used_gb: 30, free_gb: 70 }, uptime: { seconds: 100, formatted: '1分 40秒' } }))
   if (req.url.includes('/ensure')) return res.end(JSON.stringify({ bot_id: 'bot_auto', state: 'STOPPED', healthy: false, agent_token: 'tok_auto', epoch: 0 }))
   res.statusCode = 404
   res.end(JSON.stringify({ detail: 'not found' }))
@@ -375,7 +548,7 @@ server.listen(port, '127.0.0.1')
     } catch (_e) { /* ignore */ }
   }
 
-  // 7. Auto-replace outdated v1 local gateway squatting on port (missing /ensure -> 404)
+  // 7. Auto-replace outdated local gateway (v3 without system_info -> 404 on /api/system)
   const upgradePort = await new Promise((resolvePort, reject) => {
     const srv = net.createServer()
     srv.once('error', reject)
@@ -390,7 +563,8 @@ server.listen(port, '127.0.0.1')
     `const http = require('node:http')
 const server = http.createServer((req, res) => {
   res.setHeader('content-type', 'application/json')
-  if (req.url === '/healthz') return res.end(JSON.stringify({ ok: true, bots: 4 }))
+  if (req.url === '/healthz') return res.end(JSON.stringify({ ok: true, api_version: 3, capabilities: ['ensure', 'tile_stream'], cgroup: false, bots: 1 }))
+  if (req.url === '/api/screens') return res.end(JSON.stringify({ screens: [], host: { available_mb: 7049, limit_mb: 7964, min_free_mb: 1024, blocker: null } }))
   res.statusCode = 404
   res.end(JSON.stringify({ detail: 'Not Found' }))
 })
@@ -419,8 +593,10 @@ server.listen(${upgradePort}, '127.0.0.1')
     const healthBefore = await upgradeScreen.health()
     assert.equal(healthBefore.available, false)
     assert.equal(healthBefore.outdated, true)
-    const upgraded = await upgradeScreen.ensure('bot_auto')
-    assert.equal(upgraded.bot_id, 'bot_auto')
+    // Calling getSystemInfo directly must auto-upgrade the stale v3 gateway and succeed
+    const upgradedSys = await upgradeScreen.getSystemInfo()
+    assert.equal(upgradedSys.available, true)
+    assert.equal(upgradedSys.hostname, 'auto-host')
     const healthAfter = await upgradeScreen.health()
     assert.equal(healthAfter.available, true)
   } finally {
@@ -430,6 +606,61 @@ server.listen(${upgradePort}, '127.0.0.1')
       if (pid > 0) process.kill(pid, 'SIGTERM')
     } catch (_e) { /* ignore */ }
   }
+
+  // 8. Local gateway fallback vs remote gateway strict failure
+  const deadLocalPort = await new Promise((resolvePort, reject) => {
+    const srv = net.createServer()
+    srv.once('error', reject)
+    srv.listen(0, '127.0.0.1', () => {
+      const p = srv.address().port
+      srv.close(() => resolvePort(p))
+    })
+  })
+  const fallbackScreen = new ScreenBridge({
+    approvals,
+    logger: console,
+    gatewayUrl: `http://127.0.0.1:${deadLocalPort}`,
+    autoSpawn: false,
+  })
+  const fallbackApi = new BotApi({
+    ctx: { get: (k) => (k === 'connection' ? { requestRejection: () => undefined } : undefined) },
+    store,
+    dispatcher: { status: () => ({ busy: {}, last: {} }), inRoom: () => false },
+    rooms: { state: () => ({}) },
+    routines: {},
+    approvals,
+    screen: fallbackScreen,
+    logger: console,
+  })
+  const fallbackInfo = await fallbackApi.getSystemInfo()
+  assert.equal(fallbackInfo.system.available, true)
+  assert.equal(fallbackInfo.system.degraded, true)
+  assert.equal(fallbackInfo.system.source, 'host-fallback')
+  assert.equal(fallbackInfo.system.gatewayAvailable, false)
+  assert.ok(fallbackInfo.system.cpu && Number.isFinite(fallbackInfo.system.cpu.usage_percent))
+  assert.ok(fallbackInfo.system.memory && fallbackInfo.system.memory.total_mb > 0)
+  assert.ok(fallbackInfo.system.disk && fallbackInfo.system.disk.total_gb > 0)
+
+  // Remote gateway must NOT fabricate local host metrics on failure
+  const remoteScreen = new ScreenBridge({
+    approvals,
+    logger: console,
+    gatewayUrl: 'http://192.0.2.1:6200',
+    autoSpawn: false,
+  })
+  const remoteApi = new BotApi({
+    ctx: { get: () => undefined },
+    store,
+    dispatcher: { status: () => ({ busy: {}, last: {} }), inRoom: () => false },
+    rooms: { state: () => ({}) },
+    routines: {},
+    approvals,
+    screen: remoteScreen,
+    logger: console,
+  })
+  const remoteInfo = await remoteApi.getSystemInfo({ timeoutMs: 200 })
+  assert.equal(remoteInfo.system.available, false)
+  assert.notEqual(remoteInfo.system.source, 'host-fallback')
 
   console.log('✓ screen.test.mjs all assertions passed')
 

@@ -11,6 +11,7 @@ import subprocess
 import time
 from typing import List, Optional
 
+from .artifacts import ArtifactStore
 from .audit import Auditor
 from .cgroup import CgroupError, CgroupManager
 from .config import (
@@ -39,7 +40,12 @@ from .config import (
 )
 from .desktop import DesktopShell
 from .driver import ScreenDriver
-from .resources import MemoryBlocked, require_memory, summarize as memory_summary
+from .resources import (
+    MemoryBlocked,
+    proc_tree_memory_bytes,
+    require_memory,
+    summarize as memory_summary,
+)
 from .session import (
     capture_session,
     ensure_chrome_session_prefs,
@@ -399,6 +405,7 @@ class ScreenWorker:
         self.cg = CgroupManager()
         self.driver = ScreenDriver(bot_id, self.display, self.paths)
         self.auditor = Auditor(bot_id, self.paths)
+        self.artifacts = ArtifactStore(self.paths.artifacts, bot_id)
         self.streamer = TileStreamHub(self)
         self.desktop = DesktopShell(
             bot_id,
@@ -431,6 +438,7 @@ class ScreenWorker:
             self.paths.root,
             self.paths.home,
             self.paths.downloads,
+            self.paths.artifacts,
             self.paths.audit,
             self.paths.runtime,
             os.path.join(self.paths.home, ".vnc"),
@@ -1139,17 +1147,84 @@ class ScreenWorker:
         self._started_at = None
 
     # ---- 观测 -------------------------------------------------------------
+    def load_avatar(self) -> Optional[dict]:
+        """读取该 Bot 经网关同步的形象数据（不存在或损坏时返回 None）。"""
+        try:
+            with open(self.paths.avatar_file, encoding="utf-8") as fh:
+                data = json.load(fh)
+            return data if isinstance(data, dict) else None
+        except (OSError, json.JSONDecodeError):
+            return None
+
+    def save_avatar(self, data: dict) -> dict:
+        """原子持久化 Bot 形象配置到 runtime/avatar.json。"""
+        os.makedirs(self.paths.runtime, exist_ok=True)
+        tmp = f"{self.paths.avatar_file}.{os.getpid()}.tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2)
+            fh.write("\n")
+        os.replace(tmp, self.paths.avatar_file)
+        return data
+
+    def delete_avatar(self) -> bool:
+        try:
+            os.unlink(self.paths.avatar_file)
+            return True
+        except OSError:
+            return False
+
+    def _tracked_pids(self) -> List[int]:
+        """在 cgroup 不可用的沙箱中收集当前虚拟屏的存活进程树 PID 列表。"""
+        roots: List[int] = []
+        for proc in (self._xvnc, self._openbox, *self._apps, *self._vnc_procs):
+            if self._alive(proc):
+                roots.append(proc.pid)
+        for pid in (self._adopted_xvnc, self._adopted_openbox):
+            if self._pid_alive(pid):
+                roots.append(int(pid))
+        if DESKTOP_SHELL:
+            try:
+                for pid in self.desktop.snapshot().get("procs") or []:
+                    if self._pid_alive(pid):
+                        roots.append(int(pid))
+            except Exception:  # noqa: BLE001
+                pass
+        seen: set[int] = set()
+        out: List[int] = []
+        for root_pid in roots:
+            if root_pid not in seen:
+                seen.add(root_pid)
+                out.append(root_pid)
+            try:
+                for desc in self.cg.descendants(root_pid):
+                    if desc not in seen and self._pid_alive(desc):
+                        seen.add(desc)
+                        out.append(desc)
+            except OSError:
+                continue
+        return out
+
     def status(self) -> dict:
         st = self.lock.snapshot()
+        healthy = self.healthy()
+        cg_ok = bool(self.cg.available)
         mem = 0
         pids: List[int] = []
         frozen = False
-        try:
-            mem = self.cg.memory_current(self.bot_id)
-            pids = self.cg.pids(self.bot_id)
-            frozen = self.cg.is_frozen(self.bot_id)
-        except CgroupError:
-            pass
+        metrics_source = "none"
+        if cg_ok:
+            try:
+                mem = self.cg.memory_current(self.bot_id)
+                pids = self.cg.pids(self.bot_id)
+                frozen = self.cg.is_frozen(self.bot_id)
+                if mem > 0 or pids:
+                    metrics_source = "cgroup"
+            except CgroupError:
+                cg_ok = False
+        if healthy and (not cg_ok or (mem == 0 and not pids)):
+            pids = self._tracked_pids()
+            mem = proc_tree_memory_bytes(pids) if pids else 0
+            metrics_source = "proc" if pids else "none"
         st.update(
             {
                 "bot_id": self.bot_id,
@@ -1166,10 +1241,13 @@ class ScreenWorker:
                 "idle_mode": IDLE_MODE,
                 "has_saved_session": has_saved_session(self.paths.session_file),
                 "has_cached_preview": bool(self.last_preview or os.path.isfile(self.paths.preview_file)),
-                "healthy": self.healthy(),
+                "healthy": healthy,
+                "cgroup_available": cg_ok,
                 "cgroup_frozen": frozen,
+                "metrics_source": metrics_source,
                 "pids": pids,
                 "memory_bytes": mem,
+                "avatar": self.load_avatar(),
                 "stream": {
                     "subscribers": self.streamer.active_subscribers,
                     "capture_active": self.streamer.capture_active,
@@ -1181,6 +1259,7 @@ class ScreenWorker:
                 "paths": {
                     "root": self.paths.root,
                     "downloads": self.paths.downloads,
+                    "artifacts": self.paths.artifacts,
                     "audit": self.paths.audit,
                 },
             }
