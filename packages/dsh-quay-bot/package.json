@@ -25,7 +25,7 @@
     "dsh": ">=0.2.2-rc.3"
   },
   "scripts": {
-    "test": "node test/host.test.mjs && node test/screen.test.mjs && node test/avatar.test.mjs && node test/artifacts.test.mjs && node test/routines.test.mjs && node test/qr.test.mjs && node test/remote.test.mjs",
+    "test": "node test/host.test.mjs && node test/screen.test.mjs && node test/avatar.test.mjs && node test/artifacts.test.mjs && node test/routines.test.mjs && node test/transcript.test.mjs && node test/qr.test.mjs && node test/remote.test.mjs",
     "doctor": "node bin/doctor.mjs"
   },
   "bin": {

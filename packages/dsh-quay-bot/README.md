@@ -13,6 +13,8 @@ dsh plugin install dsh-quay-bot          # 在目标 profile 里
 ## 1. 这个包做了什么
 
 - 每个 Bot 独立目录、`SOUL.md` / `MEMORY.md`、永久私聊会话，以及**按房间隔离的隐藏 Group Session**（支持房间共享工程目录 `workDir`）
+- **独立整页**：进入 Bot 模式后外壳工作区侧栏让位，只留 Bot 会话侧栏；侧栏可折叠成 56px 头像轨道（`localStorage` 记忆状态），折叠时仍可切 Bot、新建、进设置、回 Harness
+- **对话历史由 Host 折叠**：Bot 会话在 Bot 自己的目录下，浏览器端会话列表不收它，Host 直接读该会话日志折成对话（`GET /botmode/api/transcript`）。历史里带思考过程与工具调用（名称 / 参数 / 输出 / 状态），用实时视图同一套组件渲染；切 Bot 自动载入，运行中每 3 秒、空闲每 12 秒按 `after=<seq>` 增量追新
 - 每个 Bot 可单独绑定模型：DSH 默认（空绑定，每轮重读）、provider/model、思考档位；模型目录标注是否支持图片输入
 - Bot 聊天可发图片（PNG/JPEG/WebP/GIF，≤6 张 × 12 MB），纯文本模型在 Host 入队前拒绝
 - `message_agent` 异步队友消息（会话级 FIFO、跳数护栏 `MAX_AGENT_HOPS=4`、同链去重、回信降级、>16k 落盘、群聊隐藏会话禁止）

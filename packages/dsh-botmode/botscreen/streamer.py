@@ -3,7 +3,7 @@
 设计原则
 --------
 * **平时零抓屏、零编码开销**：无观看连接时不运行任何后台抓屏协程，不持有 XShm 缓冲区。
-* **64×64 内存分块比对**：有观看者接入时按 100ms（10fps 上限）采样 `XShmGetImage`：
+* **64×64 内存分块比对**：有观看者接入时按可调档位（默认 15fps≈67ms，支持 30/15/10）采样 `XShmGetImage`：
   - 整帧字节完全一致时 0.2ms 短路跳过，网络零流量、CPU ~0%；
   - 发生变化时在 `memoryview` 上零拷贝比对 64×64 网格，合并相邻脏块后编码成 JPEG/WebP
     发给前端 `<canvas>` 局部重绘（脏块占比 >55% 时自动退化为单张关键帧）。
@@ -22,7 +22,11 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
 from PIL import Image
 
-from .config import CAPTURE_IDLE_HIBERNATE, STREAM_INTERVAL_MS, TILE_SIZE
+from .config import (
+    CAPTURE_IDLE_HIBERNATE,
+    TILE_SIZE,
+    get_stream_interval_ms,
+)
 from .driver import RawFrame
 from .state import State
 
@@ -139,6 +143,7 @@ def _build_packets(
     need_delta: bool,
     fmt: str,
     seq: int,
+    ts_ms: int = 0,
 ) -> Tuple[Optional[dict], Optional[dict], Optional[bytes]]:
     """在工作线程内完成像素比对与编码，返回 `(keyframe_pkt, delta_pkt, jpeg_preview)`。"""
     w, h = curr_raw.width, curr_raw.height
@@ -152,6 +157,12 @@ def _build_packets(
         if img is None:
             img = curr_raw.to_image()
         return img
+
+    def stamp(pkt: Optional[dict]) -> Optional[dict]:
+        """附加网关侧时间标记，供前端计算到网关的单程延迟与实际帧率。"""
+        if pkt is not None:
+            pkt["ts"] = ts_ms
+        return pkt
 
     if need_keyframe:
         full_img = ensure_img()
@@ -167,6 +178,7 @@ def _build_packets(
             "mime": mime,
             "tiles": [{"x": 0, "y": 0, "w": full_img.width, "h": full_img.height, "d": b64}],
         }
+        keyframe_pkt = stamp(keyframe_pkt)
 
     if need_delta and prev_raw is not None:
         rects, dirty_cells, total_cells = diff_grid_rects(prev_raw, curr_raw, TILE_SIZE)
@@ -188,6 +200,7 @@ def _build_packets(
                         "mime": mime,
                         "tiles": [{"x": 0, "y": 0, "w": full_img.width, "h": full_img.height, "d": b64}],
                     }
+                    delta_pkt = stamp(delta_pkt)
             else:
                 full_img = ensure_img()
                 tiles = []
@@ -205,6 +218,7 @@ def _build_packets(
                     "mime": mime,
                     "tiles": tiles,
                 }
+                delta_pkt = stamp(delta_pkt)
 
     return keyframe_pkt, delta_pkt, preview_bytes
 
@@ -321,9 +335,10 @@ class TileStreamHub:
             sub.needs_keyframe = True
 
     async def _pump_loop(self) -> None:
-        interval = max(0.04, STREAM_INTERVAL_MS / 1000.0)
         try:
             while self._subscribers:
+                # 每轮读取当前帧率档位，设置中修改后无需重启即可生效
+                interval = max(0.02, get_stream_interval_ms() / 1000.0)
                 t0 = time.perf_counter()
                 self._nudge.clear()
                 if not self.worker.healthy() or self.worker.lock.state is State.FROZEN:
@@ -354,6 +369,7 @@ class TileStreamHub:
                     # 画面静止且无人等关键帧：0.2ms 短路，零编码零流量
                     if not kf_subs and self._prev_raw is not None and curr_raw.data == self._prev_raw.data:
                         continue
+                    ts_ms = int(time.time() * 1000)
                     kf_pkt, dl_pkt, preview = await asyncio.to_thread(
                         _build_packets,
                         self._prev_raw,
@@ -362,6 +378,7 @@ class TileStreamHub:
                         bool(dl_subs),
                         fmt,
                         seq,
+                        ts_ms,
                     )
                     if preview:
                         self.worker.last_preview = preview

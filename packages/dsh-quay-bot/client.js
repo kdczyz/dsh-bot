@@ -4,7 +4,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const ReactDOM = require('react-dom')
     const h = React.createElement
-    const { useState, useMemo, useEffect, useRef, useSyncExternalStore } = React
+    const { useState, useMemo, useEffect, useRef, useCallback, useSyncExternalStore } = React
 
     const PANEL_ID = 'botmode'
     const NS = 'botmode'
@@ -97,6 +97,14 @@ window.__ModuleLoader__.load({
         'chat.attachSize': 'Each image must be 12 MB or smaller.',
         'chat.attachLimit': 'At most 6 images per message.',
         'chat.attachRemove': 'Remove',
+        'chat.attachOpen': 'Open preview',
+        'chat.attachClear': 'Clear all',
+        'chat.attachDrop': 'Drop images to attach',
+        'chat.bindMissing': 'Chat history is not bound to this session right now; messages still reach the Host and the Bot still runs.',
+        'chat.bindRetry': 'Retry binding',
+        'chat.historyRefresh': 'Refresh history',
+        'chat.imageCount': '{count} image(s)',
+        'chat.hostReply': 'Latest reply from Host',
         'chat.imageOnly': 'Image only',
         'detail.model': 'Model',
         'model.default': 'DSH default',
@@ -105,6 +113,8 @@ window.__ModuleLoader__.load({
         'pane.title': 'Bots',
         'pane.search': 'Search Bots',
         'pane.empty': 'No matching Bot',
+        'pane.collapse': 'Collapse bot list',
+        'pane.expand': 'Expand bot list',
         'detail.workspace': 'Workspace',
         'detail.instructions': 'Standing instructions',
         'detail.sessions': 'Sessions in this workspace',
@@ -439,6 +449,8 @@ window.__ModuleLoader__.load({
         'system.diskPaths': 'Disk Mount Paths',
         'system.diskPathsPlaceholder': 'Comma-separated, e.g. /, /data',
         'system.refreshInterval': 'Refresh Interval (sec)',
+        'system.frameRate': 'Virtual Screen FPS',
+        'system.frameRateHint': '30 / 15 / 10 fps. Default 15. Applies live to the enlarged screen.',
         'system.pushUrl': 'Outbound Push URL (optional)',
         'system.pushUrlPlaceholder': 'e.g. http://127.0.0.1:9000/metrics',
         'system.pushInterval': 'Auto Push Interval (sec, 0=off)',
@@ -462,6 +474,9 @@ window.__ModuleLoader__.load({
         'screen.helpCancel': 'Cancel',
         'screen.helpNotePlaceholder': 'Optional note for the Bot (e.g. Logged in, continue)…',
         'screen.modalHint': 'Expanded takeover mode: click, drag, scroll, or type directly. Shrinking immediately hands control back to the Bot.',
+        'screen.hudFps': 'FPS',
+        'screen.hudLatency': 'Latency',
+        'screen.hudTarget': 'to gateway',
         'screen.typePlaceholder': 'Type text / password to send to screen…',
         'screen.typeSend': 'Send',
         'screen.openVnc': 'Open VNC window',
@@ -595,6 +610,14 @@ window.__ModuleLoader__.load({
         'chat.attachSize': '每张图片不超过 12 MB。',
         'chat.attachLimit': '每条消息最多 6 张图片。',
         'chat.attachRemove': '移除',
+        'chat.attachOpen': '查看大图',
+        'chat.attachClear': '全部清除',
+        'chat.attachDrop': '松开即可添加图片',
+        'chat.bindMissing': '当前会话历史没绑定上；消息仍会送到 Host，Bot 也会照常运行。',
+        'chat.bindRetry': '重试绑定',
+        'chat.historyRefresh': '刷新历史',
+        'chat.imageCount': '{count} 张图片',
+        'chat.hostReply': 'Host 最新回复',
         'chat.imageOnly': '仅图片',
         'detail.model': '模型',
         'model.default': 'DSH 默认',
@@ -603,6 +626,8 @@ window.__ModuleLoader__.load({
         'pane.title': 'Bot 会话',
         'pane.search': '搜索 Bot',
         'pane.empty': '没有匹配的 Bot',
+        'pane.collapse': '收起机器人侧栏',
+        'pane.expand': '展开机器人侧栏',
         'detail.workspace': '工作区',
         'detail.instructions': '常驻指令',
         'detail.sessions': '这个工作区的会话',
@@ -937,6 +962,8 @@ window.__ModuleLoader__.load({
         'system.diskPaths': '磁盘挂载点路径',
         'system.diskPathsPlaceholder': '逗号分隔，如 /, /data',
         'system.refreshInterval': '刷新间隔（秒）',
+        'system.frameRate': '虚拟屏帧率',
+        'system.frameRateHint': '30 / 15 / 10 帧，默认 15 帧。修改后放大屏幕实时生效。',
         'system.pushUrl': '网关主动上报目标接口（可选）',
         'system.pushUrlPlaceholder': '例如 http://127.0.0.1:9000/metrics',
         'system.pushInterval': '定时上报周期（秒，0 表示关闭）',
@@ -960,6 +987,9 @@ window.__ModuleLoader__.load({
         'screen.helpCancel': '取消',
         'screen.helpNotePlaceholder': '可选备注（如：已完成验证码/登录，请继续）…',
         'screen.modalHint': '已放大进入人工接管：可直接点击、拖拽、滚轮或输入；点击「缩小归还」或收起窗口即刻归还给 Bot。',
+        'screen.hudFps': '帧率',
+        'screen.hudLatency': '延迟',
+        'screen.hudTarget': '到网关',
         'screen.typePlaceholder': '输入要发送到屏幕的文本或密码…',
         'screen.typeSend': '发送',
         'screen.openVnc': '新窗口 VNC',
@@ -1316,7 +1346,9 @@ window.__ModuleLoader__.load({
         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .bm-unread { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--dsw-alias-brand-primary); }
       .bm-msg-name { font-size: 10px; line-height: 14px; font-weight: 600; color: var(--dsw-alias-label-tertiary); margin-bottom: 3px; }
-      .bm-page-split { display: flex; height: 100%; padding: 0; overflow: hidden; }
+      .bm-page-split { display: flex; height: 100%; padding: 0; overflow: hidden;
+        /* Standalone page has no shell sidebar: still clear the window strip (macOS). */
+        padding-top: var(--dsh-frame-top-clearance, 0px); }
       .bm-pane { width: 296px; flex: none; box-sizing: border-box; display: flex; flex-direction: column;
         border-right: 0.5px solid var(--dsw-alias-border-l2); padding: 12px 8px; gap: 6px; overflow: hidden; }
       .bm-pane-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px 6px; }
@@ -1352,6 +1384,40 @@ window.__ModuleLoader__.load({
       .bm-srow-time { font-size: 10px; line-height: 16px; color: var(--dsw-alias-label-tertiary); }
       .bm-pane-foot { border-top: 0.5px solid var(--dsw-alias-border-l2); padding-top: 8px; display: flex; }
       .bm-pane-empty { padding: 12px 8px; }
+      /* Bot sidebar collapse: a 56px rail keeps every Bot one click away. */
+      .bm-pane { transition: width 180ms var(--ds-ease-in-out, ease), padding 180ms var(--ds-ease-in-out, ease); }
+      .bm-pane[data-collapsed='true'] { width: 56px; padding: 10px 6px; gap: 8px; align-items: center; }
+      .bm-pane[data-collapsed='true'] .bm-pane-head { justify-content: center; width: 100%; padding: 2px 0; }
+      .bm-pane-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+      .bm-pane-collapse { appearance: none; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary);
+        width: 24px; height: 24px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+        border-radius: var(--dsw-radius-sm, 6px); cursor: pointer; flex: none; }
+      .bm-pane-collapse:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+      .bm-pane-rail { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; align-items: center;
+        gap: 4px; overflow-y: auto; overflow-x: hidden; padding: 2px 0; scrollbar-width: none; }
+      .bm-pane-rail::-webkit-scrollbar { width: 0; }
+      .bm-pane-rail-btn { appearance: none; border: 0; background: transparent; padding: 3px; width: 38px; height: 38px;
+        display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; cursor: pointer;
+        color: var(--dsw-alias-label-secondary); position: relative; flex: none; }
+      .bm-pane-rail-btn:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+      .bm-pane-rail-btn[data-active='true'] { background: var(--dsw-alias-button-ghost-active-fill); }
+      .bm-pane-rail-btn[data-active='true']::after { content: ''; position: absolute; left: -3px; top: 10px; bottom: 10px;
+        width: 2px; border-radius: 2px; background: var(--dsw-alias-brand-primary); }
+      .bm-pane-rail-dot { position: absolute; right: 3px; bottom: 3px; width: 7px; height: 7px; border-radius: 50%;
+        background: var(--dsw-alias-brand-primary); border: 1.5px solid var(--dsw-alias-bg-base); }
+      .bm-pane-rail-sep { width: 24px; height: 1px; background: var(--dsw-alias-border-l2); margin: 2px 0; flex: none; }
+      .bm-pane-rail-foot { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px;
+        border-top: 0.5px solid var(--dsw-alias-border-l2); padding-top: 6px; flex: none; }
+      .bm-pane-rail-empty { font-size: 11px; color: var(--dsw-alias-label-tertiary); padding: 4px 0; }
+      /* Standalone page: no shell chrome. The narrow-screen drawer keeps its own
+         overlay so it can never strand an inert page behind a hidden column. */
+      html[data-bm-page='standalone'] [data-shell-leading] { display: none !important; }
+      html[data-bm-page='standalone'] [data-slot='root'] > div:not([data-sidebar-drawer]) > [class*='sidebarCol'],
+      html[data-bm-page='standalone'] [data-slot='root'] > div:not([data-sidebar-drawer]) > [class*='handle'][data-side='sidebar'] { display: none !important; }
+      html[data-bm-page='standalone'] [data-slot='root'] > div:not([data-sidebar-drawer]):has(> [class*='sidebarCol']) {
+        grid-template-columns: 0 minmax(0px, 1fr) minmax(0px, 0px) !important; }
+      /* The drawer band exists only for the opener this page hides. */
+      html[data-bm-page='standalone'] [data-slot='root'] > div[data-sidebar-drawer] [data-global-panel] { padding-top: 0 !important; }
       .bm-detail-col { flex: 1; min-width: 0; overflow: auto; padding: 28px 32px 48px; }
       .bm-detail { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
       .bm-dhead { display: flex; align-items: center; gap: 12px; }
@@ -1490,15 +1556,50 @@ window.__ModuleLoader__.load({
       .bm-compose-row { display: flex; gap: 8px; align-items: flex-end; width: 100%; }
       .bm-compose-row textarea { flex: 1; }
       .bm-attach-btn { flex: none; height: 34px; }
-      .bm-attach-list { display: flex; gap: 8px; flex-wrap: wrap; }
-      .bm-attach-item { display: flex; align-items: center; gap: 6px; max-width: 220px; padding: 3px 6px;
-        border-radius: 7px; background: var(--dsw-alias-bg-layer-1); border: 0.5px solid var(--dsw-alias-border-l2); }
-      .bm-attach-item img { width: 28px; height: 28px; object-fit: cover; border-radius: 5px; flex: none; }
-      .bm-attach-name { font-size: 10.5px; line-height: 15px; color: var(--dsw-alias-label-secondary);
-        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .bm-attach-list { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .bm-attach-item { display: flex; align-items: center; gap: 7px; max-width: 240px; padding: 4px 6px 4px 4px;
+        border-radius: 9px; background: var(--dsw-alias-bg-layer-1); border: 0.5px solid var(--dsw-alias-border-l2); }
+      .bm-attach-thumb { appearance: none; border: 0; padding: 0; width: 34px; height: 34px; flex: none;
+        border-radius: 6px; overflow: hidden; background: var(--dsw-alias-bg-layer-2); cursor: zoom-in; }
+      .bm-attach-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .bm-attach-meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+      .bm-attach-name { font-size: 11px; line-height: 15px; color: var(--dsw-alias-label-secondary);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 132px; }
+      .bm-attach-size { font-size: 10px; line-height: 13px; color: var(--dsw-alias-label-tertiary);
+        font-variant-numeric: tabular-nums; }
       .bm-attach-remove { appearance: none; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary);
         font: inherit; font-size: 14px; line-height: 16px; cursor: pointer; padding: 0 2px; flex: none; }
       .bm-attach-remove:hover { color: var(--dsw-alias-label-error); }
+      .bm-attach-tools { display: inline-flex; align-items: center; gap: 8px; }
+      .bm-attach-count { font-size: 10.5px; line-height: 14px; color: var(--dsw-alias-label-tertiary);
+        font-variant-numeric: tabular-nums; }
+      .bm-compose[data-drag='true'] { outline: 1px dashed var(--dsw-alias-border-selected); outline-offset: 3px;
+        border-radius: var(--dsw-radius-lg); }
+      .bm-drop-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+        font-size: 12px; color: var(--dsw-alias-brand-primary); pointer-events: none;
+        background: color-mix(in srgb, var(--dsw-alias-bg-base) 72%, transparent); border-radius: inherit; }
+      .bm-compose { position: relative; }
+      .bm-bind-note { display: flex; align-items: center; gap: 8px; margin: 0 16px 8px; padding: 6px 10px;
+        font-size: 11.5px; line-height: 17px; color: var(--dsw-alias-label-secondary);
+        border: 0.5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md);
+        background: var(--dsw-alias-bg-layer-1); }
+      .bm-bind-note span { flex: 1; min-width: 0; }
+      /* a Host-folded transcript: same rhythm as a live one, no streaming affordances */
+      .bm-history { display: flex; flex-direction: column; gap: 10px; }
+      .bm-history-note { display: flex; align-items: center; gap: 8px; font-size: 11px;
+        color: var(--dsw-alias-label-tertiary); }
+      .bm-history-note[data-error='true'] { color: var(--dsw-alias-label-danger, #c0392b); }
+      .bm-tool-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+      .bm-tool-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px;
+        font-size: 10.5px; line-height: 16px; color: var(--dsw-alias-label-secondary);
+        border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 999px;
+        background: var(--dsw-alias-bg-layer-1); }
+      .bm-msg-badge { margin-left: 6px; font-size: 10.5px; opacity: 0.7; }
+      .bm-host-reply { align-self: stretch; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md);
+        background: var(--dsw-alias-bg-layer-1); padding: 6px 10px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+      .bm-host-reply summary { cursor: pointer; color: var(--dsw-alias-label-tertiary); font-size: 11.5px; }
+      .bm-host-reply-body { margin-top: 8px; max-height: 220px; overflow: auto; color: var(--dsw-alias-label-primary); }
+      .bm-host-reply-body .bm-md { font-size: 12.5px; line-height: 19px; }
       .bm-compose textarea { flex: 1; resize: none; min-height: 34px; max-height: 160px; font: inherit; font-size: 13px;
         line-height: 20px; padding: 7px 10px; box-sizing: border-box; color: var(--dsw-alias-label-primary);
         background: var(--dsw-alias-bg-layer-1); border: 0.5px solid var(--dsw-alias-border-l2);
@@ -1849,6 +1950,14 @@ window.__ModuleLoader__.load({
         overflow: hidden; max-height: 74vh; }
       .bm-modal-canvas { width: auto; height: auto; max-width: 100%; max-height: 74vh; display: block;
         cursor: default; touch-action: none; user-select: none; outline: none; }
+      .bm-screen-hud { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px;
+        pointer-events: none; z-index: 2; }
+      .bm-screen-hud-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px;
+        border-radius: 6px; background: rgba(2, 6, 23, 0.72); color: #e2e8f0;
+        font-size: 11px; font-variant-numeric: tabular-nums; line-height: 1.4;
+        border: 0.5px solid rgba(148, 163, 184, 0.28); backdrop-filter: blur(4px); }
+      .bm-screen-hud-chip strong { color: #38bdf8; font-weight: 600; }
+      .bm-screen-hud-chip[data-warn='1'] strong { color: #f59e0b; }
       .bm-modal-bar { display: flex; align-items: center; gap: 6px; padding: 8px 14px; flex-wrap: wrap;
         border-top: 0.5px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1); }
       .bm-modal-foot { display: flex; align-items: center; gap: 8px; padding: 10px 14px; flex-wrap: wrap;
@@ -2123,10 +2232,11 @@ window.__ModuleLoader__.load({
         const markGroupSeen = () => {}
         ctx.effect(() => {
           void refreshHost()
+          const onBotPage = () => document.documentElement.getAttribute('data-bm-page') === 'standalone'
           const timer = window.setInterval(() => {
             if (document.visibilityState === 'hidden') return
             const panel = ctx.layout.panelInfo.getSnapshot()
-            if (panel && panel.activeId === PANEL_ID) void refreshHost()
+            if ((panel && panel.activeId === PANEL_ID) || onBotPage()) void refreshHost()
           }, 3000)
           const unsubPanel = ctx.layout.panelInfo.subscribe(() => {
             const panel = ctx.layout.panelInfo.getSnapshot()
@@ -2328,6 +2438,16 @@ window.__ModuleLoader__.load({
         const openBot = (bot) => {
           if (!bot.sessionId) return
           ctx.layout.selectPanel(PANEL_ID)
+        }
+
+        // Narrow frames open the shell sidebar as a drawer; selecting the Bot
+        // page leaves the centre inert until that drawer closes, so close it here.
+        const closeSidebarDrawer = () => {
+          if (typeof document === 'undefined') return
+          const frame = document.querySelector('[data-slot="root"] > div')
+          if (!frame || !frame.hasAttribute('data-sidebar-drawer')) return
+          if (!frame.querySelector('[class*="centerCol"][inert]')) return
+          ctx.layout.toggleSidebar()
         }
 
         const toBots = () => ctx.layout.selectPanel(PANEL_ID)
@@ -4136,29 +4256,58 @@ window.__ModuleLoader__.load({
           const [error, setError] = useState('')
           const [busy, setBusy] = useState(false)
           const [images, setImages] = useState([])
+          const [dragOver, setDragOver] = useState(false)
+          const [retainKey, setRetainKey] = useState(0)
+          const [echoed, setEchoed] = useState([])
           const imagesRef = useRef([])
           imagesRef.current = images
           const attachRef = useRef(null)
+          const inputRef = useRef(null)
+          const composingRef = useRef(false)
+          const composingDoneAt = useRef(0)
           const catalog = props.models && props.models.catalog
           const vision = modelVisionOf(catalog, effectiveModelOf(catalog, props.bot.model))
+          const ATTACH_LIMIT = 6
+          const ATTACH_MAX_BYTES = 12 * 1024 * 1024
+          const formatBytes = (bytes) => (bytes >= 1024 * 1024
+            ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+            : `${Math.max(1, Math.round(bytes / 1024))} KB`)
           const releaseImages = (list) => {
             for (const item of list) {
               try { URL.revokeObjectURL(item.url) } catch (_error) { /* the browser may already have released it */ }
             }
           }
           useEffect(() => () => releaseImages(imagesRef.current), [])
+          useEffect(() => {
+            const node = inputRef.current
+            if (!node) return
+            node.style.height = 'auto'
+            node.style.height = `${Math.min(160, node.scrollHeight)}px`
+          }, [text])
+          const dragCarriesFiles = (transfer) => {
+            if (!transfer) return false
+            const types = Array.from(transfer.types || [])
+            if (types.includes('Files')) return true
+            return Array.from(transfer.items || []).some(item => item.kind === 'file')
+          }
+          // One entry point for picker, drop and paste: every rejection is reported,
+          // accepted files respect the per-message limit, and the model's vision
+          // capability gates the whole path.
           const addFiles = (fileList) => {
+            const incoming = Array.from(fileList || [])
+            if (incoming.length === 0) return
+            if (vision === false) { setError(t('chat.attachVisionOnly')); return }
+            const notes = []
             const accepted = []
-            let notice = ''
-            for (const file of Array.from(fileList || [])) {
-              if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) { notice = t('chat.attachType'); continue }
-              if (file.size > 12 * 1024 * 1024) { notice = t('chat.attachSize'); continue }
+            for (const file of incoming) {
+              if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) { notes.push(t('chat.attachType')); continue }
+              if (file.size > ATTACH_MAX_BYTES) { notes.push(t('chat.attachSize')); continue }
               accepted.push({ id: newId(), file, url: URL.createObjectURL(file), name: file.name || 'image' })
             }
-            const room = Math.max(0, 6 - imagesRef.current.length)
-            if (accepted.length > room) notice = t('chat.attachLimit')
-            setImages(current => [...current, ...accepted.slice(0, room)])
-            if (notice) setError(notice)
+            const room = Math.max(0, ATTACH_LIMIT - imagesRef.current.length)
+            if (accepted.length > room) notes.push(t('chat.attachLimit'))
+            if (accepted.length > 0) setImages(current => [...current, ...accepted.slice(0, room)])
+            setError(Array.from(new Set(notes)).join(' '))
           }
           const removeImage = (id) => {
             setImages((current) => {
@@ -4166,6 +4315,13 @@ window.__ModuleLoader__.load({
               if (item) releaseImages([item])
               return current.filter(image => image.id !== id)
             })
+          }
+          const clearImages = () => {
+            setImages((current) => {
+              releaseImages(current)
+              return []
+            })
+            setError('')
           }
           const uploadImage = async (file) => {
             const response = await fetch('/botmode/api/image', {
@@ -4185,13 +4341,18 @@ window.__ModuleLoader__.load({
             return payload.attachment
           }
           const logRef = useRef(null)
-          const reference = useMemo(() => {
+          // Sending never depends on this binding: the Host owns the turn FIFO.
+          // A failed binding only hides the local transcript, so keep the reason
+          // around and offer one explicit re-attempt.
+          const retained = useMemo(() => {
             try {
-              return sessions.retain(props.sessionId, { source: 'botmode.chat' })
-            } catch (_failure) {
-              return null
+              return { reference: sessions.retain(props.sessionId, { source: 'botmode.chat' }), error: '' }
+            } catch (failure) {
+              return { reference: null, error: (failure && failure.message) || String(failure) }
             }
-          }, [props.sessionId])
+          }, [props.sessionId, retainKey])
+          const reference = retained.reference
+          const retainError = retained.error
           useEffect(() => () => { if (reference) reference.release() }, [reference])
           const binding = reference ? reference.binding : null
           const session = binding ? binding.session : null
@@ -4219,10 +4380,96 @@ window.__ModuleLoader__.load({
             const text = last.blocks.filter(block => block.kind === 'text').map(block => block.text).join('\n')
             if (text !== '') props.onActivity(text)
           }, [events.revision])
+          // Without a bound transcript the Host stays the only live source: mirror
+          // its running flag and echo this turn's text so the turn is still visible.
+          const running = session ? Boolean(snapshot.running) : Boolean(props.bot.running)
+          useEffect(() => { if (session) setEchoed([]) }, [session])
+          // A Bot Session lives under the Bot's own directory, so the Client's
+          // Session list never carries it and `sessions.retain()` refuses it.
+          // The Host owns the events, so it folds that log for this pane instead.
+          const [history, setHistory] = useState([])
+          const [historyLoaded, setHistoryLoaded] = useState(false)
+          const [historyError, setHistoryError] = useState('')
+          const historySeq = useRef(0)
+          // The Host hands back the newest event seq, so a poll asks only for what
+          // landed after it instead of re-reading the whole log.
+          const cursorRef = useRef(-1)
+          const loadHistory = useCallback(async (options = {}) => {
+            const append = options.append === true
+            const seq = historySeq.current + 1
+            historySeq.current = seq
+            // Overlap the cursor so a turn whose tool result landed in the next
+            // batch is rebuilt with its output instead of staying stale.
+            const after = append && cursorRef.current >= 0 ? Math.max(-1, cursorRef.current - 50) : -1
+            try {
+              const suffix = after >= 0 ? `&after=${after}` : ''
+              const response = await fetch(`/botmode/api/transcript?botId=${encodeURIComponent(props.bot.id)}&limit=160${suffix}`, { credentials: 'include' })
+              const payload = await response.json().catch(() => null)
+              if (historySeq.current !== seq) return null
+              if (!payload || payload.ok !== true) {
+                setHistoryError((payload && payload.error) || `transcript ${response.status}`)
+                return null
+              }
+              setHistoryError('')
+              setHistoryLoaded(true)
+              if (Number.isInteger(payload.cursor)) cursorRef.current = payload.cursor
+              const turns = Array.isArray(payload.turns) ? payload.turns : []
+              if (append) {
+                if (turns.length > 0) {
+                  // Same key means the same turn: the newer fold wins, so a late
+                  // tool result replaces the row it belongs to.
+                  setHistory((current) => {
+                    const merged = current.slice()
+                    const index = new Map(merged.map((turn, position) => [turn.key, position]))
+                    for (const turn of turns) {
+                      const position = index.get(turn.key)
+                      if (position === undefined) {
+                        index.set(turn.key, merged.length)
+                        merged.push(turn)
+                      } else {
+                        merged[position] = turn
+                      }
+                    }
+                    return merged
+                  })
+                }
+              } else {
+                setHistory(turns)
+              }
+              return turns
+            } catch (failure) {
+              if (historySeq.current === seq) setHistoryError(failure && failure.message ? failure.message : String(failure))
+              return null
+            }
+          }, [props.bot.id])
+          // A different Bot is a different conversation: never show the old rows
+          // while the new log is on its way.
+          useEffect(() => {
+            cursorRef.current = -1
+            setHistory([])
+            setHistoryLoaded(false)
+            setHistoryError('')
+          }, [props.bot.id])
+          useEffect(() => { void loadHistory() }, [loadHistory])
+          // A running turn is chased; an idle pane still ticks slowly so a turn
+          // started elsewhere (another tab, a teammate, a Routine) lands by itself.
+          useEffect(() => {
+            const timer = window.setInterval(() => {
+              if (document.visibilityState === 'hidden') return
+              void loadHistory({ append: true })
+            }, props.bot.running === true ? 3000 : 12000)
+            return () => window.clearInterval(timer)
+          }, [props.bot.running, loadHistory])
+          // A reloaded log already holds what was just echoed; drop those repeats.
+          useEffect(() => {
+            if (history.length === 0) return
+            const recent = new Set(history.filter(turn => turn.kind === 'user').slice(-16).map(turn => turn.text))
+            setEchoed(current => (current.length === 0 ? current : current.filter(item => !recent.has(item.text))))
+          }, [history])
           const send = async (event) => {
-            event.preventDefault()
+            if (event && typeof event.preventDefault === 'function') event.preventDefault()
             const value = text.trim()
-            if (busy || session === null) return
+            if (busy) return
             if (value === '' && images.length === 0) return
             setBusy(true)
             setError('')
@@ -4239,6 +4486,9 @@ window.__ModuleLoader__.load({
               releaseImages(images)
               setImages([])
               setText('')
+              if (session === null && value !== '') setEchoed(current => [...current, { id: newId(), text: value, at: Date.now() }])
+              if (inputRef.current) inputRef.current.focus()
+              void loadHistory({ append: true })
             } catch (failure) {
               setError(failure && failure.message ? failure.message : String(failure))
             } finally {
@@ -4261,7 +4511,6 @@ window.__ModuleLoader__.load({
           }
 
           const stop = async () => {
-            if (session === null) return
             try { await hostCommand('bot.stop', { botId: props.bot.id }) } catch (_failure) { /* the turn may already be settling */ }
           }
           const head = h('header', { className: 'bm-chat-head' },
@@ -4269,8 +4518,8 @@ window.__ModuleLoader__.load({
             h('div', { className: 'bm-chat-title' },
               h('span', { className: 'bm-name' }, props.bot.name),
               h('span', { className: 'bm-role' }, props.bot.role || '—')),
-            h('span', { className: 'bm-chat-status', 'data-running': Boolean(snapshot.running) },
-              snapshot.running ? t('chat.working') : t('chat.idle')),
+            h('span', { className: 'bm-chat-status', 'data-running': running },
+              running ? t('chat.working') : t('chat.idle')),
             h('span', {
               className: 'bm-model-pill',
               title: describeModel(t, catalog, props.bot.model, { optional: true }),
@@ -4301,10 +4550,10 @@ window.__ModuleLoader__.load({
                 stickRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48
               },
             },
-              turns.length === 0 && !snapshot.running
+              turns.length === 0 && echoed.length === 0 && history.length === 0 && !running && (session !== null || historyLoaded)
                 ? h('div', { className: 'bm-chat-empty' }, t('chat.empty', { name: props.bot.name }))
                 : null,
-              snapshot.hasMore
+              session && snapshot.hasMore
                 ? h('button', { className: 'bm-btn small', style: { alignSelf: 'center' }, onClick: () => { if (session) void session.loadOlder() } }, t('chat.older'))
                 : null,
               turns.map(turn => turn.kind === 'user'
@@ -4314,26 +4563,97 @@ window.__ModuleLoader__.load({
                   : turn.kind === 'notice'
                     ? h('div', { key: turn.key, className: 'bm-turn-notice' }, t('chat.stopped'))
                     : h(AssistantTurn, { key: turn.key, turn, bot: props.bot })),
-              snapshot.running && turns.every(turn => turn.kind !== 'assistant' || turn.streaming !== true)
+              session === null && history.length > 0
+                ? h('div', { className: 'bm-history' },
+                  history.map(turn => turn.kind === 'user'
+                    ? h('div', { key: turn.key, className: 'bm-msg bm-msg-user' },
+                      turn.text,
+                      turn.images > 0
+                        ? h('span', { className: 'bm-msg-badge' }, t('chat.imageCount', { count: turn.images }))
+                        : null)
+                    : turn.kind === 'error'
+                      ? h('div', { key: turn.key, className: 'bm-turn-error' }, turn.text)
+                      : turn.kind === 'notice'
+                        ? h('div', { key: turn.key, className: 'bm-turn-notice' }, t('chat.stopped'))
+                        : h(AssistantTurn, { key: turn.key, turn, bot: props.bot })))
+                : null,
+              session === null
+                ? echoed.filter(item => !history.some(turn => turn.kind === 'user' && turn.text === item.text))
+                  .map(item => h('div', { key: item.id, className: 'bm-msg bm-msg-user' }, item.text))
+                : null,
+              session === null && props.bot.lastReply && history.length === 0
+                ? h('details', { className: 'bm-host-reply' },
+                  h('summary', null, t('chat.hostReply')),
+                  h('div', { className: 'bm-host-reply-body' }, h(MarkdownText, { text: props.bot.lastReply })))
+                : null,
+              session === null && history.length > 0
+                ? h('div', { className: 'bm-history-note', 'data-error': historyError !== '' ? 'true' : undefined },
+                  h('button', { type: 'button', className: 'bm-btn small', onClick: () => { void loadHistory() } }, t('chat.historyRefresh')),
+                  historyError !== ''
+                    ? h('span', null, historyError)
+                    : null)
+                : null,
+              running && turns.every(turn => turn.kind !== 'assistant' || turn.streaming !== true)
                 ? h('div', { className: 'bm-tail' }, h('span', { className: 'bm-spin' }), h('span', { className: 'bm-tail-text' }, t('chat.tail')))
                 : null),
             error ? h('div', { className: 'bm-error bm-chat-error' }, error) : null,
-            h('form', { className: 'bm-compose bm-compose-col', onSubmit: send },
+            retainError && session === null && history.length === 0 && !historyLoaded
+              ? h('div', { className: 'bm-bind-note' },
+                h('span', null, t('chat.bindMissing')),
+                h('button', { type: 'button', className: 'bm-btn small', onClick: () => setRetainKey(value => value + 1) }, t('chat.bindRetry')))
+              : null,
+            h('form', {
+              className: 'bm-compose bm-compose-col',
+              onSubmit: send,
+              'data-drag': dragOver ? 'true' : undefined,
+              onDragOver: (event) => {
+                if (!dragCarriesFiles(event.dataTransfer)) return
+                event.preventDefault()
+                if (!dragOver) setDragOver(true)
+              },
+              onDragLeave: (event) => {
+                if (event.currentTarget.contains(event.relatedTarget)) return
+                setDragOver(false)
+              },
+              onDrop: (event) => {
+                if (!dragCarriesFiles(event.dataTransfer)) return
+                event.preventDefault()
+                setDragOver(false)
+                addFiles(event.dataTransfer && event.dataTransfer.files)
+              },
+            },
+              dragOver ? h('div', { className: 'bm-drop-hint' }, t('chat.attachDrop')) : null,
               images.length > 0
-                ? h('div', { className: 'bm-attach-list' }, images.map(image => h('div', { key: image.id, className: 'bm-attach-item' },
-                  h('img', { src: image.url, alt: image.name }),
-                  h('span', { className: 'bm-attach-name' }, image.name),
-                  h('button', {
-                    type: 'button', className: 'bm-attach-remove', title: t('chat.attachRemove'),
-                    onClick: () => removeImage(image.id),
-                  }, '×'))))
+                ? h('div', { className: 'bm-attach-list' },
+                  images.map(image => h('div', { key: image.id, className: 'bm-attach-item' },
+                    h('button', {
+                      type: 'button',
+                      className: 'bm-attach-thumb',
+                      title: t('chat.attachOpen'),
+                      onClick: () => { try { window.open(image.url, '_blank', 'noopener') } catch (_error) { /* popup blocked */ } },
+                    }, h('img', { src: image.url, alt: image.name })),
+                    h('span', { className: 'bm-attach-meta' },
+                      h('span', { className: 'bm-attach-name', title: image.name }, image.name),
+                      h('span', { className: 'bm-attach-size' }, formatBytes(image.file.size))),
+                    h('button', {
+                      type: 'button', className: 'bm-attach-remove', title: t('chat.attachRemove'),
+                      'aria-label': `${t('chat.attachRemove')}: ${image.name}`,
+                      onClick: () => removeImage(image.id),
+                    }, '×'))),
+                  h('div', { className: 'bm-attach-tools' },
+                    h('span', { className: 'bm-attach-count' }, `${images.length}/${ATTACH_LIMIT}`),
+                    images.length > 1
+                      ? h('button', { type: 'button', className: 'bm-btn small', onClick: clearImages }, t('chat.attachClear'))
+                      : null))
                 : null,
               h('div', { className: 'bm-compose-row' },
                 h('button', {
                   type: 'button',
                   className: 'bm-btn small bm-attach-btn',
-                  disabled: vision === false || busy,
-                  title: vision === false ? t('chat.attachVisionOnly') : t('chat.attachAdd'),
+                  disabled: vision === false || busy || images.length >= ATTACH_LIMIT,
+                  title: vision === false
+                    ? t('chat.attachVisionOnly')
+                    : images.length >= ATTACH_LIMIT ? t('chat.attachLimit') : t('chat.attachAdd'),
                   onClick: () => { if (attachRef.current) attachRef.current.click() },
                 }, t('chat.attach')),
                 h('input', {
@@ -4342,13 +4662,37 @@ window.__ModuleLoader__.load({
                   onChange: (event) => { addFiles(event.target.files); event.target.value = '' },
                 }),
                 h('textarea', {
+                  ref: inputRef,
                   value: text, rows: 1, placeholder: t('chat.placeholder', { name: props.bot.name }),
                   onChange: event => setText(event.target.value),
+                  onPaste: (event) => {
+                    const files = []
+                    const items = event.clipboardData && event.clipboardData.items
+                    if (items) {
+                      for (const item of items) {
+                        if (item.kind !== 'file') continue
+                        const file = item.getAsFile()
+                        if (file) files.push(file)
+                      }
+                    }
+                    if (files.length === 0) return
+                    event.preventDefault()
+                    addFiles(files)
+                  },
+                  onCompositionStart: () => { composingRef.current = true },
+                  onCompositionEnd: () => {
+                    composingRef.current = false
+                    composingDoneAt.current = Date.now()
+                  },
                   onKeyDown: (event) => {
+                    const native = event.nativeEvent || event
+                    // IME: an Enter that commits a candidate must never send.
+                    if (native.isComposing || composingRef.current || event.keyCode === 229) return
+                    if (Date.now() - composingDoneAt.current < 60) return
                     if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(event) }
                   },
                 }),
-                snapshot.running
+                running
                   ? h('button', { type: 'button', className: 'bm-btn', onClick: stop }, t('chat.stop'))
                   : h('button', { type: 'submit', className: 'bm-btn primary', disabled: busy || (text.trim() === '' && images.length === 0) }, busy ? t('form.busy') : t('chat.send')))))
         }
@@ -4672,6 +5016,8 @@ window.__ModuleLoader__.load({
           const [error, setError] = useState('')
           const [mentionQuery, setMentionQuery] = useState(null)
           const [mentionIdx, setMentionIdx] = useState(0)
+          const composingRef = useRef(false)
+          const composingDoneAt = useRef(0)
           const logRef = useRef(null)
           const inputRef = useRef(null)
           const stickRef = useRef(true)
@@ -5099,8 +5445,15 @@ window.__ModuleLoader__.load({
                     syncMentionFromTarget(event.target)
                   },
                   onBlur: () => { setMentionQuery(null) },
+                  onCompositionStart: () => { composingRef.current = true },
+                  onCompositionEnd: () => {
+                    composingRef.current = false
+                    composingDoneAt.current = Date.now()
+                  },
                   onKeyDown: (event) => {
-                    if (event.nativeEvent && event.nativeEvent.isComposing) return
+                    const native = event.nativeEvent || event
+                    if (native.isComposing || composingRef.current || event.keyCode === 229) return
+                    if (Date.now() - composingDoneAt.current < 60) return
                     if (mentionQuery && mentionCandidates.length > 0) {
                       if (event.key === 'ArrowDown') {
                         event.preventDefault()
@@ -5491,6 +5844,7 @@ window.__ModuleLoader__.load({
           const [adminToken, setAdminToken] = useState(initialCfg.adminToken || '')
           const [diskPaths, setDiskPaths] = useState(Array.isArray(initialCfg.diskPaths) ? initialCfg.diskPaths.join(', ') : '/')
           const [refreshIntervalSec, setRefreshIntervalSec] = useState(String(initialCfg.refreshIntervalSec ?? 5))
+          const [frameRate, setFrameRate] = useState(String([30, 15, 10].includes(Number(initialCfg.frameRate)) ? Number(initialCfg.frameRate) : 15))
           const [pushUrl, setPushUrl] = useState(initialCfg.pushUrl || '')
           const [pushIntervalSec, setPushIntervalSec] = useState(String(initialCfg.pushIntervalSec ?? 0))
           const [pushToken, setPushToken] = useState(initialCfg.pushToken || '')
@@ -5516,6 +5870,7 @@ window.__ModuleLoader__.load({
                   setAdminToken(cfg.adminToken || '')
                   setDiskPaths(Array.isArray(cfg.diskPaths) ? cfg.diskPaths.join(', ') : '/')
                   setRefreshIntervalSec(String(cfg.refreshIntervalSec ?? 5))
+                  setFrameRate(String([30, 15, 10].includes(Number(cfg.frameRate)) ? Number(cfg.frameRate) : 15))
                   setPushUrl(cfg.pushUrl || '')
                   setPushIntervalSec(String(cfg.pushIntervalSec ?? 0))
                   setPushToken(cfg.pushToken || '')
@@ -5602,6 +5957,7 @@ window.__ModuleLoader__.load({
                   adminToken: adminToken.trim(),
                   diskPaths: diskPaths.split(/[,\n]/).map(s => s.trim()).filter(Boolean),
                   refreshIntervalSec: Number(refreshIntervalSec) || 5,
+                  frameRate: Number(frameRate) || 15,
                   pushUrl: pushUrl.trim(),
                   pushIntervalSec: Number(pushIntervalSec) || 0,
                   pushToken: pushToken.trim(),
@@ -5763,7 +6119,13 @@ window.__ModuleLoader__.load({
                   h('input', {
                     className: 'bm-input', type: 'number', min: 1, max: 60, value: refreshIntervalSec,
                     onChange: e => setRefreshIntervalSec(e.target.value),
-                  }))),
+                  })),
+                h('label', { className: 'bm-label' }, t('system.frameRate'),
+                  h('select', {
+                    className: 'bm-input', value: frameRate,
+                    onChange: e => setFrameRate(e.target.value),
+                  }, [30, 15, 10].map(fps => h('option', { key: fps, value: String(fps) }, `${fps} fps`))),
+                  h('span', { className: 'bm-form-hint', style: { display: 'block', marginTop: '2px' } }, t('system.frameRateHint')))),
               h('div', { className: 'bm-row' },
                 h('label', { className: 'bm-label' }, t('system.pushUrl'),
                   h('input', {
@@ -6854,12 +7216,14 @@ window.__ModuleLoader__.load({
           const [note, setNote] = useState('')
           const [busy, setBusy] = useState(false)
           const [err, setErr] = useState('')
+          const [hud, setHud] = useState({ fps: 0, latency: 0 })
           const canvasRef = useRef(null)
           const screenSizeRef = useRef({ w: 1280, h: 720 })
           const dragRef = useRef({ active: false, pointerId: null, button: 1, lastRatio: null, pendingMoves: [] })
           const inputQueueRef = useRef(Promise.resolve())
           const paintQueueRef = useRef(Promise.resolve())
           const moveFlushTimerRef = useRef(null)
+          const hudRef = useRef({ frames: 0, lastAt: 0, lastPublish: 0, latencySum: 0, latencyCount: 0 })
           const fallbackPollRef = useRef(null)
           const nudgePollRef = useRef(null)
           const legacyModeRef = useRef(false)
@@ -6868,6 +7232,8 @@ window.__ModuleLoader__.load({
             if (!modal) return undefined
             let cancelled = false
             legacyModeRef.current = false
+            hudRef.current = { frames: 0, lastAt: 0, lastPublish: 0, latencySum: 0, latencyCount: 0 }
+            setHud({ fps: 0, latency: 0 })
             let es = null
             let sseFrameSeen = false
             let fallbackActive = false
@@ -6943,12 +7309,40 @@ window.__ModuleLoader__.load({
               })
             }
 
+            // 统计实际帧率与到网关单程延迟：帧携带网关 ts，客户端用收到时刻 - ts 估算
+            const noteFrame = (pkt) => {
+              if (cancelled) return
+              const now = Date.now()
+              const stat = hudRef.current
+              stat.frames += 1
+              if (pkt && typeof pkt.ts === 'number' && pkt.ts > 0) {
+                const lat = now - pkt.ts
+                if (lat >= 0 && lat < 60000) {
+                  stat.latencySum += lat
+                  stat.latencyCount += 1
+                }
+              }
+              if (!stat.lastAt) stat.lastAt = now
+              if (now - stat.lastPublish >= 500) {
+                const secs = (now - stat.lastAt) / 1000
+                const fps = secs > 0 ? Math.round(stat.frames / secs) : 0
+                const latency = stat.latencyCount > 0 ? Math.round(stat.latencySum / stat.latencyCount) : 0
+                setHud({ fps, latency })
+                stat.frames = 0
+                stat.latencySum = 0
+                stat.latencyCount = 0
+                stat.lastAt = now
+                stat.lastPublish = now
+              }
+            }
+
             const paintFullImage = (img) => {
               const task = async () => {
                 if (cancelled) {
                   if (img && typeof img.close === 'function') img.close()
                   return
                 }
+                noteFrame(null)
                 const node = canvasRef.current
                 if (!node) {
                   if (img && typeof img.close === 'function') img.close()
@@ -6971,6 +7365,7 @@ window.__ModuleLoader__.load({
             const applyFramePacket = (pkt) => {
               const task = async () => {
                 if (cancelled) return
+                noteFrame(pkt)
                 const node = canvasRef.current
                 if (!node) return
                 if (pkt.w > 0 && pkt.h > 0 && (node.width !== pkt.w || node.height !== pkt.h)) {
@@ -7406,7 +7801,12 @@ window.__ModuleLoader__.load({
                     void sendInput({ kind: 'scroll', rx: pos.rx, ry: pos.ry, x: pos.x, y: pos.y, clicks })
                   },
                   onKeyDown: handleKeyDown,
-                })),
+                }),
+                h('div', { className: 'bm-screen-hud' },
+                  h('span', { className: 'bm-screen-hud-chip', 'data-warn': hud.fps > 0 && hud.fps < 10 ? '1' : '0' },
+                    `${t('screen.hudFps')} `, h('strong', null, String(hud.fps || '—'))),
+                  h('span', { className: 'bm-screen-hud-chip' },
+                    `${t('screen.hudLatency')} `, h('strong', null, hud.latency ? `${hud.latency}ms` : '—'), ` ${t('screen.hudTarget')}`))),
               h('form', { className: 'bm-modal-bar', onSubmit: sendText },
                 h('input', {
                   className: 'bm-help-note',
@@ -7839,7 +8239,26 @@ window.__ModuleLoader__.load({
           const [selection, setSelection] = useState(null)
           const [query, setQuery] = useState('')
           const [railOpen, setRailOpen] = useState(true)
+          const [paneCollapsed, setPaneCollapsed] = useState(() => {
+            try { return window.localStorage.getItem('botmode.paneCollapsed') === '1' } catch (_err) { return false }
+          })
           const [takeoverModal, setTakeoverModal] = useState(null)
+
+          useEffect(() => {
+            try { window.localStorage.setItem('botmode.paneCollapsed', paneCollapsed ? '1' : '0') } catch (_err) { /* storage unavailable */ }
+          }, [paneCollapsed])
+          // Standalone page: while the Bot page is mounted the shell's workspace
+          // sidebar is dropped, so the Bot list is the only navigation column.
+          React.useLayoutEffect(() => {
+            const root = document.documentElement
+            const previous = root.getAttribute('data-bm-page')
+            root.setAttribute('data-bm-page', 'standalone')
+            closeSidebarDrawer()
+            return () => {
+              if (previous === null) root.removeAttribute('data-bm-page')
+              else root.setAttribute('data-bm-page', previous)
+            }
+          }, [])
 
           const openScreenTakeover = async (targetBot, helpEntry = null) => {
             const botId = (targetBot && targetBot.id) || (helpEntry && helpEntry.botId)
@@ -8020,34 +8439,108 @@ window.__ModuleLoader__.load({
                   : null,
                 h('button', { className: 'bm-btn small danger', onClick: () => hostCommand('approval.decide', { approvalId: approval.id, decision: 'deny' }).catch(() => {}) }, t('approval.deny'))))),
             questions.map(question => h(QuestionCard, { key: question.id, entry: question })))
-          const pane = h('aside', { className: 'bm-pane' },
-            h('div', { className: 'bm-pane-head' },
-              h('span', { className: 'bm-pane-title' }, t('pane.title')),
-              h('button', { className: 'bm-btn small primary', onClick: () => setForm({ mode: 'create' }) }, t('page.new'))),
-            h('input', {
-              className: 'bm-search', value: query, placeholder: t('pane.search'),
-              onChange: event => setQuery(event.target.value),
-            }),
-            h('div', { className: 'bm-groups' },
-              h('div', { className: 'bm-section' },
-                h('span', null, t('pane.general'))),
-              visibleBots.length === 0
-                ? h('p', { className: 'bm-muted bm-pane-empty' }, t('pane.empty'))
-                : h('div', { className: 'bm-bot-group' }, visibleBots.map(botRow)),
-              h('div', { className: 'bm-section' },
-                h('span', null, t('pane.groups')),
-                h('button', { className: 'bm-section-add', onClick: () => setForm({ mode: 'group' }) }, t('pane.newGroup'))),
-              visibleGroups.length === 0
-                ? h('p', { className: 'bm-muted bm-pane-empty' }, t('group.none'))
-                : visibleGroups.map(groupRow)),
-            h('div', { className: 'bm-pane-foot' },
-              h('button', {
+          const paneChevron = h('svg', {
+            width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': true,
+          }, h('path', {
+            d: paneCollapsed ? 'M9 6l6 6-6 6' : 'M15 6l-6 6 6 6',
+            stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round',
+          }))
+          const paneToggleLabel = t(paneCollapsed ? 'pane.expand' : 'pane.collapse')
+          const paneCollapseButton = h('button', {
+            type: 'button',
+            className: 'bm-pane-collapse',
+            title: paneToggleLabel,
+            'aria-label': paneToggleLabel,
+            'aria-expanded': paneCollapsed ? 'false' : 'true',
+            onClick: () => setPaneCollapsed(value => !value),
+          }, paneChevron)
+          const paneRail = h('div', { className: 'bm-pane-rail' },
+            visibleBots.length === 0
+              ? h('span', { className: 'bm-pane-rail-empty' }, t('pane.empty'))
+              : visibleBots.map(bot => h('button', {
+                key: `rail-bot-${bot.id}`,
                 type: 'button',
-                className: `bm-btn small${isSettingsView ? ' primary' : ''}`,
-                style: { display: 'inline-flex', alignItems: 'center', gap: '5px', flex: 1, justifyContent: 'center' },
-                onClick: () => openSettingsView('soul'),
-              }, h(SettingsIcon, { kind: 'gear' }), t('pane.settings')),
-              h('button', { type: 'button', className: 'bm-btn small', onClick: toHarness }, t('foot.back'))))
+                className: 'bm-pane-rail-btn',
+                title: bot.role ? `${bot.name} · ${bot.role}` : bot.name,
+                'aria-label': bot.name,
+                'data-active': Boolean(activeBot && activeBot.id === bot.id) || undefined,
+                onClick: () => openBotEntry(bot),
+              },
+                h(BotAvatarBadge, { bot, size: 'sm' }),
+                bot.running ? h('span', { className: 'bm-pane-rail-dot' }) : null)),
+            visibleGroups.length > 0 ? h('span', { className: 'bm-pane-rail-sep' }) : null,
+            visibleGroups.map(group => h('button', {
+              key: `rail-group-${group.id}`,
+              type: 'button',
+              className: 'bm-pane-rail-btn',
+              title: group.name,
+              'aria-label': group.name,
+              'data-active': Boolean(activeGroup && activeGroup.id === group.id) || undefined,
+              onClick: () => openGroupEntry(group),
+            },
+              h('span', { className: 'bm-avatar bm-avatar-sm', style: { background: group.color || COLORS[3] } }, initialOf(group.name)),
+              group.needsYou ? h('span', { className: 'bm-pane-rail-dot' }) : null)))
+          const paneRailFoot = h('div', { className: 'bm-pane-rail-foot' },
+            h('button', {
+              type: 'button',
+              className: 'bm-pane-rail-btn',
+              title: t('page.new'),
+              'aria-label': t('page.new'),
+              onClick: () => setForm({ mode: 'create' }),
+            }, h('svg', {
+              width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': true,
+            }, h('path', {
+              d: 'M12 5v14M5 12h14', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round',
+            }))),
+            h('button', {
+              type: 'button',
+              className: 'bm-pane-rail-btn',
+              title: t('pane.settings'),
+              'aria-label': t('pane.settings'),
+              onClick: () => openSettingsView('soul'),
+            }, h(SettingsIcon, { kind: 'gear' })),
+            h('button', {
+              type: 'button',
+              className: 'bm-pane-rail-btn',
+              title: t('foot.back'),
+              'aria-label': t('foot.back'),
+              onClick: toHarness,
+            }, h(PanelIcon, { size: 17 })))
+          const pane = h('aside', { className: 'bm-pane', 'data-collapsed': paneCollapsed ? 'true' : undefined },
+            h('div', { className: 'bm-pane-head' },
+              paneCollapsed ? null : h('span', { className: 'bm-pane-title' }, t('pane.title')),
+              h('div', { className: 'bm-pane-actions' },
+                paneCollapsed ? null : h('button', { className: 'bm-btn small primary', onClick: () => setForm({ mode: 'create' }) }, t('page.new')),
+                paneCollapseButton)),
+            paneCollapsed
+              ? paneRail
+              : h(React.Fragment, null,
+                h('input', {
+                  className: 'bm-search', value: query, placeholder: t('pane.search'),
+                  onChange: event => setQuery(event.target.value),
+                }),
+                h('div', { className: 'bm-groups' },
+                  h('div', { className: 'bm-section' },
+                    h('span', null, t('pane.general'))),
+                  visibleBots.length === 0
+                    ? h('p', { className: 'bm-muted bm-pane-empty' }, t('pane.empty'))
+                    : h('div', { className: 'bm-bot-group' }, visibleBots.map(botRow)),
+                  h('div', { className: 'bm-section' },
+                    h('span', null, t('pane.groups')),
+                    h('button', { className: 'bm-section-add', onClick: () => setForm({ mode: 'group' }) }, t('pane.newGroup'))),
+                  visibleGroups.length === 0
+                    ? h('p', { className: 'bm-muted bm-pane-empty' }, t('group.none'))
+                    : visibleGroups.map(groupRow))),
+            paneCollapsed
+              ? paneRailFoot
+              : h('div', { className: 'bm-pane-foot' },
+                h('button', {
+                  type: 'button',
+                  className: `bm-btn small${isSettingsView ? ' primary' : ''}`,
+                  style: { display: 'inline-flex', alignItems: 'center', gap: '5px', flex: 1, justifyContent: 'center' },
+                  onClick: () => openSettingsView('soul'),
+                }, h(SettingsIcon, { kind: 'gear' }), t('pane.settings')),
+                h('button', { type: 'button', className: 'bm-btn small', onClick: toHarness }, t('foot.back'))))
 
           const detailBody = activeBot
             ? h(BotDetail, {

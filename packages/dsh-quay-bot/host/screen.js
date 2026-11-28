@@ -1044,6 +1044,8 @@ export class ScreenBridge {
     else if (typeof patch.disk_path === 'string') body.disk_path = patch.disk_path
     if (patch.refreshIntervalSec !== undefined) body.stream_interval_sec = Number(patch.refreshIntervalSec)
     else if (patch.stream_interval_sec !== undefined) body.stream_interval_sec = Number(patch.stream_interval_sec)
+    if (patch.frameRate !== undefined) body.frame_rate = Number(patch.frameRate)
+    else if (patch.frame_rate !== undefined) body.frame_rate = Number(patch.frame_rate)
     if (typeof patch.pushUrl === 'string') body.push_url = patch.pushUrl
     else if (typeof patch.push_url === 'string') body.push_url = patch.push_url
     if (patch.pushIntervalSec !== undefined) body.push_interval_sec = Number(patch.pushIntervalSec)

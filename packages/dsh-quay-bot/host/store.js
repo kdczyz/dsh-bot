@@ -130,6 +130,9 @@ export const normalizeSystemSettings = (input, base = defaultSettingsState().sys
     refreshIntervalSec: sys.refreshIntervalSec !== undefined
       ? clampInt(sys.refreshIntervalSec, 1, 60, base.refreshIntervalSec)
       : base.refreshIntervalSec,
+    frameRate: [30, 15, 10].includes(Number(sys.frameRate))
+      ? Number(sys.frameRate)
+      : ([30, 15, 10].includes(Number(base.frameRate)) ? Number(base.frameRate) : 15),
     pushUrl: sys.pushUrl !== undefined ? cleanUrl(sys.pushUrl, base.pushUrl) : base.pushUrl,
     pushIntervalSec: sys.pushIntervalSec !== undefined
       ? clampInt(sys.pushIntervalSec, 0, 86400, base.pushIntervalSec)
@@ -192,6 +195,7 @@ export const defaultSettingsState = () => ({
     adminToken: '',         // 空表示使用 BOTSCREEN_ADMIN_TOKEN
     diskPaths: ['/'],       // 采集磁盘占用的挂载点列表
     refreshIntervalSec: 5,  // 监控流/界面刷新周期（秒）
+    frameRate: 15,          // 虚拟屏推流帧率档位：30 / 15 / 10，默认 15
     pushUrl: '',            // 可选：通过网关主动上报的目标接口 URL
     pushIntervalSec: 0,     // 0 = 关闭定时主动上报；>0 为秒级周期
     pushToken: '',          // 可选：主动上报鉴权 Token

@@ -51,10 +51,51 @@ SCREEN_WIDTH = int(os.environ.get("BOTSCREEN_WIDTH", "1280"))
 SCREEN_HEIGHT = int(os.environ.get("BOTSCREEN_HEIGHT", "720"))
 #: 色深：默认 24 位（亦支持 16 位进一步压缩帧缓冲带宽）。
 SCREEN_DEPTH = int(os.environ.get("BOTSCREEN_DEPTH", "24"))
-FRAME_RATE = int(os.environ.get("BOTSCREEN_FPS", "10"))
-#: 按需增量推流：64×64 脏矩形网格 + 100ms 采样 + 断开 5 秒自动销毁抓屏会话
+#: 虚拟屏推流帧率档位：仅允许 30 / 15 / 10，默认 15。
+SUPPORTED_FRAME_RATES = (30, 15, 10)
+DEFAULT_FRAME_RATE = 15
+
+
+def normalize_frame_rate(value) -> int:
+    """把任意输入归一到受支持的帧率档位，非法值回退到默认 15。"""
+    try:
+        fps = int(value)
+    except (TypeError, ValueError):
+        return DEFAULT_FRAME_RATE
+    return fps if fps in SUPPORTED_FRAME_RATES else DEFAULT_FRAME_RATE
+
+
+def frame_rate_to_interval_ms(value) -> int:
+    """帧率 -> 推流采样间隔（毫秒）。30→33、15→67、10→100。"""
+    return {30: 33, 15: 67, 10: 100}[normalize_frame_rate(value)]
+
+
+#: Xvfb 渲染帧率（启动参数 -FrameRate），默认与推流默认帧率一致。
+FRAME_RATE = normalize_frame_rate(os.environ.get("BOTSCREEN_FPS", str(DEFAULT_FRAME_RATE)))
+#: 运行时推流帧率：由网关从 SystemConfigStore 同步，可在设置中动态调整而无需重启。
+_runtime_frame_rate = normalize_frame_rate(os.environ.get("BOTSCREEN_FPS", str(DEFAULT_FRAME_RATE)))
+_runtime_interval_ms = frame_rate_to_interval_ms(_runtime_frame_rate)
+
+
+def set_runtime_frame_rate(value) -> int:
+    """设置全局推流帧率档位，返回归一化后的帧率。"""
+    global _runtime_frame_rate, _runtime_interval_ms
+    _runtime_frame_rate = normalize_frame_rate(value)
+    _runtime_interval_ms = frame_rate_to_interval_ms(_runtime_frame_rate)
+    return _runtime_frame_rate
+
+
+def get_runtime_frame_rate() -> int:
+    return _runtime_frame_rate
+
+
+def get_stream_interval_ms() -> int:
+    return _runtime_interval_ms
+
+
+#: 按需增量推流：64×64 脏矩形网格 + 可调采样间隔（默认 15fps ≈ 67ms）+ 断开 5 秒自动销毁抓屏会话
 TILE_SIZE = int(os.environ.get("BOTSCREEN_TILE_SIZE", "64"))
-STREAM_INTERVAL_MS = int(os.environ.get("BOTSCREEN_STREAM_MS", "100"))
+STREAM_INTERVAL_MS = _runtime_interval_ms
 CAPTURE_IDLE_HIBERNATE = float(os.environ.get("BOTSCREEN_CAPTURE_HIBERNATE", "5.0"))
 
 # ---- 生命周期参数 ------------------------------------------------------------

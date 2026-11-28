@@ -21,6 +21,7 @@
  *   POST artifacts/bundle — download multiple Agent reply artifacts as a ZIP archive via gateway
  *   DELETE artifacts    — delete an Agent reply artifact (`?id=...` or `DELETE artifacts/:id`)
  *   POST image          — upload one image attachment
+ *   GET  transcript     — fold one Bot Session log into readable chat turns (`?botId=`/`?roomId=`)
  *   POST command        — one typed mutation or action
  */
 import { createHash } from 'node:crypto'
@@ -68,6 +69,7 @@ import {
 } from './isolation.js'
 import { normalizeNotificationsSettings } from './channels.js'
 import { RemoteGateway } from './remote.js'
+import { readBotTranscript } from './transcript.js'
 
 const BOT_SCOPED_TOOL_NAMES = [
   'message_agent',
@@ -845,6 +847,18 @@ export class BotApi {
         sendJson(res, 200, { ok: true, ...result })
         return
       }
+      if (route === 'transcript' && req.method === 'GET') {
+        const botId = stringOr(url.searchParams.get('botId') || url.searchParams.get('bot_id')).trim()
+        const roomId = stringOr(url.searchParams.get('roomId') || url.searchParams.get('room_id')).trim()
+        const rawLimit = url.searchParams.get('limit')
+        const limit = rawLimit !== null && rawLimit.trim() !== '' ? clampInt(rawLimit, 1, 500, 120) : 120
+        const rawAfter = url.searchParams.get('after')
+        const after = rawAfter !== null && /^-?\d+$/.test(rawAfter.trim()) ? Number(rawAfter.trim()) : -1
+        await this.store.load()
+        const { sessionId, cursor, turns } = await this.readTranscript({ botId, roomId, limit, after })
+        sendJson(res, 200, { ok: true, sessionId, cursor, turns })
+        return
+      }
       if (route === 'image' && req.method === 'POST') {
         const mediaType = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase()
         if (!IMAGE_TYPES.has(mediaType)) {
@@ -906,6 +920,23 @@ export class BotApi {
       this.logger?.warn?.(`botmode: API ${route} failed: ${message}`)
       sendJson(res, 400, { ok: false, error: message })
     }
+  }
+
+  /**
+   * Fold the Bot's Session log into readable turns for the Bot page.
+   * Rooms read the member Session of that Bot, a primary chat reads the Bot's own.
+   */
+  async readTranscript({ botId, roomId, limit, after }) {
+    let sessionId = ''
+    if (roomId !== '') {
+      const room = this.store.room(roomId)
+      sessionId = room?.memberSessions?.[botId] ?? ''
+    } else {
+      sessionId = this.store.bot(botId)?.sessionId ?? ''
+    }
+    if (sessionId === '') return { sessionId: '', cursor: -1, turns: [] }
+    const { cursor, turns } = await readBotTranscript(this.ctx, sessionId, { limit, after })
+    return { sessionId, cursor, turns }
   }
 
   publicState() {
@@ -1553,6 +1584,8 @@ export class BotApi {
       ...(rawPatch.disk_path !== undefined ? { diskPath: rawPatch.disk_path } : {}),
       ...(rawPatch.refreshIntervalSec !== undefined ? { refreshIntervalSec: rawPatch.refreshIntervalSec } : {}),
       ...(rawPatch.stream_interval_sec !== undefined ? { refreshIntervalSec: rawPatch.stream_interval_sec } : {}),
+      ...(rawPatch.frameRate !== undefined ? { frameRate: rawPatch.frameRate } : {}),
+      ...(rawPatch.frame_rate !== undefined ? { frameRate: rawPatch.frame_rate } : {}),
       ...(rawPatch.pushUrl !== undefined ? { pushUrl: String(rawPatch.pushUrl ?? '').trim() } : {}),
       ...(rawPatch.push_url !== undefined ? { pushUrl: String(rawPatch.push_url ?? '').trim() } : {}),
       ...(rawPatch.pushIntervalSec !== undefined ? { pushIntervalSec: rawPatch.pushIntervalSec } : {}),
@@ -1582,6 +1615,7 @@ export class BotApi {
           enabled: updated.enabled,
           diskPaths: updated.diskPaths,
           refreshIntervalSec: updated.refreshIntervalSec,
+          frameRate: updated.frameRate,
           pushUrl: updated.pushUrl,
           pushIntervalSec: updated.pushIntervalSec,
           pushToken: updated.pushToken,

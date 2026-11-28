@@ -59,8 +59,10 @@ Quay Bot maps each of those onto **real DeepSeek Harness primitives** instead of
 
 - **Three identity files**: `$DSH_HOME/botmode/bots/<slug>-<id>/` holds `bot.json`, `SOUL.md` (persona and standing instructions), `MEMORY.md` (long-term notes the Bot may edit itself), plus `.dsh/skills/team/SKILL.md` teaching it how to use teammate messaging and memory tools.
 - **Permanent Bot chat**: `botId → canonicalSessionId`; `/new` and `/reset` take a memory checkpoint then compact **without switching session**. Sidebar sections, pinning and search all apply.
+- **Standalone page with a collapsible Bot sidebar**: entering Bot mode gives up the shell's workspace sidebar and keeps only the Bot list; the chevron next to the title folds it into a 56 px avatar rail (state kept in `localStorage`) that still switches Bots, creates one, opens settings, or returns to Harness.
+- **History folded by the Host**: a Bot session lives under the Bot's own directory, so the browser's session service never lists it. The Host reads that session log and folds it into chat turns (`GET /botmode/api/transcript`), rendered by the same components as the live view: prose, reasoning rows and tool calls with arguments, output and status. Switching Bots loads its log on its own, and an `after=<seq>` poll every 3 s while a turn runs (12 s idle) pulls in turns started anywhere else, so the refresh button is a fallback rather than a habit.
 - **Per-Bot model binding**: follow the DSH default (empty binding, re-read every turn) or pin a provider/model plus thinking level. The live model catalog marks whether each model accepts image input; text-only models are rejected at enqueue time.
-- **Image messages**: up to 6 PNG/JPEG/WebP/GIF files per message, ≤ 12 MB each, only when the Bot's current model declares `image` input.
+- **Image messages**: up to 6 PNG/JPEG/WebP/GIF files per message, ≤ 12 MB each, only when the Bot's current model declares `image` input. Add them from the picker, paste, or drag-and-drop; each card shows its thumbnail, name and size with per-item removal and clear-all, and an Enter that commits an IME candidate never sends.
 
 ![Bot team and group chat](./screenshots/bot-group-chat.png)
 

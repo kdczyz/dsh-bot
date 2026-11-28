@@ -35,7 +35,7 @@ Hermes 的 Bot Mode 本质是「一组有身份的 agent + 一个群聊确定性
 | 持久 Routines | Host 自己解析五段 cron，`setInterval` 包在 `ctx.effect()` 中；支持冷会话唤醒、手动 `Run now`、暂停/恢复 |
 | 审批 | Bot 私聊与隐藏群聊会话的 `approval/request`（`once / session / always / deny`）及 `ask_user_question`（`user-questions/request`）均由 Host 桥接；群聊会话局部挂起不超时误杀，私聊无人值守 2 分钟自动拒绝 |
 | Sections | 分组存于 `state.json`，侧边栏按 Section 分组；Bot 表单可选 Section，可新建 Section |
-| 页面入口 | `sidebar.panellist` 图标 + 侧边栏底部 `Bot 模式` 按钮；`main` 面板 key `botmode` |
+| 页面入口 | `sidebar.panellist` 图标 + 侧边栏底部 `Bot 模式` 按钮；`main` 面板 key `botmode`。进入后外壳的工作区侧栏让位，Bot 页面整页独占视口，Bot 会话侧栏可折叠成 56px 头像轨道（`localStorage` 记住状态） |
 
 ## 安装
 
@@ -56,7 +56,7 @@ dsh plugin --profile desktop install /path/to/dsh-bot/packages/dsh-botmode
 
 ## 使用
 
-1. 侧边栏点机器人图标，或底部 `Bot 模式`，进入 Bot 页面。
+1. 侧边栏点机器人图标，或底部 `Bot 模式`，进入 Bot 页面：该页是独立整页，不带外壳的工作区侧栏；标题右侧箭头可把 Bot 侧栏折叠成图标轨道（折叠后仍能切 Bot、新建、进设置、回 Harness）。
 2. `新建` 一个 Bot：名字、角色、常驻指令、分组、模型、工具白名单、审批策略。模型默认跟随 **DSH 默认模型**；也可以单独指定 provider/model、思考档位（reasoning effort）和视觉能力。表单从 Host 的实时模型目录读取：每个模型会标出可选的思考档位与是否支持图片输入，纯文本模型不能给 Bot 发图。
 3. 创建后会立刻生成目录与身份文件，并创建一个 canonical Session。
 4. 在 Bot 详情里直接聊天；回复按官方轨迹样式渲染：思考过程可折叠、正文 Markdown/代码块、工具调用行可展开参数与输出，流式时有 shimmer 与光标。输入框可附加 PNG/JPEG/WebP/GIF 图片（最多 6 张、每张 12 MB），前提是这个 Bot 当前绑定的模型声明了图片输入能力；纯文本模型会在发送时被 Host 拒绝。`定时例程` 区域可以建 cron、立即跑、暂停、删除。
@@ -119,6 +119,7 @@ $DSH_HOME/botmode/
 - `GET /botmode/api/state` → roster、sections、rooms（含 transcript/activity/watermarks/预算/运行态）、routines、approvals、memory 摘要、工具名、状态根
 - `GET /botmode/api/models[?force=1]` → 实时 provider/model 目录、每个模型的思考档位与 `vision` 能力、当前 DSH 默认选择
 - `GET /botmode/api/memory` → 完整 Memory Hub 状态、已安装记忆库、可下载目录与实时健康探测
+- `GET /botmode/api/transcript?botId=[&roomId=][&limit=][&after=seq]` → `{ ok, sessionId, cursor, turns }`：Host 直接读该 Bot（或房间成员）会话日志并折成与实时视图同构的 turn（用户消息、助手 blocks：正文 / 思考 / 工具调用含参数与输出 / 错误与中止），`cursor` 是日志最新 seq，带 `after=` 时只返回更新的部分，供页面增量轮询；Bot 会话不在浏览器端会话列表里，页面靠这条渲染历史
 - `POST /botmode/api/image`，body 为图片二进制，`content-type` 为 `image/png|jpeg|webp|gif` → `{ ok, attachment }`
 - `POST /botmode/api/command`，body `{ type, ... }`
 - `GET /botmode/api/remote[?qr=0]` → Remote 运行态、App 链接、二维码（详见 [DETAIL.md](../packages/dsh-botmode/docs/DETAIL.md)）

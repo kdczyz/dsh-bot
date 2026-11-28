@@ -44,6 +44,10 @@ from .config import (
     ARTIFACT_MAX_BYTES,
     CAPTURE_IDLE_HIBERNATE,
     DEFAULT_DISK_PATHS,
+    DEFAULT_FRAME_RATE,
+    normalize_frame_rate,
+    set_runtime_frame_rate,
+    get_runtime_frame_rate,
     DESKTOP_SPEC_VERSION,
     GATEWAY_API_VERSION,
     IDLE_MODE,
@@ -120,6 +124,7 @@ class SystemConfigStore:
         self.enabled: bool = True
         self.disk_paths: List[str] = _normalize_disk_paths(DEFAULT_DISK_PATHS)
         self.stream_interval_sec: float = max(0.5, min(60.0, float(SYSTEM_STREAM_INTERVAL)))
+        self.frame_rate: int = normalize_frame_rate(get_runtime_frame_rate() or DEFAULT_FRAME_RATE)
         self.push_url: str = SYSTEM_PUSH_URL
         self.push_interval_sec: int = max(0, min(86400, int(SYSTEM_PUSH_INTERVAL)))
         self.push_token: str = SYSTEM_PUSH_TOKEN
@@ -140,6 +145,8 @@ class SystemConfigStore:
                 self.disk_paths = _normalize_disk_paths(raw["disk_paths"], self.disk_paths)
             if raw.get("stream_interval_sec") is not None:
                 self.stream_interval_sec = max(0.5, min(60.0, float(raw["stream_interval_sec"])))
+            if raw.get("frame_rate") is not None:
+                self.frame_rate = normalize_frame_rate(raw["frame_rate"])
             if isinstance(raw.get("push_url"), str):
                 url = raw["push_url"].strip()
                 if not url or url.startswith(("http://", "https://")):
@@ -160,6 +167,7 @@ class SystemConfigStore:
             "enabled": self.enabled,
             "disk_paths": self.disk_paths,
             "stream_interval_sec": self.stream_interval_sec,
+            "frame_rate": self.frame_rate,
             "push_url": self.push_url,
             "push_interval_sec": self.push_interval_sec,
             "push_token": self.push_token,
@@ -190,6 +198,7 @@ class SystemConfigStore:
         enabled: Optional[bool] = None,
         disk_paths: Optional[Sequence[str]] = None,
         stream_interval_sec: Optional[float] = None,
+        frame_rate: Optional[int] = None,
         push_url: Optional[str] = None,
         push_interval_sec: Optional[int] = None,
         push_token: Optional[str] = None,
@@ -200,6 +209,10 @@ class SystemConfigStore:
             self.disk_paths = _normalize_disk_paths(disk_paths, ["/"])
         if stream_interval_sec is not None:
             self.stream_interval_sec = round(max(0.5, min(60.0, float(stream_interval_sec))), 2)
+        if frame_rate is not None:
+            self.frame_rate = normalize_frame_rate(frame_rate)
+            # 立即应用到全局推流循环，无需重启网关
+            set_runtime_frame_rate(self.frame_rate)
         if push_url is not None:
             self.push_url = _validate_http_url(push_url)
         if push_interval_sec is not None:
@@ -217,6 +230,7 @@ class SystemConfigStore:
             "enabled": self.enabled,
             "disk_paths": list(self.disk_paths),
             "stream_interval_sec": self.stream_interval_sec,
+            "frame_rate": self.frame_rate,
             "push_url": self.push_url,
             "push_interval_sec": self.push_interval_sec,
             "has_push_token": bool(self.push_token),
@@ -473,6 +487,8 @@ async def system_reporter(reg: Registry) -> None:
 async def lifespan(app: FastAPI):
     global REGISTRY
     REGISTRY = Registry(DEFAULT_BOTS)
+    # 应用持久化的虚拟屏帧率档位（默认 15fps），推流循环实时读取
+    set_runtime_frame_rate(REGISTRY.system_config.frame_rate)
     prime_cpu_sample()
     try:
         if REGISTRY.workers:
@@ -615,6 +631,7 @@ async def healthz() -> dict:
         "desktop_spec_version": DESKTOP_SPEC_VERSION,
         "idle_mode": IDLE_MODE,
         "idle_stop_seconds": IDLE_STOP_SECONDS,
+        "frame_rate": get_runtime_frame_rate(),
         "capabilities": [
             "ensure",
             "tile_stream",
@@ -644,6 +661,7 @@ class SystemConfigBody(BaseModel):
     disk_paths: Optional[List[str]] = None
     disk_path: Optional[str] = None
     stream_interval_sec: Optional[float] = Field(default=None, ge=0.5, le=60.0)
+    frame_rate: Optional[int] = Field(default=None, ge=1, le=120)
     push_url: Optional[str] = None
     push_interval_sec: Optional[int] = Field(default=None, ge=0, le=86400)
     push_token: Optional[str] = None
@@ -703,6 +721,7 @@ async def update_system_config(body: SystemConfigBody) -> dict:
         enabled=body.enabled,
         disk_paths=paths,
         stream_interval_sec=body.stream_interval_sec,
+        frame_rate=body.frame_rate,
         push_url=body.push_url,
         push_interval_sec=body.push_interval_sec,
         push_token=body.push_token,

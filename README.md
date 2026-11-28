@@ -59,8 +59,10 @@ Quay Bot 就是把这四件事**逐项落到 DeepSeek Harness 的真能力上**�
 
 - **独立身份三件套**：`$DSH_HOME/botmode/bots/<slug>-<id>/` 下的 `bot.json`、`SOUL.md`（人格与常驻指令）、`MEMORY.md`（Bot 可自己改的长期记忆），外加 `.dsh/skills/team/SKILL.md` 教它怎么用队友消息与记忆工具。
 - **永久 Bot Chat**：`botId → canonicalSessionId`，`/new`、`/reset` 触发记忆检查点后做 compaction，**不换会话**；侧边栏按 Section 分组、置顶与搜索。
+- **独立整页 + 可折叠 Bot 侧栏**：进入 Bot 模式后外壳的工作区侧栏让位，只留 Bot 会话侧栏；点标题右侧箭头可折叠成 56px 头像轨道（状态记在 `localStorage`），折叠时仍能切 Bot、新建、进设置、回 Harness。
+- **历史由 Host 折叠**：Bot 会话落在 Bot 自己的目录下，浏览器端的会话服务拿不到它，于是 Host 读会话日志折成对话（`GET /botmode/api/transcript`）再交给页面。刷新后旧消息、Markdown、思考过程、工具调用（名称 / 参数 / 输出 / 状态）都在，和实时视图同一套组件渲染；切 Bot 自动载入，跑动中每 3 秒、空闲每 12 秒按 `after=<seq>` 增量追一次，所以在别处触发的回合也会自己出现，不用点刷新。
 - **模型与能力可单独绑定**：默认跟随 DSH 默认模型（空绑定，每轮重读），也可指定 provider/model、思考档位；模型目录会标出每个模型是否支持图片输入，纯文本模型在 Host 入队前就被拒。
-- **图片对话**：每条消息最多 6 张 PNG/JPEG/WebP/GIF、每张 ≤ 12 MB，需该 Bot 当前模型声明 `image` 输入能力。
+- **图片对话**：每条消息最多 6 张 PNG/JPEG/WebP/GIF、每张 ≤ 12 MB，需该 Bot 当前模型声明 `image` 输入能力。支持文件选择、直接粘贴、拖拽入框三种添加方式，附件卡片显示缩略图 / 文件名 / 体积并支持单张移除与一键清空；回车发送走输入法安全判定，选中候选词的那次回车不会误发。
 
 ![Bot 团队与群聊](./screenshots/bot-group-chat.png)
 
@@ -304,6 +306,7 @@ cd packages/dsh-botmode   && npm test     # 9 个无头测试 + remote/test
 | `GET /botmode/api/state` | 名册、分组、房间（含 transcript / activity / 水位线 / 预算 / 运行态）、例程、审批、记忆摘要 |
 | `GET /botmode/api/models[?force=1]` | 实时模型目录、思考档位、`vision` 能力、当前默认选择 |
 | `GET /botmode/api/memory` | Memory Hub 状态、已装记忆库、可安装目录、健康探测 |
+| `GET /botmode/api/transcript` | `?botId=&roomId=&limit=` → 会话日志折叠出的对话（页面历史来源） |
 | `POST /botmode/api/image` | 图片二进制 → `{ ok, attachment }`（PNG/JPEG/WebP/GIF） |
 | `POST /botmode/api/command` | `{ type, ... }`：`bot.*` / `room.*` / `routine.*` / `approval.decide` / `question.decide` / `memory.*` / `remote.*` |
 | `GET /botmode/api/remote[?qr=0]` | Remote 运行态 + 链接 + 二维码 |
