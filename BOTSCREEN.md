@@ -1,5 +1,7 @@
 # BotScreen
 
+> 项目总览（Bot 团队模式 / 安装 / 架构）见 [README.md](./README.md)；Bot 模式实现细则见 [docs/BOTMODE.md](./docs/BOTMODE.md)。
+
 轻量级多 Bot 虚拟屏系统（Linux）。每张虚拟屏 = 独立 X server（KasmVNC）+ 极简窗口管理器（Openbox）+ 独立 HOME + 独立 cgroup v2 子组，闲置时内核级冻结到 **CPU 0%**，收到 Agent 或人类请求后毫秒级唤醒，窗口/表单/标签页完整保留。
 
 已在本机验证：Ubuntu 24.04 aarch64 / cgroup v2 / KasmVNC 1.5.2 / Chrome 真实页面输入。

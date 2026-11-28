@@ -34,4 +34,4 @@ dsh plugin --profile desktop install /path/to/dsh-bot/packages/dsh-botmode
 node packages/dsh-botmode/test/host.test.mjs
 ```
 
-完整架构、命令表与限制见仓库根目录 [README.md](../../README.md)。
+完整架构、命令表与限制见 [docs/BOTMODE.md](../../docs/BOTMODE.md)；项目总览见仓库根 [README.md](../../README.md)。
