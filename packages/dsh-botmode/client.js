@@ -510,6 +510,7 @@ window.__ModuleLoader__.load({
         'remote.rotate': 'Rotate key',
         'remote.rotated': 'Key rotated, old link expires after the grace window',
         'remote.stop': 'Stop mapping',
+        'remote.start': 'Start mapping',
         'remote.close': 'Close',
         'remote.notRunning': 'The gateway is not running yet.',
         'remote.failed': 'Gateway command failed',
@@ -1018,6 +1019,7 @@ window.__ModuleLoader__.load({
         'remote.rotate': '轮换密钥',
         'remote.rotated': '密钥已轮换，旧链接在宽限期后失效',
         'remote.stop': '停止映射',
+        'remote.start': '启动映射',
         'remote.close': '关闭',
         'remote.notRunning': '网关尚未启动。',
         'remote.failed': '网关命令失败',
@@ -8573,9 +8575,17 @@ window.__ModuleLoader__.load({
                   type: 'button', className: 'bm-remote-btn', 'data-primary': 'true',
                   onClick: copy, disabled: !(data && data.appLink),
                 }, t('remote.copyApp')),
-                h('button', { type: 'button', className: 'bm-remote-btn', onClick: () => load(isStopped), disabled: Boolean(busy) }, t('remote.refresh')),
+                h('button', { type: 'button', className: 'bm-remote-btn', onClick: () => load(false), disabled: Boolean(busy) }, t('remote.refresh')),
                 h('button', { type: 'button', className: 'bm-remote-btn', onClick: rotateApp, disabled: Boolean(busy) || !(data && data.appLink) }, t('remote.rotateApp')),
-                h('button', { type: 'button', className: 'bm-remote-btn', 'data-danger': 'true', onClick: stop, disabled: Boolean(busy) || !(data && data.running) }, t('remote.stop')),
+                data && data.running
+                  ? h('button', { type: 'button', className: 'bm-remote-btn', 'data-danger': 'true', onClick: stop, disabled: Boolean(busy) }, t('remote.stop'))
+                  : h('button', {
+                    type: 'button',
+                    className: 'bm-remote-btn',
+                    'data-primary': 'true',
+                    onClick: () => (needsCloudflared ? downloadAndStart() : load(true)),
+                    disabled: Boolean(busy),
+                  }, t('remote.start')),
                 toast ? h('span', { className: 'bm-remote-toast' }, toast) : null)))
 
           // 侧边栏存在 transform 祖先，fixed 定位会被拽回；挂到 body 才是真正的全屏浮层
