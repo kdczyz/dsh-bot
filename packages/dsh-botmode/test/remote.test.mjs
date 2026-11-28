@@ -186,3 +186,26 @@ test('resolveNodeRuntime：三端 Electron 桌面版与纯 Node 兼容解析', a
     extraEnv: { ELECTRON_RUN_AS_NODE: '1' },
   })
 })
+
+test('status：新进程启动中（runtime.link 为空）不应被旧 link.txt 误导', async () => {
+  const home = tempHome()
+  try {
+    writeFileSync(join(home.dir, 'link.txt'), `${LINK}\n`)
+    writeFileSync(join(home.dir, 'state', 'runtime.json'), JSON.stringify({
+      pid: process.pid,
+      startedAt: new Date().toISOString(),
+      listen: { host: '127.0.0.1', port: 49123 },
+      publicUrl: null,
+      link: null,
+      appLink: null,
+      tunnel: { mode: 'quick', state: 'running', url: null, restarts: 0 },
+    }))
+    const gateway = new RemoteGateway({ home: home.dir, bin: '/nonexistent/dsh-remote.mjs', logger: noopLogger })
+    const state = await gateway.status({ qr: false })
+    assert.equal(state.running, true)
+    assert.equal(state.link, null)
+    assert.equal(state.appLink, null)
+  } finally {
+    home.cleanup()
+  }
+})

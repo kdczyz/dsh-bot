@@ -8391,10 +8391,6 @@ window.__ModuleLoader__.load({
               setError(String(tunnelErr))
               return
             }
-            if (next.link && !next.appLink) {
-              setError(t('remote.appDisabled'))
-              return
-            }
             setError('')
           }
 
@@ -8410,7 +8406,8 @@ window.__ModuleLoader__.load({
               }
               const needsDownload = Boolean(next && next.cloudflared && next.cloudflared.needsDownload)
               // 首次未安装 cloudflared 时不静默自动下载，先让用户手动选择国内镜像源或官方源
-              if (ensure && !needsDownload && (!next.running || !next.healthy)) {
+              if (ensure && !needsDownload && (!next.running || !next.healthy || !next.appLink)) {
+                setData(next)
                 next = await hostCommand('remote.up')
               }
               setData(next)
@@ -8440,12 +8437,11 @@ window.__ModuleLoader__.load({
           useEffect(() => {
             if (!data || !data.running || data.appLink) return undefined
             if (data.cloudflared && data.cloudflared.needsDownload) return undefined
-            if (data.link && !data.appLink) return undefined
             const timer = window.setInterval(() => {
               void load(false, { silent: true })
-            }, 2500)
+            }, 1500)
             return () => window.clearInterval(timer)
-          }, [data && data.running, data && data.link, data && data.appLink, data && data.cloudflared && data.cloudflared.needsDownload])
+          }, [data && data.running, data && data.appLink, data && data.cloudflared && data.cloudflared.needsDownload])
           useEffect(() => {
             const onKey = (event) => { if (event.key === 'Escape') onClose() }
             window.addEventListener('keydown', onKey)
@@ -8507,12 +8503,12 @@ window.__ModuleLoader__.load({
           }
 
           const needsCloudflared = Boolean(data && data.cloudflared && data.cloudflared.needsDownload)
-          const tunnelPending = Boolean(data && data.running && !data.link && !needsCloudflared)
+          const isStopped = Boolean(data && !data.running && !busy && !needsCloudflared)
           const emptyMessage = busy
-            || (tunnelPending
-              ? t('remote.tunnelStarting')
-              : (data && data.link && !data.appLink
-                ? t('remote.appDisabled')
+            || (isStopped
+              ? t('remote.stopped')
+              : (data && data.running && !data.appLink
+                ? t('remote.starting')
                 : (error ? t('remote.failed') : t('remote.starting'))))
 
           const setupPane = h('div', { className: 'bm-remote-setup' },
@@ -8577,7 +8573,7 @@ window.__ModuleLoader__.load({
                   type: 'button', className: 'bm-remote-btn', 'data-primary': 'true',
                   onClick: copy, disabled: !(data && data.appLink),
                 }, t('remote.copyApp')),
-                h('button', { type: 'button', className: 'bm-remote-btn', onClick: () => load(false), disabled: Boolean(busy) }, t('remote.refresh')),
+                h('button', { type: 'button', className: 'bm-remote-btn', onClick: () => load(isStopped), disabled: Boolean(busy) }, t('remote.refresh')),
                 h('button', { type: 'button', className: 'bm-remote-btn', onClick: rotateApp, disabled: Boolean(busy) || !(data && data.appLink) }, t('remote.rotateApp')),
                 h('button', { type: 'button', className: 'bm-remote-btn', 'data-danger': 'true', onClick: stop, disabled: Boolean(busy) || !(data && data.running) }, t('remote.stop')),
                 toast ? h('span', { className: 'bm-remote-toast' }, toast) : null)))

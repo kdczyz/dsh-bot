@@ -503,9 +503,9 @@ export class RemoteGateway {
       readText(this.linkPath),
       this.detectCloudflared(),
     ])
-    let link = rawLink
-    if (!link && runtime?.link) link = runtime.link
     const running = Boolean(runtime && isAlive(runtime.pid))
+    // 进程运行中只认当前 runtime.link，绝不用上一次停机遗留的旧 link.txt 冒充新隧道已就绪
+    const link = running ? (runtime?.link || null) : (runtime?.link || rawLink || null)
     const port = runtime?.listen?.port ?? null
     const health = running && port ? await probe(`http://127.0.0.1:${port}/__dsh/health`) : false
     const parsed = parseGatewayLink(link)
@@ -559,7 +559,7 @@ export class RemoteGateway {
   /** 确保网关在线（首次缺少 cloudflared 时需由用户选择下载源后再下载并启动）。 */
   async up({ source } = {}) {
     const before = await this.status({ qr: false })
-    if (before.running && before.healthy && before.link) {
+    if (before.running && before.healthy && before.link && before.appLink) {
       return { ...(await this.status()), started: false, message: '网关已在线' }
     }
     if (!this.bin || !existsSync(this.bin)) {
@@ -573,7 +573,7 @@ export class RemoteGateway {
       if (before.running) {
         await this.down().catch(() => {})
       }
-    } else if (before.running && before.healthy && !before.link) {
+    } else if (before.running && before.healthy && (!before.link || !before.appLink)) {
       return this.#waitFor({ timeoutMs: 30_000, expectPid: null }).then((state) => ({ ...state, started: false }))
     }
     await this.#runDetachedUp({ timeoutMs: 120_000 })
@@ -585,8 +585,8 @@ export class RemoteGateway {
     let last = null
     while (Date.now() < deadline) {
       last = await this.status({ qr: false })
-      if (last.running && last.healthy && last.link) return this.status()
-      await sleep(1200)
+      if (last.running && last.healthy && last.link && last.appLink) return this.status()
+      await sleep(1000)
     }
     return { ...(last ?? (await this.status())), timeout: true }
   }
@@ -633,6 +633,7 @@ export class RemoteGateway {
       await this.#run(['stop'], { timeoutMs: 30_000 })
     }
     await sleep(800)
+    await rm(this.linkPath, { force: true }).catch(() => {})
     return { ...(await this.status()), stopped: true }
   }
 
