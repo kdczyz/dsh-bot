@@ -1,0 +1,3 @@
+- insert:
+    - id: botmode
+      name: 'dsh-quay-bot'

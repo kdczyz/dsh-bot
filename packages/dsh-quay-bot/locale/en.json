@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Bot mode",
+    "description": "Switch the session bar between Harness mode and Bot mode: a roster of named Bots, each with its own chat and standing instructions.",
+    "detail": "docs/DETAIL.md"
+  }
+}

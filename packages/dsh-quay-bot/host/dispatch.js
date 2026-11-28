@@ -1,0 +1,907 @@
+/**
+ * Serial delivery of turns into Bot sessions (primary & hidden Group Room sessions).
+ *
+ * Improvements over v0.4:
+ * - Per-Session FIFO queues (`bot:<id>` for primary chat, `room:<roomId>:<botId>`
+ *   for isolated hidden Group Room sessions) so group chats never pollute a
+ *   Bot's private chat or block unrelated rooms.
+ * - Accurate `inRoom(botId)` reflecting active room membership rather than only
+ *   the momentary execution window of one speaker.
+ * - Hermes-style MemoryManager lifecycle integration (`prefetch` before turns,
+ *   async `syncTurn` after substantive turns).
+ * - `message_agent` loop guard (`MAX_AGENT_HOPS`, per-chain dedup hash,
+ *   ambiguous-target refusal, and session-based Group Room enforcement).
+ */
+import { createHash, randomUUID } from 'node:crypto'
+import { mkdir } from 'node:fs/promises'
+import { newId, writeTextFile } from './store.js'
+import { modelAcceptsImages, resolveBotSelection } from './models.js'
+import { computeErrorFingerprint, isPassReply } from './room-protocol.js'
+import { extractMutatedPathsFromTool } from './room-locks.js'
+
+const TURN_TIMEOUT_MS = 15 * 60 * 1000
+const MAX_REPLY_CHARS = 16_000
+export const MAX_AGENT_HOPS = 4
+
+const textOfBlocks = (blocks) => {
+  if (!Array.isArray(blocks)) return ''
+  return blocks
+    .filter(block => block && block.type === 'text' && typeof block.text === 'string')
+    .map(block => block.text)
+    .join('\n')
+    .trim()
+}
+
+const oneLine = (value) => String(value ?? '').replace(/\s+/g, ' ').trim()
+
+const localDayKey = (date = new Date()) => {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+const messageFingerprint = (senderId, targetId, message) => {
+  const normalized = String(message ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+  return createHash('sha256').update(`${senderId}->${targetId}:${normalized}`).digest('hex').slice(0, 16)
+}
+
+export const makeUserMessage = (text, content) => ({
+  id: randomUUID(),
+  role: 'user',
+  content: content ?? [{ type: 'text', text }],
+  source: { kind: 'user' },
+})
+
+export class Dispatcher {
+  #chains = new Map() // queueKey -> Promise
+  #queue = new Map() // queueKey -> queued count
+  #runningKeys = new Set() // active queueKeys
+  #speakingRoomCounts = new Map() // botId -> active room turn count
+  #roomSpeakers = new Map() // roomId -> Set<botId>
+  #activeRooms = new Map() // roomId -> Set<botId>
+  #last = new Map() // botId -> last result
+  #dmChains = new Map() // botId -> { chainId, hops, lastSenderId, seen: Set<string> }
+
+  constructor(ctx, store, logger, onAgent, memory = null) {
+    this.ctx = ctx
+    this.store = store
+    this.logger = logger
+    this.onAgent = onAgent
+    this.memory = memory
+    this.onReplyArtifacts = null
+    this.onBudgetExceeded = null
+  }
+
+  setMemoryManager(memory) {
+    this.memory = memory
+  }
+
+  setArtifactHandler(handler) {
+    this.onReplyArtifacts = typeof handler === 'function' ? handler : null
+  }
+
+  setBudgetExceededHandler(handler) {
+    this.onBudgetExceeded = typeof handler === 'function' ? handler : null
+  }
+
+  #effectiveDailyTokenLimit(bot) {
+    const botLimit = Number(bot?.dailyTokenLimit) || 0
+    if (botLimit > 0) return botLimit
+    const globalLimit = Number(this.store.state?.settings?.governance?.defaultDailyTokenLimit) || 0
+    return globalLimit > 0 ? globalLimit : 0
+  }
+
+  #todayTokensUsed(bot, today = localDayKey()) {
+    const usage = bot?.tokenUsage
+    if (!usage || usage.day !== today) return 0
+    return Number(usage.tokens) || 0
+  }
+
+  async #recordTokenUsage(botId, deltaTokens) {
+    const add = Math.max(0, Math.round(Number(deltaTokens) || 0))
+    if (add <= 0) return
+    const today = localDayKey()
+    await this.store.mutate((state) => {
+      const stored = state.bots.find(item => item.id === botId)
+      if (!stored) return
+      const prev = stored.tokenUsage && stored.tokenUsage.day === today ? (Number(stored.tokenUsage.tokens) || 0) : 0
+      stored.tokenUsage = { day: today, tokens: prev + add }
+    }).catch(() => undefined)
+  }
+
+  /** Called by Rooms when a room starts or stops driving a discussion. */
+  setActiveRoomMembers(roomId, memberIds) {
+    if (!roomId) return
+    this.#activeRooms.set(roomId, new Set(Array.isArray(memberIds) ? memberIds : []))
+  }
+
+  clearActiveRoom(roomId) {
+    this.#activeRooms.delete(roomId)
+  }
+
+  #queueKey(botId, options = {}) {
+    if (options.roomId) return `room:${options.roomId}:${botId}`
+    // Isolated Routine runs get their own FIFO so they never wait behind (or block) the Bot's chat.
+    if (this.#isIsolatedRoutine(options)) return `routine:${options.routineId}:${botId}`
+    return `bot:${botId}`
+  }
+
+  /** True for Routine runs that execute in their own Session (`fresh` / `named`), not the primary chat. */
+  #isIsolatedRoutine(options = {}) {
+    return typeof options.routineId === 'string' && options.routineId !== ''
+      && (options.sessionMode === 'fresh' || options.sessionMode === 'named')
+  }
+
+  /** Remember the latest result for the primary-chat preview; isolated Routine runs never overwrite it. */
+  #remember(botId, result, options = {}) {
+    if (this.#isIsolatedRoutine(options)) return
+    this.#last.set(botId, result)
+  }
+
+  isRunning(botId) {
+    if (this.#runningKeys.has(`bot:${botId}`)) return true
+    for (const key of this.#runningKeys) {
+      if (key.endsWith(`:${botId}`)) return true
+    }
+    return false
+  }
+
+  queueDepth(botId) {
+    let total = 0
+    for (const [key, depth] of this.#queue.entries()) {
+      if (key === `bot:${botId}` || key.endsWith(`:${botId}`)) total += depth
+    }
+    return total
+  }
+
+  isBusy(botId) {
+    return this.isRunning(botId) || this.queueDepth(botId) > 0
+  }
+
+  /** True when this Bot belongs to any currently running Group Room or is speaking in one. */
+  inRoom(botId) {
+    if ((this.#speakingRoomCounts.get(botId) ?? 0) > 0) return true
+    for (const members of this.#activeRooms.values()) {
+      if (members.has(botId)) return true
+    }
+    return false
+  }
+
+  roomSpeaking(botId) {
+    return (this.#speakingRoomCounts.get(botId) ?? 0) > 0
+  }
+
+  roomSpeakers(roomId) {
+    return [...(this.#roomSpeakers.get(roomId) ?? [])]
+  }
+
+  activeRoomId(botId) {
+    for (const [roomId, members] of this.#activeRooms.entries()) {
+      if (members.has(botId)) return roomId
+    }
+    return ''
+  }
+
+  status() {
+    const busy = {}
+    for (const bot of this.store.state.bots) {
+      if (this.isBusy(bot.id)) {
+        busy[bot.id] = {
+          running: this.isRunning(bot.id),
+          queued: this.queueDepth(bot.id),
+        }
+      }
+    }
+    return { busy, last: Object.fromEntries(this.#last) }
+  }
+
+  lastResult(botId) { return this.#last.get(botId) }
+
+  /** Queue one turn on the target Session's FIFO and return its settled result. */
+  enqueue(botId, text, options = {}) {
+    // A scheduled run starts a fresh teammate-message chain (same rule as `dispatch`).
+    if (options.source === 'routine') {
+      this.#dmChains.set(botId, { chainId: newId('chain'), hops: 0, lastSenderId: '', seen: new Set() })
+    }
+    const key = this.#queueKey(botId, options)
+    const previous = this.#chains.get(key) ?? Promise.resolve()
+    this.#queue.set(key, (this.#queue.get(key) ?? 0) + 1)
+    const run = previous.then(async () => {
+      this.#queue.set(key, Math.max(0, (this.#queue.get(key) ?? 1) - 1))
+      return this.#runTurn(botId, text, options, key)
+    }).catch((error) => {
+      const result = { ok: false, error: error instanceof Error ? error.message : String(error) }
+      this.#remember(botId, result, options)
+      return result
+    }).finally(() => {
+      if ((this.#queue.get(key) ?? 0) === 0) this.#queue.delete(key)
+    })
+    this.#chains.set(key, run.then(() => undefined, () => undefined))
+    return run
+  }
+
+  /** Fire-and-forget delivery used by the HTTP API and teammate tools. */
+  dispatch(botId, text, options = {}) {
+    const bot = this.store.bot(botId)
+    if (!bot) return { ok: false, error: 'unknown bot' }
+    // A fresh human or scheduled routine message resets the DM loop-guard chain for this Bot.
+    if (options.source === 'api' || options.source === 'command' || options.source === 'chat' || options.source === 'service' || options.source === 'routine') {
+      this.#dmChains.set(botId, { chainId: newId('chain'), hops: 0, lastSenderId: '', seen: new Set() })
+    }
+    const queued = this.queueDepth(botId)
+    void this.enqueue(botId, text, options)
+    return { ok: true, accepted: true, queued }
+  }
+
+  /** Create or resume the Bot's canonical primary Session and return its id. */
+  async ensureSession(bot) {
+    const agent = await this.#resolveAgent(bot, {})
+    return agent.session.id
+  }
+
+  /** Create or resume the Bot's isolated hidden Group Room Session and return its id. */
+  async ensureRoomSession(bot, roomId) {
+    const agent = await this.#resolveAgent(bot, { roomId })
+    return agent.session.id
+  }
+
+  async #resolveAgent(bot, options = {}) {
+    const controller = this.ctx.get('sessionController')
+    if (!controller) throw new Error('sessionController is not available')
+
+    const roomId = typeof options.roomId === 'string' ? options.roomId : ''
+    if (roomId !== '') {
+      const room = this.store.room(roomId)
+      await this.store.ensureBotDir(bot)
+      const desiredCwd = room?.workDir && room.workDir.trim() !== '' ? room.workDir.trim() : bot.dir
+      const existingRoomSessionId = room?.memberSessions?.[bot.id] ?? ''
+      if (existingRoomSessionId !== '') {
+        const resolved = await controller.resolveAgent(existingRoomSessionId)
+        if (resolved && resolved.agent) {
+          const currentCwd = resolved.agent.cwd ?? resolved.agent.session?.header?.cwd ?? desiredCwd
+          if (!room?.workDir || currentCwd === desiredCwd) {
+            await this.#announce(resolved.agent, bot, { kind: 'room', roomId })
+            return resolved.agent
+          }
+        }
+      }
+      if (room?.workDir && room.workDir.trim() !== '') {
+        await mkdir(desiredCwd, { recursive: true }).catch(() => undefined)
+      }
+      const created = await controller.create({ cwd: desiredCwd, title: `Group: ${room?.name || roomId}` })
+      if (!created || typeof created.sessionId !== 'string') throw new Error('Room session creation failed')
+      await this.store.mutate((state) => {
+        const storedRoom = state.rooms.find(item => item.id === roomId)
+        if (storedRoom) {
+          storedRoom.memberSessions = storedRoom.memberSessions ?? {}
+          storedRoom.memberSessions[bot.id] = created.sessionId
+          storedRoom.updatedAt = new Date().toISOString()
+        }
+      })
+      const resolved = await controller.resolveAgent(created.sessionId)
+      if (resolved && resolved.agent) {
+        await this.#announce(resolved.agent, bot, { kind: 'room', roomId })
+        return resolved.agent
+      }
+      throw new Error(resolved && resolved.error ? resolved.error.message : 'Room session could not be resumed')
+    }
+
+    if (this.#isIsolatedRoutine(options)) {
+      return this.#resolveRoutineAgent(bot, options, controller)
+    }
+
+    if (typeof bot.sessionId === 'string' && bot.sessionId !== '') {
+      const resolved = await controller.resolveAgent(bot.sessionId)
+      if (resolved && resolved.agent) {
+        await this.#announce(resolved.agent, bot, { kind: 'primary', roomId: '' })
+        return resolved.agent
+      }
+    }
+    const dir = await this.store.ensureBotDir(bot)
+    const created = await controller.create({ cwd: dir })
+    if (!created || typeof created.sessionId !== 'string') throw new Error('Session creation failed')
+    await this.store.mutate((state) => {
+      const stored = state.bots.find(item => item.id === bot.id)
+      if (stored) {
+        if (!stored.dir) stored.dir = dir
+        stored.sessionId = created.sessionId
+        stored.updatedAt = new Date().toISOString()
+      }
+    })
+    bot.sessionId = created.sessionId
+    const resolved = await controller.resolveAgent(created.sessionId)
+    if (resolved && resolved.agent) {
+      await this.#announce(resolved.agent, bot, { kind: 'primary', roomId: '' })
+      return resolved.agent
+    }
+    throw new Error(resolved && resolved.error ? resolved.error.message : 'Session could not be resumed')
+  }
+
+  /** Resolve (or create) the isolated Session of a Routine run: one per run (`fresh`) or per task (`named`). */
+  async #resolveRoutineAgent(bot, options, controller) {
+    const routineId = options.routineId
+    const routine = this.store.routine(routineId)
+    if (!routine) throw new Error('Unknown Routine.')
+    const meta = { kind: 'routine', roomId: '', routineId }
+    await this.store.ensureBotDir(bot)
+    if (options.sessionMode === 'named' && routine.namedSessionId !== '') {
+      const resolved = await controller.resolveAgent(routine.namedSessionId)
+      if (resolved && resolved.agent) {
+        await this.#announce(resolved.agent, bot, meta)
+        return resolved.agent
+      }
+    }
+    const created = await controller.create({ cwd: bot.dir, title: `Routine: ${routine.name}` })
+    if (!created || typeof created.sessionId !== 'string') throw new Error('Routine session creation failed')
+    const keep = this.store.state.settings?.routines?.keepRunSessions ?? 20
+    const forgotten = []
+    await this.store.mutate((state) => {
+      const stored = state.routines.find(item => item.id === routineId)
+      if (!stored) return
+      if (options.sessionMode === 'named') {
+        stored.namedSessionId = created.sessionId
+        return
+      }
+      stored.runSessions.push({ sessionId: created.sessionId, runId: options.runId ?? '', at: new Date().toISOString() })
+      while (stored.runSessions.length > keep) forgotten.push(stored.runSessions.shift().sessionId)
+    })
+    // Old per-run Sessions fall out of the retention window; delete them when the host supports it.
+    for (const sessionId of forgotten) {
+      const remove = controller.remove ?? controller.delete
+      if (typeof remove === 'function') void Promise.resolve(remove.call(controller, sessionId)).catch(() => undefined)
+    }
+    const resolved = await controller.resolveAgent(created.sessionId)
+    if (resolved && resolved.agent) {
+      await this.#announce(resolved.agent, bot, meta)
+      return resolved.agent
+    }
+    throw new Error(resolved && resolved.error ? resolved.error.message : 'Routine session could not be resumed')
+  }
+
+  async #announce(agent, bot, meta) {
+    try {
+      await this.onAgent?.(agent, bot, meta)
+    } catch (error) {
+      this.logger?.warn?.(`botmode: could not configure ${bot?.name ?? 'a Bot'}: ${String(error)}`)
+    }
+  }
+
+  async #runTurn(botId, text, options, queueKey) {
+    await this.store.load()
+    const bot = this.store.bot(botId)
+    if (!bot) return { ok: false, error: 'unknown bot' }
+    const rawPrompt = String(text ?? '').trim()
+    const images = Array.isArray(options.images) ? options.images : []
+    if (rawPrompt === '' && images.length === 0) return { ok: false, error: 'empty message' }
+    const isolated = this.#isIsolatedRoutine(options)
+
+    // Daily per-Bot token budget circuit breaker.
+    const dailyLimit = this.#effectiveDailyTokenLimit(bot)
+    const today = localDayKey()
+    const usedToday = this.#todayTokensUsed(bot, today)
+    if (dailyLimit > 0 && usedToday >= dailyLimit) {
+      const error = `Daily token budget exceeded for ${bot.name} (${usedToday.toLocaleString()} / ${dailyLimit.toLocaleString()} tokens on ${today}). Raise the Bot's dailyTokenLimit in Settings or wait until tomorrow.`
+      await this.store.mutate((state) => {
+        const stored = state.bots.find(item => item.id === botId)
+        if (stored && !isolated) stored.lastError = error
+      }).catch(() => undefined)
+      if (this.onBudgetExceeded) {
+        void Promise.resolve(this.onBudgetExceeded({
+          bot,
+          used: usedToday,
+          limit: dailyLimit,
+          day: today,
+          source: options.source ?? 'chat',
+          roomId: options.roomId ?? '',
+        })).catch(() => undefined)
+      }
+      const result = {
+        ok: false,
+        code: 'budget_exceeded',
+        error,
+        budget: { used: usedToday, limit: dailyLimit, day: today },
+        startedAt: new Date().toISOString(),
+        source: options.source ?? 'chat',
+      }
+      this.#remember(botId, result, options)
+      return result
+    }
+
+    this.#runningKeys.add(queueKey)
+    if (options.roomId) {
+      this.#speakingRoomCounts.set(botId, (this.#speakingRoomCounts.get(botId) ?? 0) + 1)
+      let set = this.#roomSpeakers.get(options.roomId)
+      if (!set) {
+        set = new Set()
+        this.#roomSpeakers.set(options.roomId, set)
+      }
+      set.add(botId)
+    }
+    const startedAt = new Date().toISOString()
+    try {
+      const agent = await this.#resolveAgent(bot, options)
+      const selection = this.#applyModel(bot, agent)
+      const session = agent.session
+      options.onSessionResolved?.(session.id)
+
+      // Hermes-style memory prefetch (skipped for trivial prompts or if explicitly disabled).
+      let finalPrompt = rawPrompt
+      if (this.memory && options.skipMemoryPrefetch !== true) {
+        const recallQuery = String(options.memoryQuery ?? rawPrompt).trim()
+        if (recallQuery !== '') {
+          const recall = await this.memory.prefetchForBot(bot, recallQuery, {
+            sessionId: session.id,
+            source: options.source ?? 'chat',
+            roomId: options.roomId ?? '',
+          })
+          if (recall && typeof recall.text === 'string' && recall.text.trim() !== '') {
+            finalPrompt = `${recall.text.trim()}\n\n${rawPrompt}`
+          }
+        }
+      }
+
+      const content = await this.#promptContent(finalPrompt, images, selection)
+      const beforeSeq = (session.ownEvents().at(-1)?.seq ?? -1) + 1
+      const message = makeUserMessage(finalPrompt, content)
+      agent.followup(message)
+      await this.#waitIdle(agent, options.timeoutMs)
+      try { await this.ctx.sessions.flush(session) } catch (_error) { /* durability is best effort here */ }
+      const { reply, allTexts } = this.#replySince(session, beforeSeq)
+      const failure = this.#failureSince(session, beforeSeq)
+      const metrics = this.#metricsSince(session, beforeSeq, finalPrompt, reply, failure, options.roomId ? (this.store.room(options.roomId)?.workDir || bot.dir) : bot.dir)
+      if (failure !== '') {
+        // Auto-recover stale hidden Group Room sessions when the global default model changed
+        // and DSH context compaction cannot switch across incompatible/removed providers.
+        const isModelSwitchCompactionError = Boolean(
+          options.roomId
+          && options._rotatedSession !== true
+          && /cannot switch to .*context compaction failed|no adapter registered for provider/i.test(failure),
+        )
+        if (isModelSwitchCompactionError) {
+          this.logger?.warn?.(`botmode: rotating stale room session for ${bot.name} in ${options.roomId} after model switch compaction failure`)
+          await this.store.mutate((state) => {
+            const storedRoom = state.rooms.find(item => item.id === options.roomId)
+            if (storedRoom?.memberSessions) delete storedRoom.memberSessions[bot.id]
+          }).catch(() => undefined)
+          return this.#runTurn(botId, text, { ...options, _rotatedSession: true }, queueKey)
+        }
+        const result = { ok: false, error: failure, metrics, sessionId: session.id, startedAt, source: options.source ?? 'chat' }
+        await this.#recordTokenUsage(botId, metrics.tokensUsed)
+        await this.store.mutate((state) => {
+          const stored = state.bots.find(item => item.id === botId)
+          if (stored) {
+            stored.lastTurnAt = new Date().toISOString()
+            if (!isolated) stored.lastError = failure
+          }
+        }).catch(() => undefined)
+        this.#remember(botId, result, options)
+        return result
+      }
+
+      const result = {
+        ok: true,
+        text: reply,
+        allTexts,
+        metrics,
+        messageId: message.id,
+        sessionId: session.id,
+        startedAt,
+        source: options.source ?? 'chat',
+      }
+
+      // Async non-blocking turn sync into the global Memory Hub (isolated by bot.id).
+      if (this.memory && options.skipMemorySync !== true) {
+        const shouldSkip = Boolean(options.roomId && isPassReply(reply))
+        if (!shouldSkip && reply.trim() !== '') {
+          const userSyncText = String(options.memoryUserText ?? rawPrompt)
+          void this.memory.syncTurnForBot(bot, userSyncText, reply, {
+            sessionId: session.id,
+            source: options.source ?? 'chat',
+            roomId: options.roomId ?? '',
+          }).catch(() => undefined)
+        }
+      }
+
+      await this.#recordTokenUsage(bot.id, metrics.tokensUsed)
+      await this.store.mutate((state) => {
+        const stored = state.bots.find(item => item.id === bot.id)
+        if (!stored) return
+        stored.lastTurnAt = new Date().toISOString()
+        // Do not overwrite the primary chat preview with `(pass)` room silence or isolated Routine output.
+        if (!isolated && (!options.roomId || !isPassReply(reply))) {
+          stored.lastReply = reply.slice(0, 4_000)
+        }
+        if (!isolated) stored.lastError = ''
+      })
+      if (this.onReplyArtifacts && typeof reply === 'string' && reply.includes('<artifact')) {
+        void Promise.resolve(this.onReplyArtifacts({
+          bot,
+          text: reply,
+          roomId: options.roomId ?? '',
+          messageId: message.id,
+          sessionId: session.id,
+          at: new Date().toISOString(),
+        })).catch(() => undefined)
+      }
+      this.#remember(botId, result, options)
+      return result
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      await this.store.mutate((state) => {
+        const stored = state.bots.find(item => item.id === bot.id)
+        if (stored && !isolated) stored.lastError = message
+      }).catch(() => undefined)
+      const metrics = {
+        toolCallCount: 0,
+        toolNames: [],
+        mutatedFilesCount: 0,
+        taskBoardChanged: false,
+        tokensUsed: Math.ceil(rawPrompt.length / 4),
+        errorFingerprints: [{
+          fingerprint: computeErrorFingerprint('turn', 'exception', message),
+          toolName: 'turn',
+          summary: message.slice(0, 200),
+        }],
+      }
+      const result = { ok: false, error: message, metrics, startedAt, source: options.source ?? 'chat' }
+      this.#remember(botId, result, options)
+      return result
+    } finally {
+      this.#runningKeys.delete(queueKey)
+      if (options.roomId) {
+        const nextCount = (this.#speakingRoomCounts.get(botId) ?? 1) - 1
+        if (nextCount <= 0) this.#speakingRoomCounts.delete(botId)
+        else this.#speakingRoomCounts.set(botId, nextCount)
+        const set = this.#roomSpeakers.get(options.roomId)
+        if (set) {
+          set.delete(botId)
+          if (set.size === 0) this.#roomSpeakers.delete(options.roomId)
+        }
+      }
+    }
+  }
+
+  /**
+   * Bind the Bot's own model, or the DSH default when it has none.
+   */
+  #applyModel(bot, agent) {
+    const selection = resolveBotSelection(this.ctx, bot)
+    if (!selection) return undefined
+    try {
+      const current = agent.model?.current?.()
+      const same = current
+        && current.provider === selection.provider
+        && current.model === selection.model
+        && (current.reasoningEffort ?? '') === (selection.reasoningEffort ?? '')
+      if (!same) agent.model?.select(selection)
+      return selection
+    } catch (error) {
+      this.logger?.warn?.(`botmode: model selection for ${bot.name} failed: ${String(error)}`)
+      return selection
+    }
+  }
+
+  async #promptContent(prompt, images, selection) {
+    if (images.length === 0) return undefined
+    const accepts = await modelAcceptsImages(this.ctx, selection)
+    if (accepts === false) {
+      const label = selection ? `${selection.provider}/${selection.model}` : 'this model'
+      throw new Error(`Model "${label}" does not accept image input. Give this Bot a vision model first.`)
+    }
+    const attachments = this.ctx.get('attachments')
+    if (!attachments || typeof attachments.admitPromptContent !== 'function') {
+      throw new Error('Image input is unavailable in this Host.')
+    }
+    const parts = []
+    if (prompt !== '') parts.push({ type: 'text', text: prompt })
+    for (const image of images) {
+      parts.push({ type: 'image', attachment: image, encodedBytes: Number(image.bytes) || 0 })
+    }
+    return attachments.admitPromptContent(parts)
+  }
+
+  async #waitIdle(agent, timeoutMs) {
+    let timer
+    const limit = Number.isFinite(timeoutMs) && timeoutMs > 0 ? Math.min(timeoutMs, TURN_TIMEOUT_MS) : TURN_TIMEOUT_MS
+    const timeout = new Promise((_resolve, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(limit === TURN_TIMEOUT_MS ? 'turn timed out after 15 minutes' : `turn timed out after ${Math.round(limit / 1000)} seconds`))
+        try { agent.cancel?.({ kind: 'timeout' }, { keepInbox: true }) } catch (_error) { /* best effort */ }
+      }, limit)
+      timer.unref?.()
+    })
+    try {
+      await Promise.race([agent.whenIdle(), timeout])
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  #failureSince(session, beforeSeq) {
+    for (const event of session.ownEvents()) {
+      if (event.seq < beforeSeq || event.type !== 'turn/end') continue
+      const reason = event.data?.reason
+      if (reason?.kind !== 'error') continue
+      const error = reason.error
+      return typeof error?.message === 'string' && error.message !== '' ? error.message : 'the model call failed'
+    }
+    return ''
+  }
+
+  #replySince(session, beforeSeq) {
+    const events = session.ownEvents()
+    const allTexts = []
+    for (const event of events) {
+      if (event.seq < beforeSeq) continue
+      if (event.type !== 'assistant/message') continue
+      const value = textOfBlocks(event.data?.message?.content)
+      if (value !== '') allTexts.push(value)
+    }
+    const reply = allTexts.length > 0 ? allTexts[allTexts.length - 1] : ''
+    return { reply, allTexts }
+  }
+
+  /**
+   * Collect tool execution, file mutation, token usage and error fingerprint
+   * telemetry for a single turn from DSH session events since `beforeSeq`.
+   */
+  #metricsSince(session, beforeSeq, promptText, replyText, failure, baseDir = '') {
+    const events = session.ownEvents()
+    const callsById = new Map() // callId -> { name, args }
+    const toolNames = []
+    let mutatedFilesCount = 0
+    let taskBoardChanged = false
+    let reportedTokens = 0
+    let cacheReadTokens = 0
+    let peakContextTokens = 0
+    const errorFingerprints = []
+
+    const parseArgs = (raw) => {
+      if (raw && typeof raw === 'object') return raw
+      if (typeof raw === 'string' && raw.trim() !== '') {
+        try { return JSON.parse(raw) } catch (_error) { return { raw } }
+      }
+      return {}
+    }
+
+    const recordToolCall = (callId, name, rawArgs) => {
+      const toolName = String(name || 'tool')
+      const args = parseArgs(rawArgs)
+      if (callId && callsById.has(callId)) return
+      if (callId) callsById.set(callId, { name: toolName, args })
+      toolNames.push(toolName)
+      if (toolName === 'claim_subtask' || toolName === 'room_finish_task' || toolName === 'room_task_progress') {
+        taskBoardChanged = true
+      }
+      const mutated = extractMutatedPathsFromTool(toolName, args, baseDir)
+      if (mutated.length > 0) mutatedFilesCount += mutated.length
+    }
+
+    for (const event of events) {
+      if (event.seq < beforeSeq) continue
+      const data = event.data ?? {}
+      if (event.type === 'assistant/message') {
+        const usage = data.usage
+        if (usage && typeof usage === 'object') {
+          const inp = Number(usage.inputTokens) || 0
+          const out = Number(usage.outputTokens) || 0
+          const cached = Number(usage.cacheReadTokens) || 0
+          const stepTotal = Number(usage.totalTokens) || (inp + out + cached)
+          // Count incremental uncached work (`inputTokens + outputTokens`) rather than
+          // summing full cached context prefixes quadratically across tool-call steps.
+          const stepIncremental = (inp > 0 || out > 0) ? (inp + out) : stepTotal
+          if (stepIncremental > 0) reportedTokens += stepIncremental
+          if (cached > 0) cacheReadTokens += cached
+          if (stepTotal > peakContextTokens) peakContextTokens = stepTotal
+        }
+        const blocks = data.message?.content
+        if (Array.isArray(blocks)) {
+          for (const block of blocks) {
+            if (block && block.type === 'tool-call') {
+              recordToolCall(block.id || block.callId || '', block.name, block.arguments)
+            }
+          }
+        }
+      } else if (event.type === 'assistant/attempt') {
+        const blocks = data.message?.content
+        if (Array.isArray(blocks)) {
+          for (const block of blocks) {
+            if (block && block.type === 'tool-call') {
+              recordToolCall(block.id || block.callId || '', block.name, block.arguments)
+            }
+          }
+        }
+      } else if (event.type === 'tool/call') {
+        recordToolCall(data.callId || '', data.name, data.arguments)
+      } else if (event.type === 'tool/result') {
+        const msg = data.message ?? data
+        if (msg.isError === true) {
+          const callId = msg.toolCallId || msg.source?.callId || ''
+          const callInfo = callsById.get(callId)
+          const toolName = callInfo?.name || msg.name || 'tool'
+          const errText = textOfBlocks(msg.content) || String(msg.error?.message ?? 'tool error')
+          // Soft-lock coordination notices are normal concurrency signals, not environment faults.
+          if (!errText.includes('正由 @')) {
+            const targetHint = String(
+              callInfo?.args?.command ?? callInfo?.args?.path ?? callInfo?.args?.file_path ?? '',
+            ).slice(0, 120)
+            errorFingerprints.push({
+              fingerprint: computeErrorFingerprint(toolName, targetHint, errText),
+              toolName,
+              summary: `${toolName}${targetHint ? ` (${targetHint})` : ''}: ${oneLine(errText).slice(0, 140)}`,
+            })
+          }
+        }
+      }
+    }
+
+    if (failure !== '') {
+      errorFingerprints.push({
+        fingerprint: computeErrorFingerprint('turn', 'model', failure),
+        toolName: 'turn',
+        summary: oneLine(failure).slice(0, 160),
+      })
+    }
+
+    const heuristicTokens = Math.max(
+      1,
+      Math.ceil((String(promptText ?? '').length + String(replyText ?? '').length) / 4),
+    )
+
+    return {
+      toolCallCount: toolNames.length,
+      toolNames,
+      mutatedFilesCount,
+      taskBoardChanged,
+      tokensUsed: reportedTokens > 0 ? reportedTokens : heuristicTokens,
+      cacheReadTokens,
+      peakContextTokens,
+      errorFingerprints,
+    }
+  }
+
+  /** Cancel a live Agent by exact Session ID (used by Group Rooms to stop only the room session). */
+  cancelSession(sessionId) {
+    if (!sessionId) return { ok: false, error: 'no live session' }
+    const agent = this.ctx.get('agents')?.get?.(sessionId)
+    if (!agent) return { ok: false, error: 'not running' }
+    try {
+      agent.cancel({ kind: 'user' }, { keepInbox: true })
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: String(error) }
+    }
+  }
+
+  cancel(botId) {
+    const bot = this.store.bot(botId)
+    if (!bot || !bot.sessionId) return { ok: false, error: 'no live session' }
+    return this.cancelSession(bot.sessionId)
+  }
+
+  /** Deliver one teammate message with Hermes-style hop & dedup loop guards. */
+  async messageAgent(senderBotId, targetToken, message, expectReply, callerSessionId = '') {
+    await this.store.load()
+    const state = this.store.state
+    const sender = state.bots.find(bot => bot.id === senderBotId)
+    if (!sender) return { ok: false, code: 'not_a_bot', error: 'this Session is not a Bot' }
+
+    // Enforce Group Room isolation strictly by Session ownership (never block a Bot's
+    // independent 1:1 primary chat simply because it is concurrently speaking in a room).
+    if (callerSessionId && this.store.roomByMemberSession(callerSessionId)) {
+      return {
+        ok: false,
+        code: 'unavailable_in_room',
+        error: 'message_agent is unavailable inside a Group Room; reply directly in the room with @Name.',
+      }
+    }
+
+    const token = oneLine(targetToken)
+    if (token === '') return { ok: false, code: 'invalid_target', error: 'target is required' }
+
+    let target = state.bots.find(bot => bot.id === token)
+      ?? state.bots.find(bot => bot.name.toLowerCase() === token.toLowerCase())
+    if (!target) {
+      const prefixMatches = state.bots.filter(bot => bot.name.toLowerCase().startsWith(token.toLowerCase()))
+      if (prefixMatches.length > 1) {
+        return {
+          ok: false,
+          code: 'ambiguous_target',
+          error: `Ambiguous target "${token}". Matching Bots: ${prefixMatches.map(b => `${b.name} (${b.id})`).join(', ')}.`,
+        }
+      }
+      target = prefixMatches[0]
+    }
+    if (!target) return { ok: false, code: 'unknown_target', error: `no Bot named "${token}"` }
+    if (target.id === sender.id) return { ok: false, code: 'self_message', error: 'cannot message yourself' }
+
+    // Chain loop guard: enforce max hops and duplicate-content detection.
+    const senderChain = this.#dmChains.get(sender.id) ?? { chainId: newId('chain'), hops: 0, lastSenderId: '', seen: new Set() }
+    const nextHops = senderChain.hops + 1
+    if (nextHops > MAX_AGENT_HOPS) {
+      return {
+        ok: false,
+        code: 'max_hops_exceeded',
+        error: `Teammate message hop budget (${MAX_AGENT_HOPS}) reached in this chain. Wait for the user before starting another relay.`,
+        hops: senderChain.hops,
+        maxHops: MAX_AGENT_HOPS,
+      }
+    }
+    const fingerprint = messageFingerprint(sender.id, target.id, message)
+    if (senderChain.seen.has(fingerprint)) {
+      return {
+        ok: false,
+        code: 'duplicate_in_chain',
+        error: 'An identical message was already sent to this teammate in the current chain; wait for their reply instead of resending.',
+      }
+    }
+    senderChain.seen.add(fingerprint)
+    // Advance sender's own hop budget so repeated Hub-and-Spoke expectReply loops cannot bypass MAX_AGENT_HOPS.
+    senderChain.hops = nextHops
+    this.#dmChains.set(sender.id, senderChain)
+
+    // Reply-is-final guard: if replying directly back to the teammate who just
+    // messaged us, downgrade expectReply to false to prevent polite ping-pong.
+    const isDirectBounce = senderChain.lastSenderId === target.id
+    const effectiveExpectReply = expectReply === true && !isDirectBounce
+
+    this.#dmChains.set(target.id, {
+      chainId: senderChain.chainId,
+      hops: nextHops,
+      lastSenderId: sender.id,
+      seen: senderChain.seen,
+    })
+
+    const body = [
+      `[Message from ${sender.name}${sender.role ? ` (${sender.role})` : ''} · hop ${nextHops}/${MAX_AGENT_HOPS}]`,
+      String(message ?? '').trim(),
+      '',
+      effectiveExpectReply
+        ? `Reply directly as your final message; the dispatcher will deliver your answer back to ${sender.name}. Do not call message_agent back to ${sender.name}.`
+        : 'Notify-only message. No reply back is required unless you have a critical blocker.',
+    ].join('\n')
+
+    const queued = this.queueDepth(target.id)
+    const pending = this.enqueue(target.id, body, { source: 'agent' })
+    if (effectiveExpectReply) {
+      void pending.then(async (result) => {
+        if (!result.ok) {
+          const reason = oneLine(result.error || 'unknown error').slice(0, 400)
+          await this.enqueue(sender.id, [
+            `[No reply from ${target.name}]`,
+            `${target.name} failed to complete your request (${reason}). Do not resend blindly; inspect or inform the user.`,
+          ].join('\n\n'), { source: 'agent' })
+          return
+        }
+        let reply = String(result.text ?? '').trim()
+        if (reply === '' || isPassReply(reply)) {
+          await this.enqueue(sender.id, [
+            `[No reply from ${target.name}]`,
+            `${target.name} finished its turn without a substantive reply.`,
+          ].join('\n\n'), { source: 'agent' })
+          return
+        }
+        let path = ''
+        if (reply.length > MAX_REPLY_CHARS) {
+          path = `${sender.dir || this.store.botsRoot}/message-reply-${Date.now()}.md`
+          await writeTextFile(path, reply).catch(() => { path = '' })
+          reply = `${reply.slice(0, MAX_REPLY_CHARS)}\n\n[truncated; full reply at ${path}]`
+        }
+        await this.enqueue(sender.id, [
+          `[Reply from ${target.name}]`,
+          reply,
+        ].join('\n\n'), { source: 'agent' })
+      }).catch(() => undefined)
+    }
+    return {
+      ok: true,
+      delivered: true,
+      queued,
+      hops: nextHops,
+      maxHops: MAX_AGENT_HOPS,
+      downgradedNotifyOnly: expectReply === true && isDirectBounce,
+      target: { id: target.id, name: target.name },
+    }
+  }
+}

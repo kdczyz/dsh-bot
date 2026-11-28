@@ -1,0 +1,41 @@
+{
+  "format": 1,
+  "title": {
+    "en": "Quay Bot",
+    "zh": "Quay Bot 团队模式"
+  },
+  "description": {
+    "en": "Bot mode for DeepSeek Harness with a bundled virtual desktop: isolated Bot personas, Group Rooms, Routines, team memory hub and screenshot/click/type screen tools — no separate dependency setup.",
+    "zh": "带内置虚拟桌面的 DeepSeek Harness 团队模式：独立 Bot 人格、Group Room、Routine、团队记忆库与截图/点击/输入工具，安装即用，无需另行安装依赖。"
+  },
+  "metadata": {
+    "updated": 1795812636
+  },
+  "plugins": [
+    {
+      "name": "dsh-quay-bot",
+      "title": {
+        "en": "Quay Bot",
+        "zh": "Quay Bot 团队模式"
+      },
+      "description": {
+        "en": "Bot mode for DSH: Bots, Group Rooms, Routines, memory hub, and a bundled BotScreen X desktop streamed into the Web UI. Python and system deps self-bootstrap on first boot.",
+        "zh": "DSH 的 Bot 团队模式：Bot、群聊房间、定时例程、记忆库，以及随包自带并自举的 BotScreen 虚拟 X 桌面（可截图/点击/输入）。"
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9IkJvdCBtb2RlIj4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYm0iIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjNGQ2YmZlIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzdhYTJmZiIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPHJlY3QgeD0iNiIgeT0iMTAiIHdpZHRoPSI1MiIgaGVpZ2h0PSI0NCIgcng9IjE0IiBmaWxsPSJ1cmwoI2JtKSIvPgogIDxyZWN0IHg9IjE1IiB5PSIyMiIgd2lkdGg9IjM0IiBoZWlnaHQ9IjIyIiByeD0iOCIgZmlsbD0iI2ZmZmZmZiIgb3BhY2l0eT0iMC45MiIvPgogIDxjaXJjbGUgY3g9IjI1IiBjeT0iMzMiIHI9IjQiIGZpbGw9IiMyYjNhN2EiLz4KICA8Y2lyY2xlIGN4PSIzOSIgY3k9IjMzIiByPSI0IiBmaWxsPSIjMmIzYTdhIi8+CiAgPHJlY3QgeD0iMjkiIHk9IjQiIHdpZHRoPSI2IiBoZWlnaHQ9IjkiIHJ4PSIzIiBmaWxsPSIjNGQ2YmZlIi8+CiAgPGNpcmNsZSBjeD0iMzIiIGN5PSI0IiByPSIzLjUiIGZpbGw9IiM0ZDZiZmUiLz4KPC9zdmc+Cg==",
+      "author": "kdczyz",
+      "versions": [
+        {
+          "version": "1.0.1",
+          "publishTimestamp": 1795812636,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.2-rc.3"
+          }
+        }
+      ]
+    }
+  ]
+}

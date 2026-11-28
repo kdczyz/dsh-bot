@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Bot 模式",
+    "description": "在会话栏切换 Harness 模式与 Bot 模式：一队有名字、有职责、各自拥有独立对话的机器人。",
+    "detail": "docs/DETAIL.md"
+  }
+}
