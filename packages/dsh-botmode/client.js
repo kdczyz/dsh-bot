@@ -1753,9 +1753,11 @@ window.__ModuleLoader__.load({
       .bm-foot-toggle:not([data-wide='true']) span { display: none; }
       .bm-foot-toggle { appearance: none; border: 0; background: transparent; color: var(--dsw-alias-label-secondary);
         font: inherit; font-size: 12px; line-height: 16px; display: inline-flex; align-items: center; gap: 6px;
-        padding: 5px 8px; border-radius: var(--dsw-radius-md); cursor: pointer; width: 100%; text-align: left; }
+        padding: 5px 8px; border-radius: var(--dsw-radius-md); cursor: pointer; flex: 1 1 auto; min-width: 0;
+        white-space: nowrap; text-align: left; }
       .bm-foot-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
       .bm-foot-toggle[data-active='true'] { color: var(--dsw-alias-brand-primary); }
+      .bm-remote-trigger { flex: 0 0 auto; }
 
       /* ---- 3-column workspace + Right Rail (Screen Card + Scheduled Tasks) ---- */
       .bm-workspace { flex: 1; min-height: 0; display: flex; overflow: hidden; }
@@ -1967,10 +1969,19 @@ window.__ModuleLoader__.load({
             return ''
           }
         }
+        ctx.effect(() => {
+          if (typeof document === 'undefined' || !document.head) return undefined
+          const styleEl = document.createElement('style')
+          styleEl.setAttribute('data-botmode-css', '1')
+          styleEl.textContent = CSS
+          document.head.appendChild(styleEl)
+          return () => { styleEl.remove() }
+        }, 'botmode: global styles')
+
         const useAvatarEngine = () => {
           const snap = useSyncExternalStore(
-            listener => avatarEngineStore.subscribe(listener),
-            () => avatarEngineStore.getSnapshot(),
+            avatarEngineStore.subscribe,
+            avatarEngineStore.getSnapshot,
           )
           useEffect(() => {
             if (snap.status === 'idle') void ensureAvatarEngine()
@@ -2123,14 +2134,17 @@ window.__ModuleLoader__.load({
         const markGroupSeen = () => {}
         ctx.effect(() => {
           void refreshHost()
+          const isBotPanelActive = () => {
+            const panel = ctx.layout.panelInfo.getSnapshot()
+            const id = panel && (panel.activePanelId ?? panel.activeId)
+            return id === PANEL_ID
+          }
           const timer = window.setInterval(() => {
             if (document.visibilityState === 'hidden') return
-            const panel = ctx.layout.panelInfo.getSnapshot()
-            if (panel && panel.activeId === PANEL_ID) void refreshHost()
+            if (isBotPanelActive()) void refreshHost()
           }, 3000)
           const unsubPanel = ctx.layout.panelInfo.subscribe(() => {
-            const panel = ctx.layout.panelInfo.getSnapshot()
-            if (panel && panel.activeId === PANEL_ID) void refreshHost()
+            if (isBotPanelActive()) void refreshHost()
           })
           return () => {
             window.clearInterval(timer)
@@ -2309,10 +2323,16 @@ window.__ModuleLoader__.load({
         }
         ctx.effect(registerLocales, 'botmode: dictionaries')
 
-        const useLang = () => useSyncExternalStore(
-          listener => locale.subscribe(listener),
-          () => locale.getLocale(),
-        )
+        const subscribeLocale = (listener) => locale.subscribe(listener)
+        let cachedLocaleSnap = { active: 'en' }
+        const getLocaleSnapshot = () => {
+          const raw = locale.getLocale()
+          const active = (raw && raw.active) || 'en'
+          if (cachedLocaleSnap && cachedLocaleSnap.active === active) return cachedLocaleSnap
+          cachedLocaleSnap = raw && typeof raw === 'object' ? raw : { active }
+          return cachedLocaleSnap
+        }
+        const useLang = () => useSyncExternalStore(subscribeLocale, getLocaleSnapshot)
 
         const useT = () => {
           const snapshot = useLang()
@@ -2320,10 +2340,16 @@ window.__ModuleLoader__.load({
           return useMemo(() => (key, vars) => interpolate(dict[key] ?? DICT.en[key] ?? key, vars), [dict])
         }
 
-        const useMainPanel = () => useSyncExternalStore(
-          listener => ctx.layout.panelInfo.subscribe(listener),
-          () => ctx.layout.panelInfo.getSnapshot(),
-        )
+        const subscribeMainPanel = (listener) => ctx.layout.panelInfo.subscribe(listener)
+        let cachedPanelSnap = { activePanelId: null }
+        const getMainPanelSnapshot = () => {
+          const raw = ctx.layout.panelInfo.getSnapshot()
+          const id = (raw && (raw.activePanelId ?? raw.activeId)) || null
+          if (cachedPanelSnap && cachedPanelSnap.activePanelId === id) return cachedPanelSnap
+          cachedPanelSnap = { activePanelId: id }
+          return cachedPanelSnap
+        }
+        const useMainPanel = () => useSyncExternalStore(subscribeMainPanel, getMainPanelSnapshot)
 
         const openBot = (bot) => {
           if (!bot.sessionId) return
@@ -4195,14 +4221,24 @@ window.__ModuleLoader__.load({
           useEffect(() => () => { if (reference) reference.release() }, [reference])
           const binding = reference ? reference.binding : null
           const session = binding ? binding.session : null
-          const snapshot = useSyncExternalStore(
-            listener => (session ? session.subscribe(listener) : () => {}),
-            () => (session ? session.getSnapshot() : ERROR_SESSION_SNAP),
+          const subscribeSession = useMemo(
+            () => (session ? (listener => session.subscribe(listener)) : NOOP_SUBSCRIBE),
+            [session],
           )
-          const events = useSyncExternalStore(
-            listener => (binding ? binding.eventSource.subscribe(listener) : () => {}),
-            () => (binding ? binding.eventSource.getSnapshot() : EMPTY_EVENT_SNAP),
+          const getSessionSnap = useMemo(
+            () => (session ? (() => session.getSnapshot()) : GET_ERROR_SESSION_SNAP),
+            [session],
           )
+          const subscribeEvents = useMemo(
+            () => (binding ? (listener => binding.eventSource.subscribe(listener)) : NOOP_SUBSCRIBE),
+            [binding],
+          )
+          const getEventsSnap = useMemo(
+            () => (binding ? (() => binding.eventSource.getSnapshot()) : GET_EMPTY_EVENT_SNAP),
+            [binding],
+          )
+          const snapshot = useSyncExternalStore(subscribeSession, getSessionSnap)
+          const events = useSyncExternalStore(subscribeEvents, getEventsSnap)
           const turns = useMemo(() => buildTranscript(events.entries), [events])
           const stickRef = useRef(true)
           useEffect(() => {
@@ -4353,9 +4389,13 @@ window.__ModuleLoader__.load({
                   : h('button', { type: 'submit', className: 'bm-btn primary', disabled: busy || (text.trim() === '' && images.length === 0) }, busy ? t('form.busy') : t('chat.send')))))
         }
 
+        const NOOP_SUBSCRIBE = () => () => {}
         const IDLE_SESSION_SNAP = Object.freeze({ running: false, openState: 'idle', hasMore: false })
         const ERROR_SESSION_SNAP = Object.freeze({ running: false, openState: 'error', hasMore: false })
         const EMPTY_EVENT_SNAP = Object.freeze({ entries: Object.freeze([]), hasMore: false, revision: 0 })
+        const GET_IDLE_SESSION_SNAP = () => IDLE_SESSION_SNAP
+        const GET_ERROR_SESSION_SNAP = () => ERROR_SESSION_SNAP
+        const GET_EMPTY_EVENT_SNAP = () => EMPTY_EVENT_SNAP
 
         function isClientPassToken(raw) {
           let v = String(raw || '').trim()
@@ -4594,14 +4634,24 @@ window.__ModuleLoader__.load({
           useEffect(() => () => { if (reference) reference.release() }, [reference])
           const binding = reference ? reference.binding : null
           const session = binding ? binding.session : null
-          const snapshot = useSyncExternalStore(
-            listener => (session ? session.subscribe(listener) : () => {}),
-            () => (session ? session.getSnapshot() : IDLE_SESSION_SNAP),
+          const subscribeSession = useMemo(
+            () => (session ? (listener => session.subscribe(listener)) : NOOP_SUBSCRIBE),
+            [session],
           )
-          const events = useSyncExternalStore(
-            listener => (binding ? binding.eventSource.subscribe(listener) : () => {}),
-            () => (binding ? binding.eventSource.getSnapshot() : EMPTY_EVENT_SNAP),
+          const getSessionSnap = useMemo(
+            () => (session ? (() => session.getSnapshot()) : GET_IDLE_SESSION_SNAP),
+            [session],
           )
+          const subscribeEvents = useMemo(
+            () => (binding ? (listener => binding.eventSource.subscribe(listener)) : NOOP_SUBSCRIBE),
+            [binding],
+          )
+          const getEventsSnap = useMemo(
+            () => (binding ? (() => binding.eventSource.getSnapshot()) : GET_EMPTY_EVENT_SNAP),
+            [binding],
+          )
+          const snapshot = useSyncExternalStore(subscribeSession, getSessionSnap)
+          const events = useSyncExternalStore(subscribeEvents, getEventsSnap)
 
           const wasRunningRef = useRef(false)
           useEffect(() => {
@@ -7776,14 +7826,14 @@ window.__ModuleLoader__.load({
                       }, t('rich.download')))))))
         }
 
+        const EMPTY_SESSION_LIST = Object.freeze({ ids: Object.freeze([]), byId: Object.freeze({}) })
+        const getRawSessionListSafe = () => rawSessionSnapshot() || EMPTY_SESSION_LIST
+
         function BotsPage() {
           const t = useT()
           const stored = useSyncExternalStore(roster.subscribe, roster.getSnapshot)
           const groups = useSyncExternalStore(groupStore.subscribe, groupStore.getSnapshot)
-          const list = useSyncExternalStore(
-            listener => sessions.list.subscribe(listener),
-            rawSessionSnapshot,
-          )
+          const list = useSyncExternalStore(rawSessionSubscribe, getRawSessionListSafe)
           const hostSnapshot = useSyncExternalStore(hostStore.subscribe, hostStore.getSnapshot)
           const models = useSyncExternalStore(modelStore.subscribe, modelStore.getSnapshot)
           useEffect(() => {
@@ -7840,6 +7890,7 @@ window.__ModuleLoader__.load({
           const [query, setQuery] = useState('')
           const [railOpen, setRailOpen] = useState(true)
           const [takeoverModal, setTakeoverModal] = useState(null)
+          const [remoteOpen, setRemoteOpen] = useState(false)
 
           const openScreenTakeover = async (targetBot, helpEntry = null) => {
             const botId = (targetBot && targetBot.id) || (helpEntry && helpEntry.botId)
@@ -8047,6 +8098,13 @@ window.__ModuleLoader__.load({
                 style: { display: 'inline-flex', alignItems: 'center', gap: '5px', flex: 1, justifyContent: 'center' },
                 onClick: () => openSettingsView('soul'),
               }, h(SettingsIcon, { kind: 'gear' }), t('pane.settings')),
+              h('button', {
+                type: 'button',
+                className: 'bm-btn small',
+                style: { display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center' },
+                title: t('remote.title'),
+                onClick: () => setRemoteOpen(true),
+              }, h(RemoteIcon, { size: 13 }), t('remote.button')),
               h('button', { type: 'button', className: 'bm-btn small', onClick: toHarness }, t('foot.back'))))
 
           const detailBody = activeBot
@@ -8198,7 +8256,8 @@ window.__ModuleLoader__.load({
               onCommand: hostCommand,
               onScreenInput: sendScreenInput,
               onClose: () => setTakeoverModal(null),
-            }))
+            }),
+            remoteOpen ? h(RemoteDialog, { onClose: () => setRemoteOpen(false) }) : null)
         }
 
         function PanelIcon(props) {
@@ -8419,25 +8478,26 @@ window.__ModuleLoader__.load({
             open ? h(RemoteDialog, { onClose: () => setOpen(false) }) : null)
         }
 
-        ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
-          name: 'sidebar.footer.action',
-          id: 'botmode.remote',
-          order: 11,
-          label: () => (typeof locale.getLocale === 'function'
-            ? (String((locale.getLocale() || {}).active || '').startsWith('zh') ? '远程访问' : 'Remote')
-            : 'Remote'),
-          locale: NS,
-        }, RemoteFooterButton))
-
-        ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
-          name: 'sidebar.footer.action',
-          id: 'botmode.mode-switch',
-          order: 10,
-          label: () => (typeof locale.getLocale === 'function'
-            ? (String((locale.getLocale() || {}).active || '').startsWith('zh') ? 'Bot 模式' : 'Bot mode')
-            : 'Bot mode'),
-          locale: NS,
-        }, FooterToggle))
+        ctx.slots.inject('sidebar.footer.action', function* () {
+          yield ctx.slots.register({
+            name: 'sidebar.footer.action',
+            id: 'botmode.mode-switch',
+            order: 10,
+            label: () => (typeof locale.getLocale === 'function'
+              ? (String((locale.getLocale() || {}).active || '').startsWith('zh') ? 'Bot 模式' : 'Bot mode')
+              : 'Bot mode'),
+            locale: NS,
+          }, FooterToggle)
+          yield ctx.slots.register({
+            name: 'sidebar.footer.action',
+            id: 'botmode.remote',
+            order: 11,
+            label: () => (typeof locale.getLocale === 'function'
+              ? (String((locale.getLocale() || {}).active || '').startsWith('zh') ? '远程访问' : 'Remote')
+              : 'Remote'),
+            locale: NS,
+          }, RemoteFooterButton)
+        })
 
         const panelLabel = () => {
           const active = String((locale.getLocale() && locale.getLocale().active) || '').toLowerCase()
@@ -8463,17 +8523,26 @@ window.__ModuleLoader__.load({
             if (this.state.error) {
               return h('div', { className: 'bm-page', style: { padding: '32px', overflow: 'auto' } },
                 h('h2', null, 'Bot 模式渲染失败 / Bot mode failed to render'),
+                h('div', { style: { display: 'flex', gap: '8px', margin: '12px 0' } },
+                  h('button', {
+                    type: 'button',
+                    className: 'bm-btn small primary',
+                    onClick: () => this.setState({ error: null }),
+                  }, '重试 / Retry')),
                 h('pre', { style: { whiteSpace: 'pre-wrap', fontSize: '12px', opacity: 0.8 } },
                   String((this.state.error && this.state.error.stack) || this.state.error)))
             }
             return this.props.children
           }
         }
+        function BotsMainSlot() {
+          return h(PageBoundary, null, h(BotsPage))
+        }
         ctx.slots.inject('main', () => ctx.slots.register({
           name: 'main',
           key: PANEL_ID,
           locale: NS,
-        }, () => h(PageBoundary, null, h(BotsPage))))
+        }, BotsMainSlot))
       },
     }
   },
