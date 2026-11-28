@@ -473,7 +473,16 @@ window.__ModuleLoader__.load({
         'remote.subtitle': 'Publish this DSH gateway through a Cloudflare tunnel with end-to-end encryption.',
         'remote.appSubtitle': 'Publish this DSH gateway through a Cloudflare tunnel; scan the QR below with public-bot to connect.',
         'remote.starting': 'Starting the gateway…',
-        'remote.tunnelStarting': 'Connecting Cloudflare tunnel (first run downloads cloudflared automatically)…',
+        'remote.tunnelStarting': 'Connecting Cloudflare tunnel…',
+        'remote.setupTitle': 'Download cloudflared (first-time setup)',
+        'remote.setupDesc': 'cloudflared was not found on this machine (~15 MB, one-time download). Choose a download source to continue:',
+        'remote.sourceMirror': 'China Mirror',
+        'remote.sourceMirrorDesc': 'cdn.gh-proxy.com / hk.gh-proxy.com / ghfast.top (recommended in Mainland China)',
+        'remote.sourceOfficial': 'GitHub Official',
+        'remote.sourceOfficialDesc': 'github.com/cloudflare/cloudflared (recommended overseas or with proxy)',
+        'remote.downloadAndStart': 'Download & Start',
+        'remote.downloadingMirror': 'Downloading cloudflared from China mirror and starting tunnel…',
+        'remote.downloadingOfficial': 'Downloading cloudflared from GitHub official and starting tunnel…',
         'remote.rotating': 'Rotating the access key…',
         'remote.running': 'Online',
         'remote.stopped': 'Offline',
@@ -972,7 +981,16 @@ window.__ModuleLoader__.load({
         'remote.subtitle': '把本机 DSH 网关通过 Cloudflare 隧道发布出去，链路端到端加密。',
         'remote.appSubtitle': '把本机 DSH 网关通过 Cloudflare 隧道发布出去；用 public-bot 扫下方二维码即可连接。',
         'remote.starting': '正在启动网关…',
-        'remote.tunnelStarting': '正在建立 Cloudflare 隧道（首次启动将自动下载 cloudflared）…',
+        'remote.tunnelStarting': '正在建立 Cloudflare 隧道…',
+        'remote.setupTitle': '首次使用需下载 cloudflared 隧道组件',
+        'remote.setupDesc': '本机尚未安装 cloudflared（约 15 MB，仅首次需要下载）。请选择下载源：',
+        'remote.sourceMirror': '中国大陆镜像源',
+        'remote.sourceMirrorDesc': 'cdn.gh-proxy.com / hk.gh-proxy.com / ghfast.top（国内网络推荐）',
+        'remote.sourceOfficial': 'GitHub 官方源',
+        'remote.sourceOfficialDesc': 'github.com/cloudflare/cloudflared（海外网络或已开代理推荐）',
+        'remote.downloadAndStart': '下载并启动',
+        'remote.downloadingMirror': '正在从中国大陆镜像源下载 cloudflared 并启动隧道…',
+        'remote.downloadingOfficial': '正在从 GitHub 官方源下载 cloudflared 并启动隧道…',
         'remote.rotating': '正在轮换访问密钥…',
         'remote.running': '在线',
         'remote.stopped': '未启动',
@@ -1191,6 +1209,18 @@ window.__ModuleLoader__.load({
 .bm-remote-btn:disabled { opacity: 0.5; cursor: default; }
 .bm-remote-toast { font-size: 11.5px; color: #16a34a; margin-left: auto; }
 .bm-remote-empty { padding: 24px 8px; text-align: center; font-size: 12.5px; color: var(--dsw-alias-label-secondary, #9b9ba4); }
+.bm-remote-setup { display: flex; flex-direction: column; gap: 12px; padding: 4px 0; }
+.bm-remote-setup-title { font-size: 13.5px; font-weight: 600; color: var(--dsw-alias-label-primary, #e8e8ec); }
+.bm-remote-setup-desc { font-size: 12px; line-height: 17px; color: var(--dsw-alias-label-secondary, #9b9ba4); }
+.bm-remote-source-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.bm-remote-source-card { appearance: none; text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 11px 12px;
+  border-radius: 10px; border: 1px solid var(--dsw-alias-border-l2, #2a2a31); background: var(--dsw-alias-bg-layer-1, #1d1d24);
+  cursor: pointer; color: var(--dsw-alias-label-primary, #e8e8ec); transition: border-color .15s, background .15s; }
+.bm-remote-source-card:hover { background: var(--dsw-alias-interactive-bg-hover, #26262f); }
+.bm-remote-source-card[data-selected='true'] { border-color: #4d6bfe; box-shadow: inset 0 0 0 1px #4d6bfe; }
+.bm-remote-source-name { font-size: 13px; font-weight: 600; }
+.bm-remote-source-sub { font-size: 11px; line-height: 15px; color: var(--dsw-alias-label-secondary, #9b9ba4); word-break: break-word; }
+.bm-remote-setup-actions { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
     `
 
     const CSS = `
@@ -8336,6 +8366,7 @@ window.__ModuleLoader__.load({
           const [busy, setBusy] = useState('')
           const [error, setError] = useState('')
           const [toast, setToast] = useState('')
+          const [downloadSource, setDownloadSource] = useState('mirror')
           const toastTimer = useRef(null)
 
           const flash = (message) => {
@@ -8348,6 +8379,10 @@ window.__ModuleLoader__.load({
           const syncRemoteError = (next) => {
             if (!next) return
             if (next.appLink) {
+              setError('')
+              return
+            }
+            if (next.cloudflared && next.cloudflared.needsDownload) {
               setError('')
               return
             }
@@ -8370,7 +8405,14 @@ window.__ModuleLoader__.load({
             }
             try {
               let next = await hostRequest('remote')
-              if (ensure && (!next.running || !next.healthy)) next = await hostCommand('remote.up')
+              if (next && next.cloudflared && next.cloudflared.source) {
+                setDownloadSource(next.cloudflared.source === 'official' ? 'official' : 'mirror')
+              }
+              const needsDownload = Boolean(next && next.cloudflared && next.cloudflared.needsDownload)
+              // 首次未安装 cloudflared 时不静默自动下载，先让用户手动选择国内镜像源或官方源
+              if (ensure && !needsDownload && (!next.running || !next.healthy)) {
+                next = await hostCommand('remote.up')
+              }
               setData(next)
               syncRemoteError(next)
             } catch (failure) {
@@ -8380,15 +8422,30 @@ window.__ModuleLoader__.load({
             }
           }
 
+          const downloadAndStart = async () => {
+            setError('')
+            setBusy(downloadSource === 'official' ? t('remote.downloadingOfficial') : t('remote.downloadingMirror'))
+            try {
+              const next = await hostCommand('remote.up', { source: downloadSource })
+              setData(next)
+              syncRemoteError(next)
+            } catch (failure) {
+              setError(String(failure && failure.message ? failure.message : failure))
+            } finally {
+              setBusy('')
+            }
+          }
+
           useEffect(() => { void load(true) }, [])
           useEffect(() => {
             if (!data || !data.running || data.appLink) return undefined
+            if (data.cloudflared && data.cloudflared.needsDownload) return undefined
             if (data.link && !data.appLink) return undefined
             const timer = window.setInterval(() => {
               void load(false, { silent: true })
             }, 2500)
             return () => window.clearInterval(timer)
-          }, [data && data.running, data && data.link, data && data.appLink])
+          }, [data && data.running, data && data.link, data && data.appLink, data && data.cloudflared && data.cloudflared.needsDownload])
           useEffect(() => {
             const onKey = (event) => { if (event.key === 'Escape') onClose() }
             window.addEventListener('keydown', onKey)
@@ -8449,13 +8506,45 @@ window.__ModuleLoader__.load({
             if (data.pid) chips.push(h('span', { className: 'bm-remote-chip' }, `${t('remote.pid')}: ${data.pid}`))
           }
 
-          const tunnelPending = Boolean(data && data.running && !data.link)
+          const needsCloudflared = Boolean(data && data.cloudflared && data.cloudflared.needsDownload)
+          const tunnelPending = Boolean(data && data.running && !data.link && !needsCloudflared)
           const emptyMessage = busy
             || (tunnelPending
               ? t('remote.tunnelStarting')
               : (data && data.link && !data.appLink
                 ? t('remote.appDisabled')
                 : (error ? t('remote.failed') : t('remote.starting'))))
+
+          const setupPane = h('div', { className: 'bm-remote-setup' },
+            h('div', { className: 'bm-remote-setup-title' }, t('remote.setupTitle')),
+            h('div', { className: 'bm-remote-setup-desc' }, t('remote.setupDesc')),
+            h('div', { className: 'bm-remote-source-grid' },
+              h('button', {
+                type: 'button',
+                className: 'bm-remote-source-card',
+                'data-selected': downloadSource === 'mirror' ? 'true' : 'false',
+                disabled: Boolean(busy),
+                onClick: () => setDownloadSource('mirror'),
+              },
+                h('span', { className: 'bm-remote-source-name' }, t('remote.sourceMirror')),
+                h('span', { className: 'bm-remote-source-sub' }, t('remote.sourceMirrorDesc'))),
+              h('button', {
+                type: 'button',
+                className: 'bm-remote-source-card',
+                'data-selected': downloadSource === 'official' ? 'true' : 'false',
+                disabled: Boolean(busy),
+                onClick: () => setDownloadSource('official'),
+              },
+                h('span', { className: 'bm-remote-source-name' }, t('remote.sourceOfficial')),
+                h('span', { className: 'bm-remote-source-sub' }, t('remote.sourceOfficialDesc')))),
+            h('div', { className: 'bm-remote-setup-actions' },
+              h('button', {
+                type: 'button',
+                className: 'bm-remote-btn',
+                'data-primary': 'true',
+                disabled: Boolean(busy),
+                onClick: downloadAndStart,
+              }, t('remote.downloadAndStart'))))
 
           const appPane = data && data.appLink
             ? h('div', { className: 'bm-remote-pane' },
@@ -8466,7 +8555,7 @@ window.__ModuleLoader__.load({
               h('div', { className: 'bm-remote-hint' }, t('remote.appLabel')),
               h('div', { className: 'bm-remote-link' }, data.appLink),
               h('div', { className: 'bm-remote-hint' }, t('remote.appHint')))
-            : h('div', { className: 'bm-remote-empty' }, emptyMessage)
+            : (needsCloudflared ? setupPane : h('div', { className: 'bm-remote-empty' }, emptyMessage))
 
           const dialog = h('div', {
             className: 'bm-modal-backdrop bm-remote-backdrop',

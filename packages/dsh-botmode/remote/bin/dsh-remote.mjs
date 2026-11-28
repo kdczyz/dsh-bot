@@ -155,9 +155,16 @@ async function cmdStop() {
     }
     await stopTunnelProcess({ config, logger })
   }
-  for (let i = 0; i < 100; i += 1) {
+  for (let i = 0; i < 30; i += 1) {
     if (!(await isAlive(runtime.pid))) break
     await sleep(100)
+  }
+  if (await isAlive(runtime.pid)) {
+    try { process.kill(runtime.pid, 'SIGKILL') } catch {}
+    for (let i = 0; i < 20; i += 1) {
+      if (!(await isAlive(runtime.pid))) break
+      await sleep(100)
+    }
   }
   if (existsSync(runtimePath) && !(await isAlive(runtime.pid))) writeJsonAtomic(runtimePath, null)
   console.log(`已停止 pid=${runtime.pid}`)

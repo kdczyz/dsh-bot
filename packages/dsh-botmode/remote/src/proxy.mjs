@@ -993,7 +993,11 @@ code{background:#22222a;padding:2px 6px;border-radius:6px;color:#cfcfe6}
       return session.ws.sendBinary(frame)
     },
     close() {
-      return new Promise((resolve) => server.close(() => resolve()))
+      return new Promise((resolve) => {
+        try { server.closeIdleConnections?.() } catch {}
+        try { server.closeAllConnections?.() } catch {}
+        server.close(() => resolve())
+      })
     },
     describe() {
       return {

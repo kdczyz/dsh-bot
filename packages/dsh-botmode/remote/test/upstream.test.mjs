@@ -231,8 +231,8 @@ test('日志不可用且未固定端口时给出明确错误（不静默连错�
   }
 })
 
-test('cloudflaredAssetName / cloudflaredBinaryName：支持 Linux / macOS / Windows 三端', async () => {
-  const { cloudflaredAssetName, cloudflaredBinaryName } = await import('../src/tunnel.mjs')
+test('cloudflaredAssetName / cloudflaredBinaryName / cloudflaredDownloadUrls：三端与国内/官方源', async () => {
+  const { cloudflaredAssetName, cloudflaredBinaryName, cloudflaredDownloadUrls } = await import('../src/tunnel.mjs')
   assert.deepEqual(cloudflaredAssetName('linux', 'x64'), { asset: 'cloudflared-linux-amd64', archive: false })
   assert.deepEqual(cloudflaredAssetName('linux', 'arm64'), { asset: 'cloudflared-linux-arm64', archive: false })
   assert.deepEqual(cloudflaredAssetName('darwin', 'arm64'), { asset: 'cloudflared-darwin-arm64.tgz', archive: true })
@@ -243,6 +243,12 @@ test('cloudflaredAssetName / cloudflaredBinaryName：支持 Linux / macOS / Wind
   assert.equal(cloudflaredBinaryName('win32'), 'cloudflared.exe')
   assert.equal(cloudflaredBinaryName('darwin'), 'cloudflared')
   assert.equal(cloudflaredBinaryName('linux'), 'cloudflared')
+
+  const mirrorUrls = cloudflaredDownloadUrls('cloudflared-darwin-arm64.tgz', 'mirror')
+  assert.ok(mirrorUrls.length >= 4)
+  assert.ok(mirrorUrls[0].startsWith('https://cdn.gh-proxy.com/'))
+  const officialUrls = cloudflaredDownloadUrls('cloudflared-darwin-arm64.tgz', 'official')
+  assert.deepEqual(officialUrls, ['https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-arm64.tgz'])
 })
 
 test('免日志 Electron 内嵌网关（authMode=none）可通过 upstream-hint.json 自动对接', async () => {

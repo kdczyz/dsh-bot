@@ -67,51 +67,45 @@ async function isRunnableBinary(cmd) {
   }
 }
 
-export function cloudflaredDownloadUrls(asset) {
+export function cloudflaredDownloadUrls(asset, source = 'mirror') {
   const direct = `https://github.com/cloudflare/cloudflared/releases/latest/download/${asset}`
-  return [
-    direct,
+  const mirrors = [
+    `https://cdn.gh-proxy.com/${direct}`,
+    `https://hk.gh-proxy.com/${direct}`,
     `https://gh-proxy.com/${direct}`,
     `https://ghfast.top/${direct}`,
+    `https://v6.gh-proxy.com/${direct}`,
   ]
+  if (source === 'official') return [direct]
+  if (source === 'mirror') return mirrors
+  return [...mirrors, direct]
 }
 
-async function downloadToFile(url, destPath, timeoutMs = 35_000) {
-  const curlBin = process.platform === 'win32'
-    ? 'curl.exe'
-    : (existsSync('/usr/bin/curl') ? '/usr/bin/curl' : 'curl')
-  try {
-    await execFileAsync(
-      curlBin,
-      ['-fsSL', '--connect-timeout', '12', '--max-time', String(Math.ceil(timeoutMs / 1000)), '-o', destPath, url],
-      { timeout: timeoutMs + 5_000, windowsHide: true },
-    )
-    const info = await stat(destPath).catch(() => null)
-    if (info && info.size > 100_000) return
-    throw new Error(`downloaded file too small (${info?.size ?? 0} bytes)`)
-  } catch (curlError) {
-    await rm(destPath, { force: true }).catch(() => {})
-    const response = await fetch(url, {
-      redirect: 'follow',
-      signal: AbortSignal.timeout(timeoutMs),
-    })
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} (curl: ${String(curlError?.message ?? curlError).slice(0, 120)})`)
-    }
-    const bytes = Buffer.from(await response.arrayBuffer())
-    if (bytes.length <= 100_000) {
-      throw new Error(`downloaded payload too small (${bytes.length} bytes)`)
-    }
-    await writeFile(destPath, bytes)
+/** 读取环境变量或 macOS 系统代理（scutil --proxy），让 Electron GUI 进程也能走系统代理。 */
+export async function detectSystemProxy(platform = process.platform, env = process.env) {
+  const fromEnv = env.HTTPS_PROXY || env.https_proxy || env.ALL_PROXY || env.all_proxy || env.HTTP_PROXY || env.http_proxy
+  if (fromEnv && String(fromEnv).trim()) return String(fromEnv).trim()
+  if (platform === 'darwin') {
+    try {
+      const { stdout } = await execFileAsync('/usr/sbin/scutil', ['--proxy'], { timeout: 3_000 })
+      const text = String(stdout ?? '')
+      const pick = (key) => new RegExp(`\\b${key}\\s*:\\s*([^\\s\\n]+)`).exec(text)?.[1] ?? ''
+      if (pick('HTTPSEnable') === '1' && pick('HTTPSProxy') && pick('HTTPSPort')) {
+        return `http://${pick('HTTPSProxy')}:${pick('HTTPSPort')}`
+      }
+      if (pick('HTTPEnable') === '1' && pick('HTTPProxy') && pick('HTTPPort')) {
+        return `http://${pick('HTTPProxy')}:${pick('HTTPPort')}`
+      }
+      if (pick('SOCKSEnable') === '1' && pick('SOCKSProxy') && pick('SOCKSPort')) {
+        return `socks5h://${pick('SOCKSProxy')}:${pick('SOCKSPort')}`
+      }
+    } catch {}
   }
+  return null
 }
 
-/**
- * 解析可用的 cloudflared 可执行文件；宿主机未预装时自动按架构下载到 `<home>/bin/cloudflared(.exe)`，
- * 实现 Linux / macOS / Windows 三端真正零配置即装即用（支持系统代理与多镜像源故障转移）。
- * 可通过 `DSH_REMOTE_AUTO_INSTALL_CLOUDFLARED=0` 关闭自动下载。
- */
-export async function ensureCloudflaredBinary({ configured = 'cloudflared', home, logger } = {}) {
+/** 仅检测本机是否已有可用 cloudflared（不触发任何下载）。 */
+export async function findInstalledCloudflared({ configured = 'cloudflared', home } = {}) {
   const defaultName = cloudflaredBinaryName()
   const preferred = String(configured || defaultName).trim() || defaultName
   if (await isRunnableBinary(preferred)) return preferred
@@ -121,34 +115,110 @@ export async function ensureCloudflaredBinary({ configured = 'cloudflared', home
     if (existsSync(candidate) && (await isRunnableBinary(candidate))) return candidate
   }
 
-  const binDir = join(home, 'bin')
-  const localBin = join(binDir, defaultName)
-  if (existsSync(localBin) && (await isRunnableBinary(localBin))) return localBin
+  if (home) {
+    const localBin = join(home, 'bin', defaultName)
+    if (existsSync(localBin) && (await isRunnableBinary(localBin))) return localBin
+  }
+  return null
+}
 
-  if (process.env.DSH_REMOTE_AUTO_INSTALL_CLOUDFLARED === '0') return preferred
+async function downloadToFile(url, destPath, { proxy = null, maxTimeSec = 180 } = {}) {
+  const curlBin = process.platform === 'win32'
+    ? 'curl.exe'
+    : (existsSync('/usr/bin/curl') ? '/usr/bin/curl' : 'curl')
+  const curlArgs = [
+    '-fsSL',
+    '--connect-timeout', '10',
+    '--speed-limit', '10240',
+    '--speed-time', '18',
+    '--max-time', String(maxTimeSec),
+  ]
+  if (proxy) curlArgs.push('-x', proxy)
+  curlArgs.push('-o', destPath, url)
+  try {
+    await execFileAsync(curlBin, curlArgs, { timeout: (maxTimeSec + 10) * 1000, windowsHide: true })
+    const info = await stat(destPath).catch(() => null)
+    if (info && info.size > 100_000) return
+    throw new Error(`下载文件不完整 (${info?.size ?? 0} bytes)`)
+  } catch (curlError) {
+    await rm(destPath, { force: true }).catch(() => {})
+    // 只有宿主机根本没有 curl 时才回退 Node fetch；网络错误直接暴露给上层切换镜像源，避免重复干等超时
+    if (curlError?.code !== 'ENOENT') {
+      const detail = String(curlError?.stderr || curlError?.message || curlError).trim().split('\n').pop()
+      throw new Error(detail || 'curl 下载失败')
+    }
+    const response = await fetch(url, {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(maxTimeSec * 1000),
+    })
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+    const bytes = Buffer.from(await response.arrayBuffer())
+    if (bytes.length <= 100_000) {
+      throw new Error(`下载文件不完整 (${bytes.length} bytes)`)
+    }
+    await writeFile(destPath, bytes)
+  }
+}
+
+/**
+ * 解析可用的 cloudflared 可执行文件；宿主机未预装时按用户选择的源（`mirror` 国内镜像源 / `official` GitHub 官方源）
+ * 自动下载到 `<home>/bin/cloudflared(.exe)`，兼容 Linux / macOS / Windows 三端及 macOS 系统代理。
+ */
+export async function ensureCloudflaredBinary({
+  configured = 'cloudflared',
+  home,
+  source = 'mirror',
+  allowAutoInstall = true,
+  logger,
+} = {}) {
+  const existing = await findInstalledCloudflared({ configured, home })
+  if (existing) return existing
+
+  const defaultName = cloudflaredBinaryName()
+  const preferred = String(configured || defaultName).trim() || defaultName
+  if (!allowAutoInstall || process.env.DSH_REMOTE_AUTO_INSTALL_CLOUDFLARED === '0') return preferred
 
   const spec = cloudflaredAssetName()
   if (!spec) {
     throw new Error(`未找到 cloudflared 且当前平台暂不支持自动下载 (${process.platform}/${process.arch})`)
   }
+  const binDir = join(home, 'bin')
+  const localBin = join(binDir, defaultName)
   ensureDir(binDir)
-  const urls = cloudflaredDownloadUrls(spec.asset)
+  const normalizedSource = source === 'official' ? 'official' : (source === 'auto' ? 'auto' : 'mirror')
+  const urls = cloudflaredDownloadUrls(spec.asset, normalizedSource)
+  const systemProxy = await detectSystemProxy()
   const tmpDownload = `${localBin}.${process.pid}.${Date.now()}.${spec.archive ? 'tgz' : 'tmp'}`
   let downloadedUrl = null
   const errors = []
   for (const url of urls) {
-    logger?.info?.('cloudflared not found; downloading automatically', { url, target: localBin })
-    try {
-      await downloadToFile(url, tmpDownload, 35_000)
-      downloadedUrl = url
-      break
-    } catch (error) {
-      errors.push(`${url} -> ${String(error?.message ?? error).slice(0, 120)}`)
-      await rm(tmpDownload, { force: true }).catch(() => {})
+    // 官方源优先走系统代理（若存在），国内镜像源优先直连（失败后再尝试系统代理）
+    const proxyPlans = normalizedSource === 'official'
+      ? (systemProxy ? [systemProxy, null] : [null])
+      : (systemProxy ? [null, systemProxy] : [null])
+    for (const proxy of proxyPlans) {
+      logger?.info?.('cloudflared not found; downloading automatically', {
+        url,
+        source: normalizedSource,
+        proxy: proxy ? 'system' : 'direct',
+        target: localBin,
+      })
+      try {
+        await downloadToFile(url, tmpDownload, { proxy, maxTimeSec: 180 })
+        downloadedUrl = url
+        break
+      } catch (error) {
+        errors.push(`${url}${proxy ? ' (proxy)' : ''} -> ${String(error?.message ?? error).slice(0, 120)}`)
+        await rm(tmpDownload, { force: true }).catch(() => {})
+      }
     }
+    if (downloadedUrl) break
   }
   if (!downloadedUrl) {
-    throw new Error(`自动下载 cloudflared 失败（请检查网络或手动安装 cloudflared）：${errors.join(' | ')}`)
+    const label = normalizedSource === 'official' ? 'GitHub 官方源' : '国内镜像源'
+    throw new Error(`从${label}下载 cloudflared 失败（可尝试切换另一个下载源）：${errors.slice(0, 3).join(' | ')}`)
   }
   if (spec.archive) {
     const tarBin = existsSync('/usr/bin/tar') ? '/usr/bin/tar' : 'tar'
@@ -359,6 +429,7 @@ export class Tunnel {
       command = await ensureCloudflaredBinary({
         configured: this.config.public.cloudflared || 'cloudflared',
         home: this.config.home,
+        source: this.config.public.downloadSource || 'mirror',
         logger: this.logger,
       })
     } catch (error) {

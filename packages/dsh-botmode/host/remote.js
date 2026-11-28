@@ -17,6 +17,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { qrDataUrl, qrSvg } from './qr.js'
+import { ensureCloudflaredBinary, findInstalledCloudflared } from '../remote/src/tunnel.mjs'
 
 const execFileAsync = promisify(execFile)
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -459,10 +460,50 @@ export class RemoteGateway {
     }
   }
 
-  /** 运行态 + 链接 + 二维码。 */
+  async detectCloudflared() {
+    const cfg = await readJson(this.configPath)
+    const configured = cfg?.public?.cloudflared || 'cloudflared'
+    const found = await findInstalledCloudflared({ configured, home: this.home })
+    return {
+      installed: Boolean(found),
+      path: found || null,
+      needsDownload: !found,
+      source: cfg?.public?.downloadSource || null,
+    }
+  }
+
+  async installCloudflared(source = 'mirror') {
+    const normalized = source === 'official' ? 'official' : 'mirror'
+    const cfgPath = await this.#ensureDefaultConfig()
+    const cfg = (await readJson(cfgPath)) || {}
+    const binPath = await ensureCloudflaredBinary({
+      configured: cfg?.public?.cloudflared || 'cloudflared',
+      home: this.home,
+      source: normalized,
+      allowAutoInstall: true,
+      logger: this.logger,
+    })
+    const nextCfg = {
+      ...cfg,
+      public: { ...(cfg.public || {}), downloadSource: normalized },
+    }
+    await atomicWriteFile(cfgPath, `${JSON.stringify(nextCfg, null, 2)}\n`, { mode: 0o600 }).catch(() => {})
+    return {
+      ok: true,
+      installed: true,
+      path: binPath,
+      source: normalized,
+    }
+  }
+
+  /** 运行态 + 链接 + 二维码 + cloudflared 安装态。 */
   async status({ qr = true } = {}) {
-    const runtime = await readJson(this.runtimePath)
-    let link = await readText(this.linkPath)
+    const [runtime, rawLink, cloudflared] = await Promise.all([
+      readJson(this.runtimePath),
+      readText(this.linkPath),
+      this.detectCloudflared(),
+    ])
+    let link = rawLink
     if (!link && runtime?.link) link = runtime.link
     const running = Boolean(runtime && isAlive(runtime.pid))
     const port = runtime?.listen?.port ?? null
@@ -478,6 +519,7 @@ export class RemoteGateway {
       link: link || null,
       appLink: runtime?.appLink ?? null,
       appBridge: Boolean(runtime?.appLink),
+      cloudflared,
       token: parsed?.key || parsed?.token || null,
       keyKind: parsed?.key ? 'psk' : parsed?.token ? 'legacy-token' : null,
       pskKid: runtime?.pskKid ?? null,
@@ -514,13 +556,24 @@ export class RemoteGateway {
     return payload
   }
 
-  /** 确保网关在线（已在线且健康则直接复用；若隧道尚在建连则短等）。 */
-  async up() {
+  /** 确保网关在线（首次缺少 cloudflared 时需由用户选择下载源后再下载并启动）。 */
+  async up({ source } = {}) {
     const before = await this.status({ qr: false })
     if (before.running && before.healthy && before.link) {
       return { ...(await this.status()), started: false, message: '网关已在线' }
     }
-    if (before.running && before.healthy && !before.link) {
+    if (!this.bin || !existsSync(this.bin)) {
+      await this.#run(['up'], { timeoutMs: 30_000 })
+    }
+    if (before.cloudflared?.needsDownload) {
+      if (!source) {
+        return { ...(await this.status()), started: false, needsCloudflared: true }
+      }
+      await this.installCloudflared(source)
+      if (before.running) {
+        await this.down().catch(() => {})
+      }
+    } else if (before.running && before.healthy && !before.link) {
       return this.#waitFor({ timeoutMs: 30_000, expectPid: null }).then((state) => ({ ...state, started: false }))
     }
     await this.#runDetachedUp({ timeoutMs: 120_000 })
