@@ -82,6 +82,7 @@ export class Upstream {
       launchToken: config.upstream.launchToken ?? null,
       logPath: config.upstream.log ?? null,
       cookie: null,
+      authless: false,
       cookieExpiresAt: null,
       cookieRefreshedAt: null,
       lastError: null,
@@ -100,7 +101,7 @@ export class Upstream {
   }
 
   get ready() {
-    return Boolean(this.info.port && this.info.cookie)
+    return Boolean(this.info.port && (this.info.cookie || this.info.authless))
   }
 
   async start() {
@@ -143,11 +144,13 @@ export class Upstream {
     if (discovered.launchToken) this.info.launchToken = discovered.launchToken
     if (discovered.logPath) this.info.logPath = discovered.logPath
 
-    // 免日志兜底路径：当宿主 dsh-botmode 直接写入了已鉴权的 upstream-hint.json（如裸跑 dsh web 未重定向日志）
-    if (discovered.fromHint && discovered.cookie) {
-      const cookieChanged = discovered.cookie !== this.info.cookie
-      if (force || hostChanged || portChanged || cookieChanged || !this.info.cookie) {
-        this.info.cookie = discovered.cookie
+    // 免日志兜底路径：当宿主 dsh-botmode 直接写入了 upstream-hint.json（如裸跑 dsh web 或 Electron 内嵌网关）
+    if (discovered.fromHint && (discovered.cookie || discovered.authless)) {
+      const cookieChanged = (discovered.cookie ?? null) !== this.info.cookie
+      const authlessChanged = Boolean(discovered.authless) !== this.info.authless
+      if (force || hostChanged || portChanged || cookieChanged || authlessChanged || !this.ready) {
+        this.info.cookie = discovered.cookie ?? null
+        this.info.authless = Boolean(discovered.authless)
         this.info.cookieExpiresAt = Date.now() + 24 * 3_600_000
         this.info.cookieRefreshedAt = Date.now()
         this.info.bootstraps += 1
@@ -155,6 +158,7 @@ export class Upstream {
         this.logger?.info?.('upstream bound via host hint (no log file required)', {
           host: this.info.host,
           port: this.info.port,
+          authMode: this.info.authless ? 'none' : 'cookie',
           bootstraps: this.info.bootstraps,
         })
       }
@@ -172,6 +176,18 @@ export class Upstream {
     await this.#bootstrap()
   }
 
+  async #probeAuthless(host, port) {
+    try {
+      const response = await httpRequest(`http://${host}:${port}/botmode/api/state`, {
+        redirect: 'manual',
+        timeoutMs: 2_000,
+      })
+      return response.status === 200
+    } catch {
+      return false
+    }
+  }
+
   async #readHostHint() {
     const stateDir = this.config?.stateDir
     if (!stateDir) return null
@@ -182,13 +198,27 @@ export class Upstream {
     const port = Number(hint?.port)
     const cookie = typeof hint?.cookie === 'string' && hint.cookie.trim() ? hint.cookie.trim() : null
     const launchToken = typeof hint?.launchToken === 'string' && hint.launchToken.trim() ? hint.launchToken.trim() : null
-    if (!Number.isInteger(port) || port <= 0 || (!cookie && !launchToken)) return null
+    const authMode = hint?.authMode === 'none' ? 'none' : null
+    if (!Number.isInteger(port) || port <= 0 || (!cookie && !launchToken && authMode !== 'none')) return null
     if (!(await probeTcp(host, port))) return null
+    if (!cookie && !launchToken && authMode === 'none') {
+      if (!(await this.#probeAuthless(host, port))) return null
+      return {
+        host,
+        port,
+        launchToken: null,
+        cookie: null,
+        authless: true,
+        fromHint: true,
+        mtimeMs: Number(hint?.updatedAt) || Date.now(),
+      }
+    }
     return {
       host,
       port,
       launchToken,
       cookie,
+      authless: false,
       fromHint: !launchToken && Boolean(cookie),
       mtimeMs: Number(hint?.updatedAt) || Date.now(),
     }
@@ -273,8 +303,9 @@ export class Upstream {
     return {}
   }
 
-  /** 扫描 /proc 找出当前存活的 dsh web 进程（最新优先）。 */
+  /** 扫描 /proc 找出当前存活的 dsh web 进程（最新优先，仅 Linux 支持）。 */
   async #listRunningDshWeb() {
+    if (process.platform !== 'linux') return []
     let entries = []
     try {
       entries = await readdir('/proc')

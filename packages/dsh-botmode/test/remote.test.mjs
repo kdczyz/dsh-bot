@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { RemoteGateway, inspectLink, parseGatewayLink } from '../host/remote.js'
+import { RemoteGateway, inspectLink, parseGatewayLink, resolveNodeRuntime } from '../host/remote.js'
 
 function tempHome() {
   const dir = mkdtempSync(join(tmpdir(), 'botmode-remote-'))
@@ -131,7 +131,58 @@ test('默认内置 dsh-remote CLI 开箱即用，且 recordUpstreamHintFromReque
     assert.equal(hint.host, '10.0.0.140')
     assert.equal(hint.port, 3080)
     assert.equal(hint.cookie, 'dsh-auth-real=abc123')
+    assert.equal(hint.authMode, 'cookie')
+
+    // 同一端口已存在有效 cookie 时，无 cookie 请求不应覆盖掉 cookie
+    const keepCookie = await gateway.recordUpstreamHintFromRequest({
+      socket: { localAddress: '::ffff:10.0.0.140', localPort: 3080 },
+      headers: {},
+    })
+    assert.equal(keepCookie, false)
+
+    // 新端口的免 cookie 内嵌桌面端网关应写入 authMode=none
+    const authlessSaved = await gateway.recordUpstreamHintFromRequest({
+      socket: { localAddress: '127.0.0.1', localPort: 3099 },
+      headers: {},
+    })
+    assert.equal(authlessSaved, true)
+    const hint2 = JSON.parse(readFileSync(join(home.dir, 'state', 'upstream-hint.json'), 'utf8'))
+    assert.equal(hint2.port, 3099)
+    assert.equal(hint2.cookie, null)
+    assert.equal(hint2.authMode, 'none')
   } finally {
     home.cleanup()
   }
+})
+
+test('resolveNodeRuntime：三端 Electron 桌面版与纯 Node 兼容解析', async () => {
+  const plain = await resolveNodeRuntime({
+    execPath: '/usr/bin/node',
+    isElectron: false,
+    useCache: false,
+  })
+  assert.deepEqual(plain, { command: '/usr/bin/node', extraEnv: {} })
+
+  const macElectronWithBrew = await resolveNodeRuntime({
+    execPath: '/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness',
+    isElectron: true,
+    platform: 'darwin',
+    env: {},
+    useCache: false,
+    probe: async (cmd) => (cmd === '/opt/homebrew/bin/node' ? 22 : 0),
+  })
+  assert.deepEqual(macElectronWithBrew, { command: '/opt/homebrew/bin/node', extraEnv: {} })
+
+  const winElectronFallback = await resolveNodeRuntime({
+    execPath: 'C:\\Program Files\\DeepSeek Harness\\DeepSeek Harness.exe',
+    isElectron: true,
+    platform: 'win32',
+    env: {},
+    useCache: false,
+    probe: async () => 0,
+  })
+  assert.deepEqual(winElectronFallback, {
+    command: 'C:\\Program Files\\DeepSeek Harness\\DeepSeek Harness.exe',
+    extraEnv: { ELECTRON_RUN_AS_NODE: '1' },
+  })
 })

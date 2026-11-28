@@ -11,9 +11,10 @@
   dsh-remote doctor                       自检
  */
 import { spawn } from 'node:child_process'
-import { existsSync, openSync } from 'node:fs'
+import { closeSync, existsSync, openSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFile } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { loadConfig, assertConfig } from '../src/config.mjs'
 import { createLogger, ensureDir, httpRequest, readJson, sleep, writeJsonAtomic } from '../src/util.mjs'
@@ -75,15 +76,25 @@ async function cmdUp() {
     ensureDir(config.logs.dir)
     const logFile = join(config.logs.dir, 'relay.log')
     const out = openSync(logFile, 'a')
-    const child = spawn(
-      process.execPath,
-      [new URL(import.meta.url).pathname, 'up', '--foreground', '--config', config.configPath ?? join(config.home, 'config.json')],
-      {
-        detached: true,
-        stdio: ['ignore', out, out],
-        env: process.env,
-      },
-    )
+    const scriptPath = fileURLToPath(import.meta.url)
+    const childEnv = process.versions?.electron
+      ? { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+      : process.env
+    let child
+    try {
+      child = spawn(
+        process.execPath,
+        [scriptPath, 'up', '--foreground', '--config', config.configPath ?? join(config.home, 'config.json')],
+        {
+          detached: true,
+          windowsHide: true,
+          stdio: ['ignore', out, out],
+          env: childEnv,
+        },
+      )
+    } finally {
+      closeSync(out)
+    }
     child.unref()
     await sleep(1200)
     const started = readRuntime()
@@ -133,7 +144,9 @@ async function cmdStop() {
     writeJsonAtomic(runtimePath, { ...runtime, stoppedAt: new Date().toISOString() })
     return
   }
-  process.kill(runtime.pid, 'SIGTERM')
+  try {
+    process.kill(runtime.pid, 'SIGTERM')
+  } catch {}
   if (flags.has('--all')) {
     // 等待 relay 退出后再收隧道，避免它自己在退出流程里又重启
     for (let i = 0; i < 50; i += 1) {
@@ -152,6 +165,7 @@ async function cmdStop() {
 
 /** state 里丢了 pid 时，按命令行匹配兜底找到本端口的 cloudflared。 */
 async function findCloudflaredForPort(config) {
+  if (process.platform !== 'linux') return null
   const needle = `--url http://${config.listen.host}:${String(config.listen.port)}`
   try {
     const { readdir, readFile } = await import('node:fs/promises')
@@ -306,7 +320,10 @@ async function cmdDoctor() {
 
   add('node', Number(process.versions.node.split('.')[0]) >= 22, `node ${process.versions.node}`)
   const cloudflared = await new Promise((resolve) => {
-    const child = spawn(config.public.cloudflared ?? 'cloudflared', ['--version'], { stdio: ['ignore', 'pipe', 'ignore'] })
+    const child = spawn(config.public.cloudflared ?? 'cloudflared', ['--version'], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    })
     let text = ''
     child.stdout?.on('data', (chunk) => {
       text += chunk

@@ -230,3 +230,58 @@ test('日志不可用且未固定端口时给出明确错误（不静默连错�
     home.cleanup()
   }
 })
+
+test('cloudflaredAssetName / cloudflaredBinaryName：支持 Linux / macOS / Windows 三端', async () => {
+  const { cloudflaredAssetName, cloudflaredBinaryName } = await import('../src/tunnel.mjs')
+  assert.deepEqual(cloudflaredAssetName('linux', 'x64'), { asset: 'cloudflared-linux-amd64', archive: false })
+  assert.deepEqual(cloudflaredAssetName('linux', 'arm64'), { asset: 'cloudflared-linux-arm64', archive: false })
+  assert.deepEqual(cloudflaredAssetName('darwin', 'arm64'), { asset: 'cloudflared-darwin-arm64.tgz', archive: true })
+  assert.deepEqual(cloudflaredAssetName('darwin', 'x64'), { asset: 'cloudflared-darwin-amd64.tgz', archive: true })
+  assert.deepEqual(cloudflaredAssetName('win32', 'x64'), { asset: 'cloudflared-windows-amd64.exe', archive: false })
+  assert.deepEqual(cloudflaredAssetName('win32', 'arm64'), { asset: 'cloudflared-windows-amd64.exe', archive: false })
+  assert.deepEqual(cloudflaredAssetName('win32', 'ia32'), { asset: 'cloudflared-windows-386.exe', archive: false })
+  assert.equal(cloudflaredBinaryName('win32'), 'cloudflared.exe')
+  assert.equal(cloudflaredBinaryName('darwin'), 'cloudflared')
+  assert.equal(cloudflaredBinaryName('linux'), 'cloudflared')
+})
+
+test('免日志 Electron 内嵌网关（authMode=none）可通过 upstream-hint.json 自动对接', async () => {
+  const http = await import('node:http')
+  const server = http.createServer((req, res) => {
+    if (req.url === '/botmode/api/state') {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ ok: true }))
+      return
+    }
+    res.writeHead(404)
+    res.end()
+  })
+  const home = tempHome()
+  let upstream = null
+  try {
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const port = server.address().port
+    const stateDir = join(home.dir, 'state')
+    mkdirSync(stateDir, { recursive: true })
+    writeFileSync(join(stateDir, 'upstream-hint.json'), JSON.stringify({
+      host: '127.0.0.1',
+      port,
+      cookie: null,
+      authMode: 'none',
+      updatedAt: Date.now(),
+    }))
+    const config = makeConfig({ home: home.dir, fake: null, logPath: null })
+    config.upstream.logs = [join(home.dir, 'missing.log')]
+    upstream = new Upstream({ config, logger: noopLogger })
+    await upstream.start()
+    assert.equal(upstream.ready, true)
+    assert.equal(upstream.info.port, port)
+    assert.equal(upstream.info.authless, true)
+    assert.equal(upstream.info.cookie, null)
+  } finally {
+    upstream?.stop()
+    server.closeAllConnections?.()
+    await new Promise((resolve) => server.close(resolve))
+    home.cleanup()
+  }
+})

@@ -11,7 +11,7 @@
  */
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { chmod, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -30,6 +30,115 @@ const BIN_CANDIDATES = [
   join(homedir(), 'Desktop', 'dsh-remote', 'bin', 'dsh-remote.mjs'),
   join(homedir(), 'dsh-remote', 'bin', 'dsh-remote.mjs'),
 ].filter(Boolean)
+
+function systemNodeCandidates(platform = process.platform, env = process.env) {
+  const list = []
+  if (env.DSH_NODE_BIN) list.push(env.DSH_NODE_BIN)
+  if (platform === 'win32') {
+    list.push('node.exe', 'node')
+    const pf = env.ProgramFiles || 'C:\\Program Files'
+    const pf86 = env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)'
+    const localAppData = env.LOCALAPPDATA
+    list.push(join(pf, 'nodejs', 'node.exe'))
+    list.push(join(pf86, 'nodejs', 'node.exe'))
+    if (localAppData) list.push(join(localAppData, 'Programs', 'nodejs', 'node.exe'))
+    if (env.NVM_SYMLINK) list.push(join(env.NVM_SYMLINK, 'node.exe'))
+    if (env.VOLTA_HOME) list.push(join(env.VOLTA_HOME, 'bin', 'node.exe'))
+  } else if (platform === 'darwin') {
+    list.push(
+      'node',
+      '/opt/homebrew/bin/node',
+      '/usr/local/bin/node',
+      '/opt/local/bin/node',
+      join(homedir(), '.volta', 'bin', 'node'),
+      join(homedir(), '.asdf', 'shims', 'node'),
+    )
+  } else {
+    list.push(
+      'node',
+      '/usr/local/bin/node',
+      '/usr/bin/node',
+      join(homedir(), '.volta', 'bin', 'node'),
+      join(homedir(), '.asdf', 'shims', 'node'),
+    )
+  }
+  return [...new Set(list.filter(Boolean))]
+}
+
+async function probeNodeMajor(command, extraEnv = {}) {
+  try {
+    const { stdout } = await execFileAsync(command, ['-p', 'process.versions.node'], {
+      timeout: 5_000,
+      windowsHide: true,
+      env: { ...process.env, ...extraEnv },
+    })
+    const match = /^(\d+)\./.exec(String(stdout ?? '').trim())
+    return match ? Number(match[1]) : 0
+  } catch {
+    return 0
+  }
+}
+
+let cachedNodeRuntime = null
+
+/**
+ * 解析可执行 dsh-remote.mjs 的 Node 运行时（兼容 Linux / macOS / Windows 及 Electron 桌面端）：
+ * - 非 Electron 环境：直接使用当前 `process.execPath`；
+ * - Electron 环境（macOS `.app` / Windows `.exe` / Linux 桌面端）：
+ *   1) 优先选用宿主机已安装的独立 `node` (>= 20)，避免 Electron 关闭 `RunAsNode` fuse 或拉起新 GUI 窗口；
+ *   2) 宿主机未安装 `node` 时，回退到 `process.execPath` 并注入 `ELECTRON_RUN_AS_NODE=1`。
+ */
+export async function resolveNodeRuntime({
+  execPath = process.execPath,
+  isElectron = Boolean(process.versions?.electron),
+  platform = process.platform,
+  env = process.env,
+  probe = probeNodeMajor,
+  useCache = true,
+} = {}) {
+  if (!isElectron) {
+    return { command: execPath, extraEnv: {} }
+  }
+  if (useCache && cachedNodeRuntime) return cachedNodeRuntime
+  for (const candidate of systemNodeCandidates(platform, env)) {
+    const major = await probe(candidate, {})
+    if (major >= 20) {
+      const resolved = { command: candidate, extraEnv: {} }
+      if (useCache) cachedNodeRuntime = resolved
+      return resolved
+    }
+  }
+  const electronFallback = { command: execPath, extraEnv: { ELECTRON_RUN_AS_NODE: '1' } }
+  if (useCache) cachedNodeRuntime = electronFallback
+  return electronFallback
+}
+
+async function atomicWriteFile(filePath, content, { mode = 0o600 } = {}) {
+  await mkdir(dirname(filePath), { recursive: true })
+  const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`
+  await writeFile(tmp, content, { encoding: 'utf8', mode })
+  if (process.platform !== 'win32') {
+    await chmod(tmp, mode).catch(() => {})
+  }
+  try {
+    await rename(tmp, filePath)
+  } catch (error) {
+    if (process.platform === 'win32' && (error?.code === 'EPERM' || error?.code === 'EEXIST')) {
+      await rm(filePath, { force: true }).catch(() => {})
+      await rename(tmp, filePath)
+    } else {
+      await rm(tmp, { force: true }).catch(() => {})
+      throw error
+    }
+  }
+}
+
+function hasRelayCookie(cookieHeader) {
+  if (typeof cookieHeader !== 'string' || !cookieHeader.trim()) return false
+  return cookieHeader
+    .split(';')
+    .some((part) => part.trim().startsWith('dsh-auth-relay='))
+}
 
 function normalizeSocketHost(raw) {
   const s = String(raw ?? '').trim().replace(/^::ffff:/i, '')
@@ -151,22 +260,33 @@ export class RemoteGateway {
   }
 
   /**
-   * 记录当前活跃 `dsh web` 进程的真实监听地址与已鉴权 cookie 到 `state/upstream-hint.json`。
-   * 即使用户在新机器终端裸跑 `dsh web`（无日志文件），dsh-remote 也能零配置自动对接。
+   * 记录当前活跃 `dsh web` / Electron 内嵌网关的真实监听地址与鉴权信息到 `state/upstream-hint.json`。
+   * 即使用户在 Linux / macOS / Windows 裸跑 `dsh web` 或桌面端（无日志文件），dsh-remote 也能零配置自动对接。
    */
   async recordUpstreamHintFromRequest(req) {
     try {
       const port = Number(req?.socket?.localPort)
       if (!Number.isInteger(port) || port <= 0) return false
       const host = normalizeSocketHost(req?.socket?.localAddress)
-      const cookie = extractDshAuthCookie(req?.headers?.cookie)
-      if (!cookie) return false
-      await mkdir(dirname(this.hintPath), { recursive: true })
-      const tmp = `${this.hintPath}.${process.pid}.tmp`
-      const body = `${JSON.stringify({ host, port, cookie, pid: process.pid, updatedAt: Date.now() }, null, 2)}\n`
-      await writeFile(tmp, body, { encoding: 'utf8', mode: 0o600 })
-      await chmod(tmp, 0o600).catch(() => {})
-      await rename(tmp, this.hintPath)
+      const cookieHeader = req?.headers?.cookie
+      const cookie = extractDshAuthCookie(cookieHeader)
+      // 跳过仅来自 dsh-remote 自身的 relay 请求，避免自循环或覆盖真实 cookie
+      if (!cookie && hasRelayCookie(cookieHeader)) return false
+      if (!cookie) {
+        const existing = await readJson(this.hintPath)
+        if (existing && existing.port === port && existing.host === host && existing.cookie) {
+          return false
+        }
+      }
+      const payload = {
+        host,
+        port,
+        cookie: cookie || null,
+        authMode: cookie ? 'cookie' : 'none',
+        pid: process.pid,
+        updatedAt: Date.now(),
+      }
+      await atomicWriteFile(this.hintPath, `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 })
       return true
     } catch {
       return false
@@ -175,7 +295,6 @@ export class RemoteGateway {
 
   async #ensureDefaultConfig() {
     if (existsSync(this.configPath)) return this.configPath
-    await mkdir(this.home, { recursive: true })
     const homeDir = homedir()
     const defaults = {
       version: 1,
@@ -194,9 +313,7 @@ export class RemoteGateway {
       proxy: { appBridge: true, hostRewrite: true },
       tunnel: { persistAcrossRestart: true },
     }
-    const tmp = `${this.configPath}.${process.pid}.tmp`
-    await writeFile(tmp, `${JSON.stringify(defaults, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
-    await rename(tmp, this.configPath)
+    await atomicWriteFile(this.configPath, `${JSON.stringify(defaults, null, 2)}\n`, { mode: 0o600 })
     return this.configPath
   }
 
@@ -229,12 +346,21 @@ export class RemoteGateway {
     if (!(await this.#hasSystemdUserBus())) return false
     if (!this.bin || !existsSync(this.bin)) return false
     try {
+      const runtime = await resolveNodeRuntime()
       const unitDir = join(homedir(), '.config', 'systemd', 'user')
       const unitPath = join(unitDir, this.serviceName)
       const logDir = join(this.home, 'logs')
       await mkdir(unitDir, { recursive: true })
       await mkdir(logDir, { recursive: true })
       const workDir = dirname(dirname(this.bin))
+      const envLines = [
+        `Environment=HOME=${homedir()}`,
+        'Environment=NODE_ENV=production',
+        `Environment=DSH_REMOTE_HOME=${this.home}`,
+      ]
+      if (runtime.extraEnv.ELECTRON_RUN_AS_NODE) {
+        envLines.push(`Environment=ELECTRON_RUN_AS_NODE=${runtime.extraEnv.ELECTRON_RUN_AS_NODE}`)
+      }
       const unitBody = [
         '[Unit]',
         'Description=dsh-remote — DSH Gateway Remote Tunnel (auto-managed by dsh-botmode)',
@@ -243,11 +369,9 @@ export class RemoteGateway {
         '',
         '[Service]',
         'Type=simple',
-        `Environment=HOME=${homedir()}`,
-        'Environment=NODE_ENV=production',
-        `Environment=DSH_REMOTE_HOME=${this.home}`,
+        ...envLines,
         `WorkingDirectory=${workDir}`,
-        `ExecStart="${process.execPath}" "${this.bin}" up --foreground --config "${this.configPath}"`,
+        `ExecStart="${runtime.command}" "${this.bin}" up --foreground --config "${this.configPath}"`,
         'Restart=always',
         'RestartSec=3',
         `StandardOutput=append:${join(logDir, 'relay.log')}`,
@@ -267,10 +391,15 @@ export class RemoteGateway {
     }
   }
 
+  async #resolveWorkDir() {
+    const candidate = this.bin ? dirname(dirname(this.bin)) : null
+    if (candidate && existsSync(candidate)) return candidate
+    await mkdir(this.home, { recursive: true }).catch(() => {})
+    return existsSync(this.home) ? this.home : homedir()
+  }
+
   async #runDetachedUp({ timeoutMs = 120_000 } = {}) {
-    if (this.useSystemd) {
-      await this.#ensureDefaultConfig().catch(() => {})
-    }
+    await this.#ensureDefaultConfig().catch(() => {})
     if (await this.#ensureSystemdService()) {
       const startedAt = Date.now()
       await execFileAsync('systemctl', ['--user', 'start', this.serviceName], { timeout: 30_000 })
@@ -279,13 +408,15 @@ export class RemoteGateway {
     }
     if (this.useSystemd) {
       try {
+        const runtime = await resolveNodeRuntime()
         const unit = `dsh-remote-detached-${Date.now()}`
-        const env = { ...process.env, DSH_REMOTE_HOME: this.home }
+        const env = { ...process.env, ...runtime.extraEnv, DSH_REMOTE_HOME: this.home }
+        const cwd = await this.#resolveWorkDir()
         const startedAt = Date.now()
         await execFileAsync(
           'systemd-run',
-          ['--user', '--scope', `--unit=${unit}`, '--', process.execPath, this.bin, 'up'],
-          { timeout: timeoutMs, env, cwd: dirname(dirname(this.bin)), maxBuffer: 4 * 1024 * 1024 },
+          ['--user', '--scope', `--unit=${unit}`, '--', runtime.command, this.bin, 'up'],
+          { timeout: timeoutMs, env, cwd, windowsHide: true, maxBuffer: 4 * 1024 * 1024 },
         )
         this.lastAction = { args: ['systemd-run', 'up'], ok: true, at: new Date().toISOString(), ms: Date.now() - startedAt }
         return
@@ -297,13 +428,21 @@ export class RemoteGateway {
   }
 
   async #run(args, { timeoutMs = 90_000 } = {}) {
-    const env = { ...process.env, DSH_REMOTE_HOME: this.home }
     const startedAt = Date.now()
+    if (!this.bin || !existsSync(this.bin)) {
+      const message = `未找到内置 dsh-remote 脚本（${this.bin ?? '未配置'}）`
+      this.lastAction = { args, ok: false, at: new Date().toISOString(), ms: 0, error: message }
+      throw new Error(`dsh-remote ${args.join(' ')} 失败：${message}`)
+    }
+    const runtime = await resolveNodeRuntime()
+    const env = { ...process.env, ...runtime.extraEnv, DSH_REMOTE_HOME: this.home }
+    const cwd = await this.#resolveWorkDir()
     try {
-      const { stdout, stderr } = await execFileAsync(process.execPath, [this.bin, ...args], {
+      const { stdout, stderr } = await execFileAsync(runtime.command, [this.bin, ...args], {
         timeout: timeoutMs,
         env,
-        cwd: dirname(dirname(this.bin)),
+        cwd,
+        windowsHide: true,
         maxBuffer: 4 * 1024 * 1024,
       })
       this.lastAction = { args, ok: true, at: new Date().toISOString(), ms: Date.now() - startedAt }

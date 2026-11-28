@@ -2,7 +2,7 @@
  * 通用工具：base64url、原子写、日志、HTTP 小工具。
  */
 import { createHash, randomBytes as nodeRandom, timingSafeEqual } from 'node:crypto'
-import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, writeSync } from 'node:fs'
+import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 export const b64u = (buf) => Buffer.from(buf).toString('base64url')
@@ -55,7 +55,17 @@ export function writeJsonAtomic(path, value, { mode = 0o600 } = {}) {
   } finally {
     closeSync(fd)
   }
-  renameSync(tmp, path)
+  try {
+    renameSync(tmp, path)
+  } catch (error) {
+    if (process.platform === 'win32' && (error?.code === 'EPERM' || error?.code === 'EEXIST')) {
+      try { rmSync(path, { force: true }) } catch {}
+      renameSync(tmp, path)
+    } else {
+      try { rmSync(tmp, { force: true }) } catch {}
+      throw error
+    }
+  }
 }
 
 export function ensureDir(path) {

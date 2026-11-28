@@ -16,22 +16,51 @@ const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
 const URL_RE = /https:\/\/[a-z0-9][a-z0-9-]*\.trycloudflare\.com/giu
 
-function cloudflaredAssetName(platform = process.platform, arch = process.arch) {
+export function cloudflaredBinaryName(platform = process.platform) {
+  return platform === 'win32' ? 'cloudflared.exe' : 'cloudflared'
+}
+
+export function cloudflaredAssetName(platform = process.platform, arch = process.arch) {
   if (platform === 'linux') {
     if (arch === 'x64') return { asset: 'cloudflared-linux-amd64', archive: false }
     if (arch === 'arm64') return { asset: 'cloudflared-linux-arm64', archive: false }
     if (arch === 'arm') return { asset: 'cloudflared-linux-arm', archive: false }
+    if (arch === 'ia32') return { asset: 'cloudflared-linux-386', archive: false }
   }
   if (platform === 'darwin') {
     if (arch === 'arm64') return { asset: 'cloudflared-darwin-arm64.tgz', archive: true }
     if (arch === 'x64') return { asset: 'cloudflared-darwin-amd64.tgz', archive: true }
   }
+  if (platform === 'win32') {
+    if (arch === 'x64' || arch === 'arm64') return { asset: 'cloudflared-windows-amd64.exe', archive: false }
+    if (arch === 'ia32') return { asset: 'cloudflared-windows-386.exe', archive: false }
+  }
   return null
+}
+
+function systemCloudflaredCandidates(platform = process.platform, env = process.env) {
+  if (platform === 'darwin') {
+    return ['/opt/homebrew/bin/cloudflared', '/usr/local/bin/cloudflared', '/usr/bin/cloudflared']
+  }
+  if (platform === 'linux') {
+    return ['/usr/local/bin/cloudflared', '/usr/bin/cloudflared']
+  }
+  if (platform === 'win32') {
+    const pf = env.ProgramFiles || 'C:\\Program Files'
+    const pf86 = env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)'
+    const list = [
+      join(pf, 'cloudflared', 'cloudflared.exe'),
+      join(pf86, 'cloudflared', 'cloudflared.exe'),
+    ]
+    if (env.LOCALAPPDATA) list.push(join(env.LOCALAPPDATA, 'cloudflared', 'cloudflared.exe'))
+    return list
+  }
+  return []
 }
 
 async function isRunnableBinary(cmd) {
   try {
-    await execFileAsync(cmd, ['--version'], { timeout: 5_000 })
+    await execFileAsync(cmd, ['--version'], { timeout: 5_000, windowsHide: true })
     return true
   } catch {
     return false
@@ -39,15 +68,22 @@ async function isRunnableBinary(cmd) {
 }
 
 /**
- * 解析可用的 cloudflared 可执行文件；宿主机未预装时自动按架构下载到 `<home>/bin/cloudflared`，
- * 实现真正零配置即装即用。可通过 `DSH_REMOTE_AUTO_INSTALL_CLOUDFLARED=0` 关闭自动下载。
+ * 解析可用的 cloudflared 可执行文件；宿主机未预装时自动按架构下载到 `<home>/bin/cloudflared(.exe)`，
+ * 实现 Linux / macOS / Windows 三端真正零配置即装即用。
+ * 可通过 `DSH_REMOTE_AUTO_INSTALL_CLOUDFLARED=0` 关闭自动下载。
  */
 export async function ensureCloudflaredBinary({ configured = 'cloudflared', home, logger } = {}) {
-  const preferred = String(configured || 'cloudflared').trim() || 'cloudflared'
+  const defaultName = cloudflaredBinaryName()
+  const preferred = String(configured || defaultName).trim() || defaultName
   if (await isRunnableBinary(preferred)) return preferred
+  if (preferred !== defaultName && (await isRunnableBinary(defaultName))) return defaultName
+
+  for (const candidate of systemCloudflaredCandidates()) {
+    if (existsSync(candidate) && (await isRunnableBinary(candidate))) return candidate
+  }
 
   const binDir = join(home, 'bin')
-  const localBin = join(binDir, 'cloudflared')
+  const localBin = join(binDir, defaultName)
   if (existsSync(localBin) && (await isRunnableBinary(localBin))) return localBin
 
   if (process.env.DSH_REMOTE_AUTO_INSTALL_CLOUDFLARED === '0') return preferred
@@ -69,17 +105,24 @@ export async function ensureCloudflaredBinary({ configured = 'cloudflared', home
   const bytes = Buffer.from(await response.arrayBuffer())
   if (spec.archive) {
     const tgzPath = `${localBin}.${process.pid}.tgz`
+    const tarBin = existsSync('/usr/bin/tar') ? '/usr/bin/tar' : 'tar'
     await writeFile(tgzPath, bytes)
     try {
-      await execFileAsync('tar', ['-xzf', tgzPath, '-C', binDir], { timeout: 30_000 })
+      await execFileAsync(tarBin, ['-xzf', tgzPath, '-C', binDir], { timeout: 30_000, windowsHide: true })
     } finally {
       await rm(tgzPath, { force: true }).catch(() => {})
     }
-    await chmod(localBin, 0o755)
+    if (process.platform !== 'win32') {
+      await chmod(localBin, 0o755).catch(() => {})
+    }
   } else {
     const tmpPath = `${localBin}.${process.pid}.tmp`
     await writeFile(tmpPath, bytes, { mode: 0o755 })
-    await chmod(tmpPath, 0o755)
+    if (process.platform !== 'win32') {
+      await chmod(tmpPath, 0o755).catch(() => {})
+    } else {
+      await rm(localBin, { force: true }).catch(() => {})
+    }
     await rename(tmpPath, localBin)
   }
   if (!(await isRunnableBinary(localBin))) {
@@ -284,6 +327,7 @@ export class Tunnel {
       child = spawn(command, args, {
         stdio: ['ignore', fd, fd],
         detached: true,
+        windowsHide: true,
         env: { ...process.env, ...stripUndefined(env) },
       })
     } finally {
