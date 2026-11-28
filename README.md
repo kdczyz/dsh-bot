@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./docs/images/quay-bot-logo.jpg" alt="Quay Bot" width="140" />
+<img src="./docs/images/quay-bot-logo.png" alt="Quay Bot" width="140" />
 
 <h1>Quay Bot</h1>
 
@@ -193,7 +193,7 @@ flowchart LR
 ├── README.md / README.en.md         # 项目介绍（中文 / English）
 └── docs/
     ├── BOTMODE.md                  # Bot 模式实现细则（Host API / 命令 / 目录规范）
-    └── images/quay-bot-logo.jpg    # 项目标志
+    └── images/quay-bot-logo.png    # 项目标志
 ```
 
 **关键映射**：`bot_NN` → X `: (100+n)`、WS `(6100+n)`、RFB `(5950+n)`（仅 loopback）、cgroup `/sys/fs/cgroup/botscreen/bot_NN`、数据 `/data/botscreen/bot_NN/{home,downloads,audit,runtime}`。

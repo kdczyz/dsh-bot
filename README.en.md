@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./docs/images/quay-bot-logo.jpg" alt="Quay Bot" width="140" />
+<img src="./docs/images/quay-bot-logo.png" alt="Quay Bot" width="140" />
 
 <h1>Quay Bot</h1>
 
@@ -193,7 +193,7 @@ flowchart LR
 ├── README.md / README.en.md         # project introduction (Chinese / English)
 └── docs/
     ├── BOTMODE.md                  # Bot mode implementation details (Host API / commands / layout)
-    └── images/quay-bot-logo.jpg    # project logo
+    └── images/quay-bot-logo.png    # project logo
 ```
 
 **Key mapping**: `bot_NN` → X `:(100+n)`, WS `(6100+n)`, RFB `(5950+n)` (loopback only), cgroup `/sys/fs/cgroup/botscreen/bot_NN`, data `/data/botscreen/bot_NN/{home,downloads,audit,runtime}`.
