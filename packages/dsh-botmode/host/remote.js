@@ -482,7 +482,13 @@ export class RemoteGateway {
       keyKind: parsed?.key ? 'psk' : parsed?.token ? 'legacy-token' : null,
       pskKid: runtime?.pskKid ?? null,
       tunnel: runtime?.tunnel
-        ? { mode: runtime.tunnel.mode, state: runtime.tunnel.state, url: runtime.tunnel.url, restarts: runtime.tunnel.restarts }
+        ? {
+          mode: runtime.tunnel.mode,
+          state: runtime.tunnel.state,
+          url: runtime.tunnel.url,
+          restarts: runtime.tunnel.restarts,
+          lastError: runtime.tunnel.lastError ?? null,
+        }
         : null,
       startedAt: runtime?.startedAt ?? null,
       bin: this.bin,
@@ -508,11 +514,14 @@ export class RemoteGateway {
     return payload
   }
 
-  /** 确保网关在线（已在线且健康则直接复用）。 */
+  /** 确保网关在线（已在线且健康则直接复用；若隧道尚在建连则短等）。 */
   async up() {
     const before = await this.status({ qr: false })
     if (before.running && before.healthy && before.link) {
       return { ...(await this.status()), started: false, message: '网关已在线' }
+    }
+    if (before.running && before.healthy && !before.link) {
+      return this.#waitFor({ timeoutMs: 30_000, expectPid: null }).then((state) => ({ ...state, started: false }))
     }
     await this.#runDetachedUp({ timeoutMs: 120_000 })
     return this.#waitFor({ timeoutMs: 90_000, expectPid: null }).then((state) => ({ ...state, started: true }))

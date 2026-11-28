@@ -67,9 +67,48 @@ async function isRunnableBinary(cmd) {
   }
 }
 
+export function cloudflaredDownloadUrls(asset) {
+  const direct = `https://github.com/cloudflare/cloudflared/releases/latest/download/${asset}`
+  return [
+    direct,
+    `https://gh-proxy.com/${direct}`,
+    `https://ghfast.top/${direct}`,
+  ]
+}
+
+async function downloadToFile(url, destPath, timeoutMs = 35_000) {
+  const curlBin = process.platform === 'win32'
+    ? 'curl.exe'
+    : (existsSync('/usr/bin/curl') ? '/usr/bin/curl' : 'curl')
+  try {
+    await execFileAsync(
+      curlBin,
+      ['-fsSL', '--connect-timeout', '12', '--max-time', String(Math.ceil(timeoutMs / 1000)), '-o', destPath, url],
+      { timeout: timeoutMs + 5_000, windowsHide: true },
+    )
+    const info = await stat(destPath).catch(() => null)
+    if (info && info.size > 100_000) return
+    throw new Error(`downloaded file too small (${info?.size ?? 0} bytes)`)
+  } catch (curlError) {
+    await rm(destPath, { force: true }).catch(() => {})
+    const response = await fetch(url, {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} (curl: ${String(curlError?.message ?? curlError).slice(0, 120)})`)
+    }
+    const bytes = Buffer.from(await response.arrayBuffer())
+    if (bytes.length <= 100_000) {
+      throw new Error(`downloaded payload too small (${bytes.length} bytes)`)
+    }
+    await writeFile(destPath, bytes)
+  }
+}
+
 /**
  * 解析可用的 cloudflared 可执行文件；宿主机未预装时自动按架构下载到 `<home>/bin/cloudflared(.exe)`，
- * 实现 Linux / macOS / Windows 三端真正零配置即装即用。
+ * 实现 Linux / macOS / Windows 三端真正零配置即装即用（支持系统代理与多镜像源故障转移）。
  * 可通过 `DSH_REMOTE_AUTO_INSTALL_CLOUDFLARED=0` 关闭自动下载。
  */
 export async function ensureCloudflaredBinary({ configured = 'cloudflared', home, logger } = {}) {
@@ -93,42 +132,49 @@ export async function ensureCloudflaredBinary({ configured = 'cloudflared', home
     throw new Error(`未找到 cloudflared 且当前平台暂不支持自动下载 (${process.platform}/${process.arch})`)
   }
   ensureDir(binDir)
-  const downloadUrl = `https://github.com/cloudflare/cloudflared/releases/latest/download/${spec.asset}`
-  logger?.info?.('cloudflared not found; downloading automatically', { url: downloadUrl, target: localBin })
-  const response = await fetch(downloadUrl, {
-    redirect: 'follow',
-    signal: AbortSignal.timeout(120_000),
-  })
-  if (!response.ok) {
-    throw new Error(`自动下载 cloudflared 失败: HTTP ${response.status} (${downloadUrl})`)
-  }
-  const bytes = Buffer.from(await response.arrayBuffer())
-  if (spec.archive) {
-    const tgzPath = `${localBin}.${process.pid}.tgz`
-    const tarBin = existsSync('/usr/bin/tar') ? '/usr/bin/tar' : 'tar'
-    await writeFile(tgzPath, bytes)
+  const urls = cloudflaredDownloadUrls(spec.asset)
+  const tmpDownload = `${localBin}.${process.pid}.${Date.now()}.${spec.archive ? 'tgz' : 'tmp'}`
+  let downloadedUrl = null
+  const errors = []
+  for (const url of urls) {
+    logger?.info?.('cloudflared not found; downloading automatically', { url, target: localBin })
     try {
-      await execFileAsync(tarBin, ['-xzf', tgzPath, '-C', binDir], { timeout: 30_000, windowsHide: true })
+      await downloadToFile(url, tmpDownload, 35_000)
+      downloadedUrl = url
+      break
+    } catch (error) {
+      errors.push(`${url} -> ${String(error?.message ?? error).slice(0, 120)}`)
+      await rm(tmpDownload, { force: true }).catch(() => {})
+    }
+  }
+  if (!downloadedUrl) {
+    throw new Error(`自动下载 cloudflared 失败（请检查网络或手动安装 cloudflared）：${errors.join(' | ')}`)
+  }
+  if (spec.archive) {
+    const tarBin = existsSync('/usr/bin/tar') ? '/usr/bin/tar' : 'tar'
+    try {
+      await execFileAsync(tarBin, ['-xzf', tmpDownload, '-C', binDir], { timeout: 30_000, windowsHide: true })
     } finally {
-      await rm(tgzPath, { force: true }).catch(() => {})
+      await rm(tmpDownload, { force: true }).catch(() => {})
     }
     if (process.platform !== 'win32') {
       await chmod(localBin, 0o755).catch(() => {})
     }
+    if (process.platform === 'darwin') {
+      await execFileAsync('/usr/bin/xattr', ['-d', 'com.apple.quarantine', localBin], { timeout: 5_000 }).catch(() => {})
+    }
   } else {
-    const tmpPath = `${localBin}.${process.pid}.tmp`
-    await writeFile(tmpPath, bytes, { mode: 0o755 })
     if (process.platform !== 'win32') {
-      await chmod(tmpPath, 0o755).catch(() => {})
+      await chmod(tmpDownload, 0o755).catch(() => {})
     } else {
       await rm(localBin, { force: true }).catch(() => {})
     }
-    await rename(tmpPath, localBin)
+    await rename(tmpDownload, localBin)
   }
   if (!(await isRunnableBinary(localBin))) {
     throw new Error(`已下载 cloudflared 至 ${localBin} 但无法执行`)
   }
-  logger?.info?.('cloudflared ready', { path: localBin })
+  logger?.info?.('cloudflared ready', { path: localBin, source: downloadedUrl })
   return localBin
 }
 
@@ -308,11 +354,21 @@ export class Tunnel {
     this.onState(this.state)
     if (this.config.public.mode === 'named' && this.config.public.refreshCommand) await this.#refreshToken()
     const { args, env } = this.#args()
-    const command = await ensureCloudflaredBinary({
-      configured: this.config.public.cloudflared || 'cloudflared',
-      home: this.config.home,
-      logger: this.logger,
-    })
+    let command
+    try {
+      command = await ensureCloudflaredBinary({
+        configured: this.config.public.cloudflared || 'cloudflared',
+        home: this.config.home,
+        logger: this.logger,
+      })
+    } catch (error) {
+      this.lastError = String(error?.message ?? error)
+      this.state = 'error'
+      this.logger.error('cloudflared preparation failed', { error: this.lastError })
+      this.onState(this.state)
+      this.#scheduleRestart()
+      return
+    }
     this.logger.info('starting cloudflared', { command, mode: this.config.public.mode })
     ensureDir(this.config.logs.dir)
     const logPath = join(this.config.logs.dir, 'tunnel.log')

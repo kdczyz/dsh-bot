@@ -163,7 +163,14 @@ export async function startSupervisor({ config, logger }) {
   process.once('SIGTERM', () => onSignal('SIGTERM'))
 
   persist()
-  await tunnel.start()
+  try {
+    await tunnel.start()
+  } catch (error) {
+    logger.error('initial tunnel start failed; relay staying online while retrying', {
+      error: String(error?.message ?? error),
+    })
+    persist()
+  }
   if (config.public.mode === 'none') {
     runtime.publicUrl = config.proxy.publicUrl ?? null
     persist()

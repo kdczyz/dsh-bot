@@ -473,6 +473,7 @@ window.__ModuleLoader__.load({
         'remote.subtitle': 'Publish this DSH gateway through a Cloudflare tunnel with end-to-end encryption.',
         'remote.appSubtitle': 'Publish this DSH gateway through a Cloudflare tunnel; scan the QR below with public-bot to connect.',
         'remote.starting': 'Starting the gateway…',
+        'remote.tunnelStarting': 'Connecting Cloudflare tunnel (first run downloads cloudflared automatically)…',
         'remote.rotating': 'Rotating the access key…',
         'remote.running': 'Online',
         'remote.stopped': 'Offline',
@@ -971,6 +972,7 @@ window.__ModuleLoader__.load({
         'remote.subtitle': '把本机 DSH 网关通过 Cloudflare 隧道发布出去，链路端到端加密。',
         'remote.appSubtitle': '把本机 DSH 网关通过 Cloudflare 隧道发布出去；用 public-bot 扫下方二维码即可连接。',
         'remote.starting': '正在启动网关…',
+        'remote.tunnelStarting': '正在建立 Cloudflare 隧道（首次启动将自动下载 cloudflared）…',
         'remote.rotating': '正在轮换访问密钥…',
         'remote.running': '在线',
         'remote.stopped': '未启动',
@@ -8343,22 +8345,50 @@ window.__ModuleLoader__.load({
           }
           useEffect(() => () => { if (toastTimer.current) window.clearTimeout(toastTimer.current) }, [])
 
-          const load = async (ensure = false) => {
+          const syncRemoteError = (next) => {
+            if (!next) return
+            if (next.appLink) {
+              setError('')
+              return
+            }
+            const tunnelErr = next.tunnel && next.tunnel.lastError
+            if (tunnelErr) {
+              setError(String(tunnelErr))
+              return
+            }
+            if (next.link && !next.appLink) {
+              setError(t('remote.appDisabled'))
+              return
+            }
             setError('')
-            setBusy(ensure ? t('remote.starting') : '')
+          }
+
+          const load = async (ensure = false, { silent = false } = {}) => {
+            if (!silent) {
+              setError('')
+              setBusy(ensure ? t('remote.starting') : '')
+            }
             try {
               let next = await hostRequest('remote')
               if (ensure && (!next.running || !next.healthy)) next = await hostCommand('remote.up')
               setData(next)
-              if (!next.appLink) setError(t('remote.appDisabled'))
+              syncRemoteError(next)
             } catch (failure) {
-              setError(String(failure && failure.message ? failure.message : failure))
+              if (!silent) setError(String(failure && failure.message ? failure.message : failure))
             } finally {
-              setBusy('')
+              if (!silent) setBusy('')
             }
           }
 
           useEffect(() => { void load(true) }, [])
+          useEffect(() => {
+            if (!data || !data.running || data.appLink) return undefined
+            if (data.link && !data.appLink) return undefined
+            const timer = window.setInterval(() => {
+              void load(false, { silent: true })
+            }, 2500)
+            return () => window.clearInterval(timer)
+          }, [data && data.running, data && data.link, data && data.appLink])
           useEffect(() => {
             const onKey = (event) => { if (event.key === 'Escape') onClose() }
             window.addEventListener('keydown', onKey)
@@ -8419,6 +8449,14 @@ window.__ModuleLoader__.load({
             if (data.pid) chips.push(h('span', { className: 'bm-remote-chip' }, `${t('remote.pid')}: ${data.pid}`))
           }
 
+          const tunnelPending = Boolean(data && data.running && !data.link)
+          const emptyMessage = busy
+            || (tunnelPending
+              ? t('remote.tunnelStarting')
+              : (data && data.link && !data.appLink
+                ? t('remote.appDisabled')
+                : (error ? t('remote.failed') : t('remote.starting'))))
+
           const appPane = data && data.appLink
             ? h('div', { className: 'bm-remote-pane' },
               h('div', { className: 'bm-remote-qr-wrap' },
@@ -8428,8 +8466,7 @@ window.__ModuleLoader__.load({
               h('div', { className: 'bm-remote-hint' }, t('remote.appLabel')),
               h('div', { className: 'bm-remote-link' }, data.appLink),
               h('div', { className: 'bm-remote-hint' }, t('remote.appHint')))
-            : h('div', { className: 'bm-remote-empty' },
-              busy || (error ? t('remote.failed') : (data ? t('remote.appDisabled') : t('remote.starting'))))
+            : h('div', { className: 'bm-remote-empty' }, emptyMessage)
 
           const dialog = h('div', {
             className: 'bm-modal-backdrop bm-remote-backdrop',
