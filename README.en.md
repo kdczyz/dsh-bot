@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./packages/dsh-botmode/icon.svg" alt="Quay Bot" width="120" />
+<img src="./docs/images/quay-bot-logo.jpg" alt="Quay Bot" width="140" />
 
 <h1>Quay Bot</h1>
 
@@ -191,7 +191,9 @@ flowchart LR
 ├── install.sh                       # BotScreen one-shot installer (deps + KasmVNC + cgroup + zram)
 ├── BOTSCREEN.md                     # virtual-screen design doc (state machine / API / measurements)
 ├── README.md / README.en.md         # project introduction (Chinese / English)
-└── docs/BOTMODE.md                  # Bot mode implementation details (Host API / commands / layout)
+└── docs/
+    ├── BOTMODE.md                  # Bot mode implementation details (Host API / commands / layout)
+    └── images/quay-bot-logo.jpg    # project logo
 ```
 
 **Key mapping**: `bot_NN` → X `:(100+n)`, WS `(6100+n)`, RFB `(5950+n)` (loopback only), cgroup `/sys/fs/cgroup/botscreen/bot_NN`, data `/data/botscreen/bot_NN/{home,downloads,audit,runtime}`.
